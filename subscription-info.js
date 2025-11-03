@@ -68,9 +68,12 @@ function fetchInfo(url, resetDay) {
 function isValidUrl(url) {
   if (!url || url.trim() === "") return false;
   if (url === "#") return false;
-  // 跳过模块默认的占位符文本
-  if (url.includes("订阅") && url.includes("地址")) return false;
-  if (url.startsWith("订阅")) return false;
+  // 跳过所有包含"订阅"关键字的默认占位符
+  if (url.includes("订阅")) return false;
+  // 跳过包含"地址"关键字的默认占位符
+  if (url.includes("地址")) return false;
+  // 跳过"重置日"文本
+  if (url.includes("重置")) return false;
   // 必须是 http 或 https 开头
   if (!url.startsWith("http://") && !url.startsWith("https://")) return false;
   return true;
