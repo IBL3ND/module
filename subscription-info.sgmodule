@@ -1,7 +1,0 @@
-#!category=机场流量信息
-#!arguments=A名称:订阅A名称,A地址:A订阅地址,A重置:重置日,B名称:订阅B名称,B地址:B订阅地址,B重置:重置日,C名称:订阅C名称,C地址:C订阅地址,C重置:重置日,D名称:订阅D名称,D地址:D订阅地址,D重置:重置日,E名称:订阅E名称,E地址:E订阅地址,E重置:重置日
-#!arguments-desc=[参数设置说明]\n\n① 可同时显示5个订阅流量信息。\n⓶ 本模块不需要编码订阅地址可直接使用。\n③ ABCDE代表不同订阅的地址和备注名称以及流量重置日期。\n\n# 更新：2025.11.05 优化版
-[Panel]
-订阅面板 = script-name=订阅面板, update-interval=3600
-[Script]
-订阅面板 = type=generic, timeout=20, script-path=https://raw.githubusercontent.com/IBL3ND/MK/refs/heads/main/subscription-info.js, argument=title1={{{A名称}}}&url1={{{A地址}}}&resetDay1={{{A重置}}}&title2={{{B名称}}}&url2={{{B地址}}}&resetDay2={{{B重置}}}&title3={{{C名称}}}&url3={{{C地址}}}&resetDay3={{{C重置}}}&title4={{{D名称}}}&url4={{{D地址}}}&resetDay4={{{D重置}}}&title5={{{E名称}}}&url5={{{E地址}}}&resetDay5={{{E重置}}}
