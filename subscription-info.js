@@ -64,6 +64,18 @@ function fetchInfo(url, resetDay) {
   });
 }
 
+// 检查是否是有效的订阅地址
+function isValidUrl(url) {
+  if (!url || url.trim() === "") return false;
+  if (url === "#") return false;
+  // 跳过模块默认的占位符文本
+  if (url.includes("订阅") && url.includes("地址")) return false;
+  if (url.startsWith("订阅")) return false;
+  // 必须是 http 或 https 开头
+  if (!url.startsWith("http://") && !url.startsWith("https://")) return false;
+  return true;
+}
+
 (async () => {
   const panels = [];
 
@@ -71,10 +83,14 @@ function fetchInfo(url, resetDay) {
     const urlKey = `url${i}`;
     const titleKey = `title${i}`;
     const resetKey = `resetDay${i}`;
-    if (args[urlKey]) {
-      const content = await fetchInfo(args[urlKey], args[resetKey] ? parseInt(args[resetKey]) : null);
-      panels.push(args[titleKey] ? `机场：${args[titleKey]}\n${content}` : content);
+    
+    // 跳过无效的订阅地址
+    if (!isValidUrl(args[urlKey])) {
+      continue;
     }
+    
+    const content = await fetchInfo(args[urlKey], args[resetKey] ? parseInt(args[resetKey]) : null);
+    panels.push(args[titleKey] ? `机场：${args[titleKey]}\n${content}` : content);
   }
 
   $done({
