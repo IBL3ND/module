@@ -4,4 +4,4 @@
 #!arguments=ids:TestFlight ID列表（用英文逗号分隔）,notifyWhenUnavailable:无名额时也通知（true/false）,interval:检查间隔秒数（10-30）,maxRunTime:最大运行分钟数（60）
 
 [Script]
-testflight_realtime = type=cron,cronexp="0 */1 * * * ?",timeout=3600,script-path=https://raw.githubusercontent.com/你的用户名/你的仓库名/main/testflight-monitor.js,argument=ids={{{ids}}}&notifyWhenUnavailable={{{notifyWhenUnavailable}}}&interval={{{interval}}}&maxRunTime={{{maxRunTime}}}
+testflight_realtime = type=cron,cronexp="0 */1 * * * ?",timeout=3600,script-path=https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/TestFlight-JK.js,argument=ids={{{ids}}}&notifyWhenUnavailable={{{notifyWhenUnavailable}}}&interval={{{interval}}}&maxRunTime={{{maxRunTime}}}
