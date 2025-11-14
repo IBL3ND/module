@@ -1,0 +1,7 @@
+#!name=TestFlight 名额监控
+#!desc=自动监控 TestFlight 是否有名额（支持参数自由填写）
+#!category=工具
+#!arguments=ids:TestFlight ID 列表（用英文逗号分隔）,notifyWhenUnavailable:无名额时也通知（true/false）
+
+[Script]
+testflight_monitor = type=generic,timeout=60,script-path=https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/TestFlight-JK.js,argument=ids={{{ids}}}&notifyWhenUnavailable={{{notifyWhenUnavailable}}}
