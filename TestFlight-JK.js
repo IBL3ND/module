@@ -1,6 +1,6 @@
+// ---------- 参数处理 ----------
 const args = (() => {
   try { return JSON.parse($argument || "{}"); } catch (e) {
-    // 兼容老版本 argument 为 query-string 的情况
     const q = ($argument || "").split("&").reduce((o, kv) => {
       const [k, v] = kv.split("=");
       if (k) o[k] = decodeURIComponent(v || "");
@@ -16,8 +16,7 @@ const CONFIG = {
   perRequestTimeout: 8000,
   apps: [],
   ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-  intervalSeconds: Number(args.intervalSeconds) || 60,
-  maxRuntimeHours: Number(args.maxRuntimeHours) || 0 // 0 = unlimited
+  intervalSeconds: Number(args.intervalSeconds) || 60
 };
 
 if (args.ids) {
@@ -26,10 +25,10 @@ if (args.ids) {
     .map(s => s.trim())
     .filter(s => s.length > 0)
     .map(id => ({ id }));
-} else {
-  CONFIG.apps = [];
 }
 
+
+// ---------- 通知 ----------
 function sendNotification(title, subtitle, message, url) {
   if (!CONFIG.enableNotification || typeof $notification === "undefined") return;
   try {
@@ -39,6 +38,8 @@ function sendNotification(title, subtitle, message, url) {
   }
 }
 
+
+// ---------- HTTP ----------
 function httpGetPromise(url) {
   return new Promise((resolve, reject) => {
     let finished = false;
@@ -57,21 +58,28 @@ function httpGetPromise(url) {
           clearTimeout(timer);
           finished = true;
           if (err) return reject(err);
-          resolve({ statusCode: resp && resp.status || resp && resp.statusCode || 0, headers: resp && resp.headers, body: typeof body === "string" ? body : (body && body.toString ? body.toString() : "") });
+          resolve({
+            statusCode: resp?.status || resp?.statusCode || 0,
+            headers: resp?.headers,
+            body: typeof body === "string" ? body :
+              body?.toString ? body.toString() : ""
+          });
         });
         return;
-      } catch (e) {
-        // fallthrough
-      }
+      } catch (e) {}
     }
 
     if (typeof $task !== "undefined") {
-      $task.fetch(opts).then(function (res) {
+      $task.fetch(opts).then(res => {
         if (finished) return;
         clearTimeout(timer);
         finished = true;
-        resolve({ statusCode: res.statusCode || res.status, headers: res.headers, body: res.body || "" });
-      }).catch(function (err) {
+        resolve({
+          statusCode: res.statusCode || res.status,
+          headers: res.headers,
+          body: res.body || ""
+        });
+      }).catch(err => {
         if (finished) return;
         clearTimeout(timer);
         finished = true;
@@ -81,106 +89,103 @@ function httpGetPromise(url) {
     }
 
     if (typeof fetch !== "undefined") {
-      fetch(url, { headers: { "User-Agent": CONFIG.ua } }).then(function (res) {
-        res.text().then(function (txt) {
+      fetch(url, { headers: { "User-Agent": CONFIG.ua } })
+        .then(res => res.text().then(txt => {
           if (finished) return;
           clearTimeout(timer);
           finished = true;
-          resolve({ statusCode: res.status, headers: res.headers, body: txt });
-        }).catch(function (err) {
+          resolve({
+            statusCode: res.status,
+            headers: res.headers,
+            body: txt
+          });
+        }))
+        .catch(err => {
           if (finished) return;
           clearTimeout(timer);
           finished = true;
           reject(err);
         });
-      }).catch(function (err) {
-        if (finished) return;
-        clearTimeout(timer);
-        finished = true;
-        reject(err);
-      });
       return;
     }
 
     clearTimeout(timer);
-    finished = true;
     reject(new Error("no http client available"));
   });
 }
 
-function analyzeBodyForAvailability(body) {
+
+// ---------- 判断可用 ----------
+function analyzeBody(body) {
   const text = (body || "").toLowerCase();
-  const availableKeywords = [
+  const available = [
     "itms-beta://", "open in testflight", "join the beta",
     "start testing", "accept invite", "加入测试",
     "开始测试", "在 testflight 中打开"
   ];
-  const fullKeywords = [
+  const full = [
     "this beta is full", "beta is full", "测试人员已满",
     "测试已满", "本次测试已满", "名额已满", "无可用名额", "full"
   ];
-
-  let isAvailable = availableKeywords.some(k => text.includes(k));
-  let isFull = fullKeywords.some(k => text.includes(k));
-  if (text.includes("itms-beta://")) isAvailable = true;
-  return { isAvailable, isFull };
+  return {
+    isAvailable: available.some(k => text.includes(k)),
+    isFull: full.some(k => text.includes(k))
+  };
 }
 
-async function checkAppOnce(app) {
+
+// ---------- 单次检查 ----------
+async function checkApp(app) {
   const url = `https://testflight.apple.com/join/${app.id}`;
-  console.log(`[TF Monitor] 检查 ${app.id} -> ${url} (${new Date().toLocaleString()})`);
+  console.log(`[TF] 检查: ${app.id} (${new Date().toLocaleString()})`);
+
   try {
     const res = await httpGetPromise(url);
-    const { body } = res;
-    const { isAvailable, isFull } = analyzeBodyForAvailability(body);
+    const { isAvailable, isFull } = analyzeBody(res.body);
+
     if (isAvailable && !isFull) {
-      console.log(`[TF Monitor] ${app.id} 有名额 ✅`);
+      console.log(`[TF] ${app.id} 有名额！`);
       sendNotification("TestFlight 名额可用", `App ID: ${app.id}`, "点击加入测试", url);
-      return { id: app.id, status: "available" };
     } else {
-      console.log(`[TF Monitor] ${app.id} 暂无名额`);
-      if (CONFIG.notifyWhenUnavailable) sendNotification("TestFlight 监控", `App ID: ${app.id}`, "当前无名额", url);
-      return { id: app.id, status: "full" };
+      console.log(`[TF] ${app.id} 暂无名额`);
+      if (CONFIG.notifyWhenUnavailable) {
+        sendNotification("TestFlight 监控", `App ID: ${app.id}`, "当前无名额", url);
+      }
     }
   } catch (err) {
-    console.log(`[TF Monitor] ${app.id} 请求失败: ${err}`);
-    if (CONFIG.notifyWhenUnavailable) sendNotification("TestFlight 监控", `App ID: ${app.id}`, `请求失败: ${err}`, url);
-    return { id: app.id, status: "error", error: String(err) };
+    console.log(`[TF] ${app.id} 请求失败: ${err}`);
+    if (CONFIG.notifyWhenUnavailable) {
+      sendNotification("TestFlight 监控", `App ID: ${app.id}`, `请求失败: ${err}`, url);
+    }
   }
 }
 
-async function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+
+// ---------- sleep ----------
+function sleep(ms) {
+  return new Promise(res => setTimeout(res, ms));
 }
 
-async function runLoop() {
-  if (!CONFIG.apps || CONFIG.apps.length === 0) {
-    console.log("[TF Monitor] 未添加任何 TestFlight ID，退出");
-    return;
-  }
 
-  console.log(`[TF Monitor] 实时监控启动（间隔 ${CONFIG.intervalSeconds}s）`);
-  const startTs = Date.now();
-  const maxMs = CONFIG.maxRuntimeHours > 0 ? CONFIG.maxRuntimeHours * 3600 * 1000 : 0;
+// ---------- 主监控循环（永驻 + 不阻塞） ----------
+async function monitorLoop() {
+  console.log(`[TF] 实时监控启动（间隔 ${CONFIG.intervalSeconds}s）`);
 
   while (true) {
     for (const app of CONFIG.apps) {
-      await checkAppOnce(app);
+      checkApp(app); // 不 await，保持事件循环活跃
     }
-
-    // 检查是否达到最大运行时间
-    if (maxMs > 0 && (Date.now() - startTs) >= maxMs) {
-      console.log("[TF Monitor] 达到最大运行时间，停止监控");
-      return;
-    }
-
-    // 等待下次轮询
     await sleep(CONFIG.intervalSeconds * 1000);
-    // 循环继续 -> 实时监控效果
   }
 }
 
-// 启动主循环（异步）
-runLoop().catch(err => {
-  console.log("[TF Monitor] 未捕获异常，停止: " + err);
-});
+
+// ---------- 保持事件循环永活，防止 Egern 调度 ----------
+function keepAliveLoop() {
+  setInterval(() => {}, 1000);  // 永不退出
+}
+
+
+// ---------- 启动 ----------
+keepAliveLoop();
+monitorLoop();
