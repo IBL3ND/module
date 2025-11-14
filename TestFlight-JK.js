@@ -1,21 +1,25 @@
-/*
-#!name=TestFlight 名额监控
-#!desc=自动监控 TestFlight 是否有名额（支持面板参数输入多个 ID）
-#!category=工具
-#!arguments=ids:TestFlight ID 列表（用英文逗号分隔）,notifyWhenUnavailable:无名额时也通知（true/false）
-*/
-
-const args = JSON.parse($argument || "{}");
+const args = (() => {
+  try { return JSON.parse($argument || "{}"); } catch (e) {
+    // 兼容老版本 argument 为 query-string 的情况
+    const q = ($argument || "").split("&").reduce((o, kv) => {
+      const [k, v] = kv.split("=");
+      if (k) o[k] = decodeURIComponent(v || "");
+      return o;
+    }, {});
+    return q;
+  }
+})();
 
 const CONFIG = {
   enableNotification: true,
-  notifyWhenUnavailable: args.notifyWhenUnavailable === "true",  
+  notifyWhenUnavailable: (args.notifyWhenUnavailable === "true"),
   perRequestTimeout: 8000,
   apps: [],
-  ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+  ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+  intervalSeconds: Number(args.intervalSeconds) || 60,
+  maxRuntimeHours: Number(args.maxRuntimeHours) || 0 // 0 = unlimited
 };
 
-// 解析用户输入的 ids
 if (args.ids) {
   CONFIG.apps = args.ids
     .split(",")
@@ -23,7 +27,6 @@ if (args.ids) {
     .filter(s => s.length > 0)
     .map(id => ({ id }));
 } else {
-  console.log("未填写 TestFlight ID");
   CONFIG.apps = [];
 }
 
@@ -36,116 +39,148 @@ function sendNotification(title, subtitle, message, url) {
   }
 }
 
-function httpGet(url, cb) {
-  let finished = false;
-  const timer = setTimeout(() => {
-    if (finished) return;
-    finished = true;
-    cb(new Error("request timeout"));
-  }, CONFIG.perRequestTimeout);
-
-  const opts = { url, headers: { "User-Agent": CONFIG.ua, Accept: "text/html" } };
-
-  if (typeof $httpClient !== "undefined") {
-    $httpClient.get(opts, function (err, resp, body) {
+function httpGetPromise(url) {
+  return new Promise((resolve, reject) => {
+    let finished = false;
+    const timer = setTimeout(() => {
       if (finished) return;
-      clearTimeout(timer);
       finished = true;
-      cb(err, resp || {}, body || "");
-    });
-    return;
-  }
+      reject(new Error("request timeout"));
+    }, CONFIG.perRequestTimeout);
 
-  if (typeof $task !== "undefined") {
-    $task.fetch(opts).then(res => {
-      if (finished) return;
-      clearTimeout(timer);
-      finished = true;
-      cb(null, { statusCode: res.statusCode, headers: res.headers }, res.body || "");
-    }).catch(err => {
-      if (finished) return;
-      clearTimeout(timer);
-      cb(err);
-    });
-    return;
-  }
+    const opts = { url, headers: { "User-Agent": CONFIG.ua, Accept: "text/html" } };
 
-  if (typeof fetch !== "undefined") {
-    fetch(url, { headers: { "User-Agent": CONFIG.ua } })
-      .then(res => res.text().then(txt => {
+    if (typeof $httpClient !== "undefined") {
+      try {
+        $httpClient.get(opts, function (err, resp, body) {
+          if (finished) return;
+          clearTimeout(timer);
+          finished = true;
+          if (err) return reject(err);
+          resolve({ statusCode: resp && resp.status || resp && resp.statusCode || 0, headers: resp && resp.headers, body: typeof body === "string" ? body : (body && body.toString ? body.toString() : "") });
+        });
+        return;
+      } catch (e) {
+        // fallthrough
+      }
+    }
+
+    if (typeof $task !== "undefined") {
+      $task.fetch(opts).then(function (res) {
         if (finished) return;
         clearTimeout(timer);
         finished = true;
-        cb(null, { statusCode: res.status }, txt);
-      }))
-      .catch(err => {
+        resolve({ statusCode: res.statusCode || res.status, headers: res.headers, body: res.body || "" });
+      }).catch(function (err) {
         if (finished) return;
         clearTimeout(timer);
-        cb(err);
+        finished = true;
+        reject(err);
       });
-    return;
-  }
-
-  clearTimeout(timer);
-  cb(new Error("no http client available"));
-}
-
-function checkApp(app, done) {
-  const url = `https://testflight.apple.com/join/${app.id}`;
-  console.log(`[TF Monitor] 检查 ${app.id}`);
-
-  httpGet(url, function (err, resp, body) {
-    if (err) {
-      console.log(`请求失败: ${err}`);
-      if (CONFIG.notifyWhenUnavailable)
-        sendNotification("TestFlight 监控", `App ID: ${app.id}`, `请求失败: ${err}`, url);
-      return done();
+      return;
     }
 
-    const text = (body || "").toLowerCase();
-
-    const availableKeywords = [
-      "itms-beta://", "open in testflight", "join the beta",
-      "start testing", "accept invite", "加入测试",
-      "开始测试", "在 testflight 中打开"
-    ];
-    const fullKeywords = [
-      "this beta is full", "beta is full", "测试人员已满",
-      "测试已满", "本次测试已满", "名额已满", "无可用名额", "full"
-    ];
-
-    let isAvailable = availableKeywords.some(k => text.includes(k));
-    let isFull = fullKeywords.some(k => text.includes(k));
-
-    if (isAvailable && !isFull) {
-      console.log(`${app.id} 有名额`);
-      sendNotification("TestFlight 名额可用", `App ID: ${app.id}`, "点击加入测试", url);
-    } else {
-      console.log(`${app.id} 暂无名额`);
-      if (CONFIG.notifyWhenUnavailable)
-        sendNotification("TestFlight 监控", `App ID: ${app.id}`, "当前无名额", url);
+    if (typeof fetch !== "undefined") {
+      fetch(url, { headers: { "User-Agent": CONFIG.ua } }).then(function (res) {
+        res.text().then(function (txt) {
+          if (finished) return;
+          clearTimeout(timer);
+          finished = true;
+          resolve({ statusCode: res.status, headers: res.headers, body: txt });
+        }).catch(function (err) {
+          if (finished) return;
+          clearTimeout(timer);
+          finished = true;
+          reject(err);
+        });
+      }).catch(function (err) {
+        if (finished) return;
+        clearTimeout(timer);
+        finished = true;
+        reject(err);
+      });
+      return;
     }
 
-    done();
+    clearTimeout(timer);
+    finished = true;
+    reject(new Error("no http client available"));
   });
 }
 
-// 主程序
-(function main() {
-  console.log("[TF Monitor] 启动");
+function analyzeBodyForAvailability(body) {
+  const text = (body || "").toLowerCase();
+  const availableKeywords = [
+    "itms-beta://", "open in testflight", "join the beta",
+    "start testing", "accept invite", "加入测试",
+    "开始测试", "在 testflight 中打开"
+  ];
+  const fullKeywords = [
+    "this beta is full", "beta is full", "测试人员已满",
+    "测试已满", "本次测试已满", "名额已满", "无可用名额", "full"
+  ];
 
-  if (CONFIG.apps.length === 0) {
-    console.log("未添加任何 TestFlight ID");
+  let isAvailable = availableKeywords.some(k => text.includes(k));
+  let isFull = fullKeywords.some(k => text.includes(k));
+  if (text.includes("itms-beta://")) isAvailable = true;
+  return { isAvailable, isFull };
+}
+
+async function checkAppOnce(app) {
+  const url = `https://testflight.apple.com/join/${app.id}`;
+  console.log(`[TF Monitor] 检查 ${app.id} -> ${url} (${new Date().toLocaleString()})`);
+  try {
+    const res = await httpGetPromise(url);
+    const { body } = res;
+    const { isAvailable, isFull } = analyzeBodyForAvailability(body);
+    if (isAvailable && !isFull) {
+      console.log(`[TF Monitor] ${app.id} 有名额 ✅`);
+      sendNotification("TestFlight 名额可用", `App ID: ${app.id}`, "点击加入测试", url);
+      return { id: app.id, status: "available" };
+    } else {
+      console.log(`[TF Monitor] ${app.id} 暂无名额`);
+      if (CONFIG.notifyWhenUnavailable) sendNotification("TestFlight 监控", `App ID: ${app.id}`, "当前无名额", url);
+      return { id: app.id, status: "full" };
+    }
+  } catch (err) {
+    console.log(`[TF Monitor] ${app.id} 请求失败: ${err}`);
+    if (CONFIG.notifyWhenUnavailable) sendNotification("TestFlight 监控", `App ID: ${app.id}`, `请求失败: ${err}`, url);
+    return { id: app.id, status: "error", error: String(err) };
+  }
+}
+
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function runLoop() {
+  if (!CONFIG.apps || CONFIG.apps.length === 0) {
+    console.log("[TF Monitor] 未添加任何 TestFlight ID，退出");
     return;
   }
 
-  let index = 0;
-  function next() {
-    if (index >= CONFIG.apps.length) {
-      console.log("全部检查完成");
+  console.log(`[TF Monitor] 实时监控启动（间隔 ${CONFIG.intervalSeconds}s）`);
+  const startTs = Date.now();
+  const maxMs = CONFIG.maxRuntimeHours > 0 ? CONFIG.maxRuntimeHours * 3600 * 1000 : 0;
+
+  while (true) {
+    for (const app of CONFIG.apps) {
+      await checkAppOnce(app);
+    }
+
+    // 检查是否达到最大运行时间
+    if (maxMs > 0 && (Date.now() - startTs) >= maxMs) {
+      console.log("[TF Monitor] 达到最大运行时间，停止监控");
       return;
     }
-    checkApp(CONFIG.apps[index++], next);
+
+    // 等待下次轮询
+    await sleep(CONFIG.intervalSeconds * 1000);
+    // 循环继续 -> 实时监控效果
   }
-  next();
-})();
+}
+
+// 启动主循环（异步）
+runLoop().catch(err => {
+  console.log("[TF Monitor] 未捕获异常，停止: " + err);
+});
