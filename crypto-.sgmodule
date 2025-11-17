@@ -1,0 +1,7 @@
+#!name=加密货币
+#!desc=加密货币面板
+#!homepage=修改版
+[Panel]
+crypto=script-name=crypto
+[Script]
+crypto=type=generic,script-path=https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/crypto.js
