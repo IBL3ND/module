@@ -1,0 +1,10 @@
+#!name=实时油价模块（Egern版）
+#!desc=显示本省实时油价，请在参数内填写省份拼音与城市拼音（如：hainan / haikou）
+#!category=信息面板
+#!arguments=省份:填写省份拼音,城市:填写城市拼音
+#!arguments-desc=示例：省份=hainan，城市=haikou
+
+[Panel]
+YJ = script-name=YJ,update-interval=43200
+[Script]
+YJ = type=generic,timeout=5,script-path=https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Oil-Price.js,argument="{{{省份}}}/{{{城市}}}"
