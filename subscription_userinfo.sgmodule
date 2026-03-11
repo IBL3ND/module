@@ -15,25 +15,22 @@ compat_arguments:
   C重置: "1"
 
 scriptings:
-- generic:
-    name: airport_traffic
-    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/subscription_userinfo.js
+  - generic:
+      name: airport_traffic
+      script_url: https://raw.githubusercontent.com/IBL3ND/module/main/subscription_userinfo.js
 
 widgets:
-- name: 机场A
-  icon: antenna.radiowaves.left.and.right
-  script_name: airport_traffic
-  arguments:
-    airport: A
+  - name: 机场A
+    script_name: airport_traffic
+    arguments:
+      airport: A
 
-- name: 机场B
-  icon: antenna.radiowaves.left.and.right
-  script_name: airport_traffic
-  arguments:
-    airport: B
+  - name: 机场B
+    script_name: airport_traffic
+    arguments:
+      airport: B
 
-- name: 机场C
-  icon: antenna.radiowaves.left.and.right
-  script_name: airport_traffic
-  arguments:
-    airport: C
+  - name: 机场C
+    script_name: airport_traffic
+    arguments:
+      airport: C
