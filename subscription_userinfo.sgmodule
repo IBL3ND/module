@@ -1,6 +1,7 @@
-name: 机场流量信息
+name: 机场流量小组件
 description: 显示机场订阅流量
 author: iBL3ND
+
 dns: {}
 
 compat_arguments:
@@ -16,21 +17,24 @@ compat_arguments:
 
 scriptings:
 - generic:
-    name: 机场流量脚本
-    script_url: https://raw.githubusercontent.com/IBL3ND/module/main/subscription_userinfo.js
+    name: airport_flow
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/main/airport_widget.js
 
 widgets:
 - name: 机场A
-  script_name: 机场流量脚本
+  icon: antenna.radiowaves.left.and.right
+  script_name: airport_flow
   arguments:
     airport: A
 
 - name: 机场B
-  script_name: 机场流量脚本
+  icon: antenna.radiowaves.left.and.right
+  script_name: airport_flow
   arguments:
     airport: B
 
 - name: 机场C
-  script_name: 机场流量脚本
+  icon: antenna.radiowaves.left.and.right
+  script_name: airport_flow
   arguments:
     airport: C
