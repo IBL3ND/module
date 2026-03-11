@@ -1,0 +1,39 @@
+name: 机场流量信息
+description: 显示机场订阅流量
+author: iBL3ND
+dns: {}
+
+compat_arguments:
+  A名称: 机场A
+  A地址: ""
+  A重置: "1"
+  B名称: 机场B
+  B地址: ""
+  B重置: "1"
+  C名称: 机场C
+  C地址: ""
+  C重置: "1"
+
+scriptings:
+- generic:
+    name: airport_traffic
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/subscription_userinfo.js
+
+widgets:
+- name: 机场A
+  icon: antenna.radiowaves.left.and.right
+  script_name: airport_traffic
+  arguments:
+    airport: A
+
+- name: 机场B
+  icon: antenna.radiowaves.left.and.right
+  script_name: airport_traffic
+  arguments:
+    airport: B
+
+- name: 机场C
+  icon: antenna.radiowaves.left.and.right
+  script_name: airport_traffic
+  arguments:
+    airport: C
