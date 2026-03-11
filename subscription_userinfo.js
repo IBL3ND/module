@@ -1,8 +1,8 @@
-function bytesToGB(bytes){
-  return (bytes/1024/1024/1024).toFixed(2)
+function bytesToGB(b){
+  return (b/1024/1024/1024).toFixed(2)
 }
 
-let airport = $input.arguments.airport
+let airport = $arguments.airport
 
 let name=""
 let url=""
@@ -26,73 +26,73 @@ if(airport=="C"){
  reset=$argument["C重置"]
 }
 
-if(!url){
- $done({
+function render(text){
+
+ return {
   title:name || "机场流量",
-  content:"未填写订阅地址"
- })
- return
+  content:text
+ }
+
 }
 
-$httpClient.head(url,function(err,res,data){
+$widget.setTimeline({
 
- if(err){
-  $done({
-   title:name,
-   content:"请求失败"
-  })
-  return
+ render: async () => {
+
+  if(!url){
+   return render("未填写订阅地址")
+  }
+
+  try{
+
+   let resp = await $httpClient.head(url)
+
+   let header =
+    resp.headers["subscription-userinfo"] ||
+    resp.headers["Subscription-Userinfo"]
+
+   if(!header){
+    return render("未检测到流量信息")
+   }
+
+   let upload=0
+   let download=0
+   let total=0
+
+   header.split(";").forEach(i=>{
+
+    let p=i.split("=")
+
+    if(p.length!=2) return
+
+    let k=p[0].trim()
+    let v=parseInt(p[1])
+
+    if(k=="upload") upload=v
+    if(k=="download") download=v
+    if(k=="total") total=v
+
+   })
+
+   let used=upload+download
+   let remain=total-used
+
+   let usedGB=bytesToGB(used)
+   let totalGB=bytesToGB(total)
+   let remainGB=bytesToGB(remain)
+
+   return render(
+    "剩余 "+remainGB+"GB\n"+
+    "已用 "+usedGB+" / "+totalGB+"GB\n"+
+    "重置 "+reset+"日"
+   )
+
+  }catch(e){
+
+   return render("请求失败")
+
+  }
+
  }
-
- let header =
- res.headers["subscription-userinfo"] ||
- res.headers["Subscription-Userinfo"]
-
- if(!header){
-  $done({
-   title:name,
-   content:"未检测到流量信息"
-  })
-  return
- }
-
- let upload=0
- let download=0
- let total=0
-
- header.split(";").forEach(function(item){
-
-  let p=item.split("=")
-
-  if(p.length!=2) return
-
-  let k=p[0].trim()
-  let v=parseInt(p[1])
-
-  if(k=="upload") upload=v
-  if(k=="download") download=v
-  if(k=="total") total=v
-
- })
-
- let used=upload+download
- let remain=total-used
-
- let usedGB=bytesToGB(used)
- let totalGB=bytesToGB(total)
- let remainGB=bytesToGB(remain)
-
- let percent=((used/total)*100).toFixed(0)
-
- let content =
- "剩余 "+remainGB+"GB\n"+
- "已用 "+usedGB+"GB / "+totalGB+"GB\n"+
- "使用 "+percent+"%\n"+
- "重置 "+reset+"日"
-
- $done({
-  title:name,
-  content:content
- })
 
 })
