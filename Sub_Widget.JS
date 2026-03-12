@@ -1,5 +1,5 @@
 /**
- * 机场订阅流量监控小组件 - 深浅色自适应版
+ * 机场订阅流量监控小组件 - Egern原生深浅色适配版
  * 
  * 📝 使用说明：
  * 
@@ -35,10 +35,10 @@
  *    - 至少需要配置 URL1 才能显示
  *    - 订阅地址需要包含完整的 token
  *    - 小组件每小时自动刷新
- *    - 自动适配系统深色/浅色模式
+ *    - 自动适配系统深色/浅色模式（无需配置）
  * 
  * @author 机场订阅监控
- * @version 2.0
+ * @version 3.0
  */
 
 export default async function (ctx) {
@@ -59,58 +59,31 @@ export default async function (ctx) {
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
-  // ✅ 检测系统主题（深色/浅色）
-  const isDarkMode = ctx.appearance === 'dark' || 
-                     (typeof $environment !== 'undefined' && $environment.style === 'dark') ||
-                     false;
-
-  // ✅ 根据主题选择颜色方案
-  const colors = isDarkMode ? {
-    // 深色主题
-    bgPrimary: "#1C1C1E",
-    bgSecondary: "#2C2C2E",
-    bgCard: "#2C2C2E",
-    bgCardBorder: "#3A3A3C",
-    textPrimary: "#FFFFFF",
-    textSecondary: "#EBEBF5",
-    textTertiary: "#AEAEB2",
-    textMuted: "#636366",
-    iconPrimary: "#5856D6",
-    iconSecondary: "#8E8E93",
-    iconMuted: "#48484A",
-    error: "#FF453A",
-    warning: "#FF9F0A",
-    success: "#30D158",
-    progressBg: "#3A3A3C",
-  } : {
-    // 浅色主题
-    bgPrimary: "#F5F5F7",
-    bgSecondary: "#FFFFFF",
-    bgCard: "#FFFFFF",
-    bgCardBorder: "#E5E5E7",
-    textPrimary: "#1D1D1F",
-    textSecondary: "#666666",
-    textTertiary: "#999999",
-    textMuted: "#CCCCCC",
-    iconPrimary: "#5856D6",
-    iconSecondary: "#8E8E93",
-    iconMuted: "#D1D1D6",
-    error: "#FF3B30",
-    warning: "#FF9500",
-    success: "#34C759",
-    progressBg: "#E5E5EA",
+  // ✅ Egern 原生深浅色配置（自动切换）
+  const colors = {
+    bgCard: { light: "#FFFFFF", dark: "#2C2C2E" },
+    bgCardBorder: { light: "#E5E5E7", dark: "#3A3A3C" },
+    textPrimary: { light: "#1D1D1F", dark: "#FFFFFF" },
+    textSecondary: { light: "#666666", dark: "#EBEBF5" },
+    textTertiary: { light: "#999999", dark: "#AEAEB2" },
+    textMuted: { light: "#CCCCCC", dark: "#636366" },
+    iconPrimary: { light: "#5856D6", dark: "#5856D6" },
+    iconSecondary: { light: "#8E8E93", dark: "#8E8E93" },
+    iconMuted: { light: "#D1D1D6", dark: "#48484A" },
+    error: { light: "#FF3B30", dark: "#FF453A" },
+    warning: { light: "#FF9500", dark: "#FF9F0A" },
+    success: { light: "#34C759", dark: "#30D158" },
+    progressBg: { light: "#E5E5EA", dark: "#3A3A3C" },
   };
 
-  // ✅ 根据主题选择背景渐变
-  const bgGradient = isDarkMode ? {
+  const bgGradient = {
     type: "linear",
-    colors: ["#1C1C1E", "#2C2C2E", "#1C1C1E", "#2C2C2E"],
-    stops: [0, 0.35, 0.7, 1],
-    startPoint: { x: 0, y: 0 },
-    endPoint: { x: 0.8, y: 1 },
-  } : {
-    type: "linear",
-    colors: ["#F5F5F7", "#FFFFFF", "#F8F8FA", "#FFFFFF"],
+    colors: [
+      { light: "#F5F5F7", dark: "#1C1C1E" },
+      { light: "#FFFFFF", dark: "#2C2C2E" },
+      { light: "#F8F8FA", dark: "#1C1C1E" },
+      { light: "#FFFFFF", dark: "#2C2C2E" },
+    ],
     stops: [0, 0.35, 0.7, 1],
     startPoint: { x: 0, y: 0 },
     endPoint: { x: 0.8, y: 1 },
@@ -158,7 +131,7 @@ export default async function (ctx) {
   }
 
   const results = await Promise.all(slots.map((s) => fetchInfo(ctx, s)));
-  const cards = results.map((r) => buildCard(r, slots.length, colors, isDarkMode));
+  const cards = results.map((r) => buildCard(r, slots.length, colors));
 
   return {
     type: "widget",
@@ -219,7 +192,7 @@ export default async function (ctx) {
 
 // ─── 卡片构建 ─────────────────────────────────────────────────
 
-function buildCard(result, total, colors, isDarkMode) {
+function buildCard(result, total, colors) {
   const { name, error, used, totalBytes, percent, expire, remainDays } = result;
 
   const usageColor =
@@ -242,7 +215,7 @@ function buildCard(result, total, colors, isDarkMode) {
       backgroundColor: colors.bgCard,
       borderRadius: 11,
       borderWidth: 0.5,
-      borderColor: colors.error + "40",
+      borderColor: { light: colors.error.light + "40", dark: colors.error.dark + "40" },
       children: [
         {
           type: "image",
