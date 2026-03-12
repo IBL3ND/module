@@ -1,6 +1,6 @@
 /**
- * Egern 黄历小组件 - 严格复刻 Holiday_Countdown.js 成功模式
- * 基于 jnlaoshu/Almanac.js 农历核心
+ * Egern 黄历小组件 - 优化版
+ * 特点：深浅模式自动适配 | 空间利用优化 | 多尺寸适配
  */
 
 // ===== 农历核心数据（1900-2100）=====
@@ -34,8 +34,8 @@ const ANI = "鼠牛虎兔龙蛇马羊猴鸡狗猪";
 const N_STR = ["","一","二","三","四","五","六","七","八","九","十"];
 const MON_STR = ["正","二","三","四","五","六","七","八","九","十","冬","腊"];
 const WEEK = ["日","一","二","三","四","五","六"];
-const YI_POOL = ["祭祀","祈福","嫁娶","出行","动土","安床","开市","交易","纳财","入宅"];
-const JI_POOL = ["安葬","破土","词讼","掘井","栽种","探病","余事勿取"];
+const YI_POOL = ["祭祀","祈福","嫁娶","出行","动土","安床","开市","交易","纳财","入宅","移徙"];
+const JI_POOL = ["安葬","破土","词讼","掘井","栽种","探病","余事勿取","伐木","作梁"];
 
 // ===== 工具函数 =====
 function hashDate(y, m, d) { return ((y*10000 + m*100 + d) * 31 + 7) % 1000; }
@@ -79,19 +79,19 @@ function getLunar(y, m, d) {
 function getLocalYiJi(y, m, d) {
   const h = hashDate(y, m, d);
   return {
-    yi: YI_POOL.slice(0, 3 + h%3),
-    ji: JI_POOL.slice(0, 2 + (h+5)%3)
+    yi: YI_POOL.slice(0, 3 + h%4),
+    ji: JI_POOL.slice(0, 2 + (h+5)%4)
   };
 }
 
-// ===== 主入口（严格复刻成功脚本模式）=====
+// ===== 主入口 =====
 export default async function(ctx) {
-  // 1. 读取环境变量（参考成功脚本）
+  // 1. 环境变量
   const env = ctx.env || {};
   const showLunar = env.SHOW_LUNAR !== 'false';
   const showYiJi = env.SHOW_YIJI !== 'false';
   
-  // 2. 时间计算（+8 时区）
+  // 2. 时间计算
   const now = new Date(Date.now() + (new Date().getTimezoneOffset() + 480) * 60000);
   const [Y, M, D] = [now.getFullYear(), now.getMonth()+1, now.getDate()];
   const W = WEEK[now.getDay()];
@@ -101,17 +101,99 @@ export default async function(ctx) {
   const yiji = getLocalYiJi(Y, M, D);
   const hash = hashDate(Y, M, D);
   
-  // 4. 尺寸适配（用数字字号）
+  // 4. 尺寸适配
   const family = ctx.widgetFamily || "systemMedium";
   const isSmall = family === "systemSmall" || family === "accessoryCircular";
-  const FONT_TITLE = isSmall ? 14 : 16;
-  const FONT_BODY = isSmall ? 11 : 13;
-  const FONT_TINY = isSmall ? 10 : 11;
+  const isMedium = family === "systemMedium" || family === "accessoryRectangular";
+  const isLarge = family === "systemLarge" || family === "systemExtraLarge";
   
-  // 5. 构建 children 数组（直接构建，参考成功脚本）
+  // 5. 深浅模式判断
+  const isDark = ctx.appearance === "dark";
+  
+  // 6. 颜色配置（优化对比度）
+  const C = {
+    bg: isDark ? "#000000" : "#FFFFFF",           // ✅ 黑/白背景
+    title: isDark ? "#FFFFFF" : "#000000",        // 标题：白/黑
+    primary: isDark ? "#E0E0E0" : "#1A1A1A",      // 主要文字：浅灰/深灰
+    secondary: isDark ? "#999999" : "#666666",    // 次要文字：中灰
+    yi: isDark ? "#FF6B6B" : "#E63946",           // 宜：红色系
+    ji: isDark ? "#4ECDC4" : "#1D3557",           // 忌：蓝绿色系
+    accent: isDark ? "#FFD93D" : "#F77F00"        // 强调色：黄/橙
+  };
+  
+  // 7. 字体大小配置（增大字号，更好利用空间）
+  const F = {
+    title: isSmall ? 16 : (isMedium ? 18 : 22),
+    date: isSmall ? 13 : (isMedium ? 15 : 18),
+    body: isSmall ? 11 : (isMedium ? 13 : 15),
+    tiny: isSmall ? 10 : (isMedium ? 11 : 13)
+  };
+  
+  // 8. Padding 和 Gap（增大间距）
+  const padding = isSmall ? 14 : (isMedium ? 16 : 20);
+  const gap = isSmall ? 6 : (isMedium ? 8 : 12);
+  
+  // 9. 构建 children 数组
   const children = [
-    // 头部：图标 + 标题 + 日期
+    // 头部：图标 + 标题
     {
+      type: 'stack',
+      direction: 'row',
+      alignItems: 'center',
+      gap: 10,
+      children: [
+        {
+          type: 'image',
+          src: 'sf-symbol:calendar',
+          color: C.yi,
+          width: isLarge ? 28 : 24,
+          height: isLarge ? 28 : 24
+        },
+        {
+          type: 'text',
+          text: '今日黄历',
+          font: { size: F.title, weight: 'bold' },
+          textColor: C.title,
+          textAlign: 'left'
+        }
+      ]
+    },
+    // 公历日期（大字号）
+    {
+      type: 'text',
+      text: `${Y}年${M}月${D}日 星期${W}`,
+      font: { size: F.date, weight: 'semibold' },
+      textColor: C.primary,
+      textAlign: 'left',
+      maxLines: 1
+    },
+    // 农历信息
+    showLunar ? {
+      type: 'text',
+      text: `${lunar.gz}年 ${lunar.ani}年 ${lunar.cn}`,
+      font: { size: F.body, weight: 'medium' },
+      textColor: C.secondary,
+      textAlign: 'left',
+      maxLines: 1
+    } : null,
+    // 分隔线（大尺寸显示）
+    isLarge ? {
+      type: 'stack',
+      direction: 'row',
+      alignItems: 'center',
+      padding: [8, 0],
+      children: [
+        {
+          type: 'stack',
+          direction: 'row',
+          flex: 1,
+          backgroundColor: isDark ? "#333333" : "#E0E0E0",
+          height: 1
+        }
+      ]
+    } : null,
+    // 宜事项（增加图标）
+    showYiJi ? {
       type: 'stack',
       direction: 'row',
       alignItems: 'center',
@@ -119,74 +201,81 @@ export default async function(ctx) {
       children: [
         {
           type: 'image',
-          src: 'sf-symbol:calendar',
-          color: { light: '#E63946', dark: '#FF6B6B' },
-          width: 22,
-          height: 22
+          src: 'sf-symbol:checkmark.circle.fill',
+          color: C.yi,
+          width: 16,
+          height: 16
         },
         {
           type: 'text',
-          text: '今日黄历',
-          font: { size: FONT_TITLE, weight: 'semibold' },
-          textColor: { light: '#1D1D1F', dark: '#F5F5F7' },
-          textAlign: 'left'
+          text: '宜：' + yiji.yi.join('  '),
+          font: { size: F.tiny, weight: 'medium' },
+          textColor: C.yi,
+          textAlign: 'left',
+          maxLines: 1
         }
       ]
-    },
-    // 公历日期
-    {
-      type: 'text',
-      text: `${Y}年${M}月${D}日 星期${W}`,
-      font: { size: FONT_BODY, weight: 'medium' },
-      textColor: { light: '#666666', dark: '#999999' },
-      textAlign: 'left',
-      maxLines: 1
-    },
-    // 农历信息（可选）
-    showLunar ? {
-      type: 'text',
-      text: `${lunar.gz}年 ${lunar.ani}年 ${lunar.cn}`,
-      font: { size: FONT_TINY, weight: 'regular' },
-      textColor: { light: '#999999', dark: '#777777' },
-      textAlign: 'left',
-      maxLines: 1
     } : null,
-    // 宜事项
+    // 忌事项（增加图标）
     showYiJi ? {
-      type: 'text',
-      text: '宜：' + yiji.yi.join(' '),
-      font: { size: FONT_TINY, weight: 'regular' },
-      textColor: { light: '#E63946', dark: '#FF6B6B' },
-      textAlign: 'left',
-      maxLines: 1
+      type: 'stack',
+      direction: 'row',
+      alignItems: 'center',
+      gap: 8,
+      children: [
+        {
+          type: 'image',
+          src: 'sf-symbol:xmark.circle.fill',
+          color: C.ji,
+          width: 16,
+          height: 16
+        },
+        {
+          type: 'text',
+          text: '忌：' + yiji.ji.join('  '),
+          font: { size: F.tiny, weight: 'medium' },
+          textColor: C.ji,
+          textAlign: 'left',
+          maxLines: 1
+        }
+      ]
     } : null,
-    // 忌事项
-    showYiJi ? {
-      type: 'text',
-      text: '忌：' + yiji.ji.join(' '),
-      font: { size: FONT_TINY, weight: 'regular' },
-      textColor: { light: '#1D3557', dark: '#457B9D' },
-      textAlign: 'left',
-      maxLines: 1
-    } : null,
-    // 冲煞信息
+    // 冲煞信息 + 幸运指数
     {
-      type: 'text',
-      text: `冲${ANI[hash%12]} 煞${["东","南","西","北"][hash%4]}`,
-      font: { size: FONT_TINY, weight: 'regular' },
-      textColor: { light: '#888888', dark: '#666666' },
-      textAlign: 'left',
-      maxLines: 1
+      type: 'stack',
+      direction: 'row',
+      alignItems: 'center',
+      gap: 12,
+      children: [
+        {
+          type: 'text',
+          text: `冲${ANI[hash%12]} 煞${["东","南","西","北"][hash%4]}`,
+          font: { size: F.tiny, weight: 'regular' },
+          textColor: C.secondary,
+          textAlign: 'left',
+          maxLines: 1
+        },
+        {
+          type: 'spacer'
+        },
+        {
+          type: 'text',
+          text: '★'.repeat((hash%5)+1) + '☆'.repeat(4-(hash%5)),
+          font: { size: F.tiny, weight: 'semibold' },
+          textColor: C.accent,
+          textAlign: 'right'
+        }
+      ]
     }
-  ].filter(Boolean); // 过滤 null
+  ].filter(Boolean);
   
-  // 6. 返回根 Widget（严格复刻成功格式）
+  // 10. 返回根 Widget
   return {
     type: 'widget',
-    backgroundColor: { light: '#FFF9E6', dark: '#2C1810' },  // ✅ 对象格式
-    padding: 12,                                              // ✅ 单一数值
-    children: children                                        // ✅ 直接数组
-    // ✅ 不设置 refreshAfter，让 Egern 自动管理
+    backgroundColor: C.bg,  // ✅ 自动适配深浅模式
+    padding: padding,
+    gap: gap,
+    children: children
   };
 }
 
