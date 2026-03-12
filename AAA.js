@@ -1,6 +1,6 @@
 /**
- * Egern 黄历小组件 - 优化版
- * 特点：深浅模式自动适配 | 空间利用优化 | 多尺寸适配
+ * Egern 黄历小组件 - 深浅模式完美适配版
+ * 基于 jnlaoshu/Almanac.js 农历核心 + Holiday_Countdown.js 成功模式
  */
 
 // ===== 农历核心数据（1900-2100）=====
@@ -107,21 +107,7 @@ export default async function(ctx) {
   const isMedium = family === "systemMedium" || family === "accessoryRectangular";
   const isLarge = family === "systemLarge" || family === "systemExtraLarge";
   
-  // 5. 深浅模式判断
-  const isDark = ctx.appearance === "dark";
-  
-  // 6. 颜色配置（优化对比度）
-  const C = {
-    bg: isDark ? "#000000" : "#FFFFFF",           // ✅ 黑/白背景
-    title: isDark ? "#FFFFFF" : "#000000",        // 标题：白/黑
-    primary: isDark ? "#E0E0E0" : "#1A1A1A",      // 主要文字：浅灰/深灰
-    secondary: isDark ? "#999999" : "#666666",    // 次要文字：中灰
-    yi: isDark ? "#FF6B6B" : "#E63946",           // 宜：红色系
-    ji: isDark ? "#4ECDC4" : "#1D3557",           // 忌：蓝绿色系
-    accent: isDark ? "#FFD93D" : "#F77F00"        // 强调色：黄/橙
-  };
-  
-  // 7. 字体大小配置（增大字号，更好利用空间）
+  // 5. 字体大小配置
   const F = {
     title: isSmall ? 16 : (isMedium ? 18 : 22),
     date: isSmall ? 13 : (isMedium ? 15 : 18),
@@ -129,11 +115,11 @@ export default async function(ctx) {
     tiny: isSmall ? 10 : (isMedium ? 11 : 13)
   };
   
-  // 8. Padding 和 Gap（增大间距）
+  // 6. Padding 和 Gap
   const padding = isSmall ? 14 : (isMedium ? 16 : 20);
   const gap = isSmall ? 6 : (isMedium ? 8 : 12);
   
-  // 9. 构建 children 数组
+  // 7. 构建 children 数组（✅ 所有颜色直接用 { light, dark } 对象）
   const children = [
     // 头部：图标 + 标题
     {
@@ -145,7 +131,7 @@ export default async function(ctx) {
         {
           type: 'image',
           src: 'sf-symbol:calendar',
-          color: C.yi,
+          color: { light: '#E63946', dark: '#FF6B6B' },  // ✅ 对象格式
           width: isLarge ? 28 : 24,
           height: isLarge ? 28 : 24
         },
@@ -153,17 +139,17 @@ export default async function(ctx) {
           type: 'text',
           text: '今日黄历',
           font: { size: F.title, weight: 'bold' },
-          textColor: C.title,
+          textColor: { light: '#000000', dark: '#FFFFFF' },  // ✅ 对象格式
           textAlign: 'left'
         }
       ]
     },
-    // 公历日期（大字号）
+    // 公历日期
     {
       type: 'text',
       text: `${Y}年${M}月${D}日 星期${W}`,
       font: { size: F.date, weight: 'semibold' },
-      textColor: C.primary,
+      textColor: { light: '#1A1A1A', dark: '#E0E0E0' },  // ✅ 对象格式
       textAlign: 'left',
       maxLines: 1
     },
@@ -172,7 +158,7 @@ export default async function(ctx) {
       type: 'text',
       text: `${lunar.gz}年 ${lunar.ani}年 ${lunar.cn}`,
       font: { size: F.body, weight: 'medium' },
-      textColor: C.secondary,
+      textColor: { light: '#666666', dark: '#999999' },  // ✅ 对象格式
       textAlign: 'left',
       maxLines: 1
     } : null,
@@ -187,12 +173,12 @@ export default async function(ctx) {
           type: 'stack',
           direction: 'row',
           flex: 1,
-          backgroundColor: isDark ? "#333333" : "#E0E0E0",
+          backgroundColor: { light: '#E0E0E0', dark: '#333333' },  // ✅ 对象格式
           height: 1
         }
       ]
     } : null,
-    // 宜事项（增加图标）
+    // 宜事项
     showYiJi ? {
       type: 'stack',
       direction: 'row',
@@ -202,7 +188,7 @@ export default async function(ctx) {
         {
           type: 'image',
           src: 'sf-symbol:checkmark.circle.fill',
-          color: C.yi,
+          color: { light: '#E63946', dark: '#FF6B6B' },  // ✅ 对象格式
           width: 16,
           height: 16
         },
@@ -210,13 +196,13 @@ export default async function(ctx) {
           type: 'text',
           text: '宜：' + yiji.yi.join('  '),
           font: { size: F.tiny, weight: 'medium' },
-          textColor: C.yi,
+          textColor: { light: '#E63946', dark: '#FF6B6B' },  // ✅ 对象格式
           textAlign: 'left',
           maxLines: 1
         }
       ]
     } : null,
-    // 忌事项（增加图标）
+    // 忌事项
     showYiJi ? {
       type: 'stack',
       direction: 'row',
@@ -226,7 +212,7 @@ export default async function(ctx) {
         {
           type: 'image',
           src: 'sf-symbol:xmark.circle.fill',
-          color: C.ji,
+          color: { light: '#1D3557', dark: '#4ECDC4' },  // ✅ 对象格式
           width: 16,
           height: 16
         },
@@ -234,7 +220,7 @@ export default async function(ctx) {
           type: 'text',
           text: '忌：' + yiji.ji.join('  '),
           font: { size: F.tiny, weight: 'medium' },
-          textColor: C.ji,
+          textColor: { light: '#1D3557', dark: '#4ECDC4' },  // ✅ 对象格式
           textAlign: 'left',
           maxLines: 1
         }
@@ -251,7 +237,7 @@ export default async function(ctx) {
           type: 'text',
           text: `冲${ANI[hash%12]} 煞${["东","南","西","北"][hash%4]}`,
           font: { size: F.tiny, weight: 'regular' },
-          textColor: C.secondary,
+          textColor: { light: '#666666', dark: '#999999' },  // ✅ 对象格式
           textAlign: 'left',
           maxLines: 1
         },
@@ -262,17 +248,17 @@ export default async function(ctx) {
           type: 'text',
           text: '★'.repeat((hash%5)+1) + '☆'.repeat(4-(hash%5)),
           font: { size: F.tiny, weight: 'semibold' },
-          textColor: C.accent,
+          textColor: { light: '#F77F00', dark: '#FFD93D' },  // ✅ 对象格式
           textAlign: 'right'
         }
       ]
     }
   ].filter(Boolean);
   
-  // 10. 返回根 Widget
+  // 8. 返回根 Widget（✅ backgroundColor 直接用对象）
   return {
     type: 'widget',
-    backgroundColor: C.bg,  // ✅ 自动适配深浅模式
+    backgroundColor: { light: '#FFFFFF', dark: '#000000' },  // ✅ 关键：对象格式！
     padding: padding,
     gap: gap,
     children: children
