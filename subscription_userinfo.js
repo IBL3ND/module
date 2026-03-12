@@ -1,6 +1,5 @@
 /**
  * 📅 节日倒计时小组件
- * 修复：使用数字字体大小
  */
 
 const HOLIDAYS = {
@@ -123,40 +122,6 @@ function getCountdowns() {
   return results.filter(r => { if (seen.has(r.days)) return false; seen.add(r.days); return true; });
 }
 
-function createText(text, options = {}) {
-  return {
-    type: 'text',
-    text: text,
-    font: {
-      size: options.size || 13,  // ✅ 使用数字
-      weight: options.weight || 'regular'
-    },
-    textColor: options.color || { light: '#1D1D1F', dark: '#F5F5F7' },
-    textAlign: options.align || 'left',
-    maxLines: options.maxLines
-  };
-}
-
-function createStack(children, options = {}) {
-  return {
-    type: 'stack',
-    direction: options.direction || 'column',
-    alignItems: options.align || 'start',
-    gap: options.gap || 8,
-    children: children.filter(Boolean)
-  };
-}
-
-function createImage(symbolName, options = {}) {
-  return {
-    type: 'image',
-    src: `sf-symbol:${symbolName}`,
-    color: options.color || { light: '#FF3B30', dark: '#FF453A' },
-    width: options.size,
-    height: options.size
-  };
-}
-
 export default async function(ctx) {
   const env = ctx.env || {};
   const title = env.TITLE || '节日倒计时';
@@ -182,21 +147,45 @@ export default async function(ctx) {
   }
   
   const children = [
-    createStack([
-      createImage('calendar', { size: 24 }),
-      createText(title, { size: 16, weight: 'semibold' })  // ✅ 使用数字 16
-    ], { direction: 'row', align: 'center', gap: 8 })
+    {
+      type: 'stack',
+      direction: 'row',
+      alignItems: 'center',
+      gap: 8,
+      children: [
+        {
+          type: 'image',
+          src: 'sf-symbol:calendar',
+          color: { light: '#FF3B30', dark: '#FF453A' },
+          width: 24,
+          height: 24
+        },
+        {
+          type: 'text',
+          text: title,
+          font: {
+            size: 16,
+            weight: 'semibold'
+          },
+          textColor: { light: '#1D1D1F', dark: '#F5F5F7' },
+          textAlign: 'left'
+        }
+      ]
+    }
   ];
   
   rows.forEach((row, index) => {
-    children.push(
-      createText(row, {
-        size: 13,  // ✅ 使用数字 13
-        weight: index === 0 ? 'semibold' : 'regular',
-        color: { light: '#333333', dark: '#CCCCCC' },
-        maxLines: 1
-      })
-    );
+    children.push({
+      type: 'text',
+      text: row,
+      font: {
+        size: 13,
+        weight: index === 0 ? 'semibold' : 'regular'
+      },
+      textColor: { light: '#333333', dark: '#CCCCCC' },
+      textAlign: 'left',
+      maxLines: 1
+    });
   });
   
   return {
