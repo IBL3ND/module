@@ -123,7 +123,7 @@ function getCountdowns() {
 }
 
 function t(text, opts = {}) {
-  const sizes = { title: 18, headline: 20, body: 25, caption: 11 };
+  const sizes = { title: 20, headline: 20, body: 25, caption: 11 };
   return {
     type: 'text',
     text,
