@@ -1,6 +1,6 @@
 # 📅 节日倒计时模块 - Egern 配置
 name: "📅 节日倒计时模块"
-author: "YourName"
+author: "iBL3ND"
 description: "显示距离节日/节气/传统节日的天数"
 
 scriptings:
