@@ -1,6 +1,6 @@
 /**
- * 节日倒计时小组件 - 优化版
- * 显示距离各种节日、节气、传统节日的天数
+ * 📅 节日倒计时小组件 - 最终优化版
+ * 充分利用空间，减少右侧空白
  */
 
 /* ========== 🎊 节日数据定义 ========== */
@@ -148,10 +148,10 @@ function getCountdowns() {
     results.push({ name, days, type: 'lunar' });
   }
   
-  // 按天数排序，去重（只保留最近的）
+  // 按天数排序
   results.sort((a, b) => a.days - b.days);
   
-  // 去重：同一天只显示一个
+  // 去重：同一天只保留一个
   const seen = new Set();
   const unique = results.filter(r => {
     if (seen.has(r.days)) return false;
@@ -202,8 +202,8 @@ export default async function(ctx) {
   const showHolidays = env.SHOW_HOLIDAYS !== 'false';
   const showTerms = env.SHOW_TERMS !== 'false';
   const showTraditional = env.SHOW_TRADITIONAL !== 'false';
-  const itemsPerRow = parseInt(env.ITEMS_PER_ROW) || 3;
-  const maxRows = parseInt(env.MAX_ROWS) || 6;  // ✅ 新增：最大行数
+  const itemsPerRow = parseInt(env.ITEMS_PER_ROW) || 4;  // ✅ 改为每行4个
+  const maxRows = parseInt(env.MAX_ROWS) || 5;          // ✅ 减少行数
   
   const countdowns = getCountdowns();
   
@@ -213,7 +213,7 @@ export default async function(ctx) {
   if (!showTerms) filtered = filtered.filter(c => c.type !== 'term');
   if (!showTraditional) filtered = filtered.filter(c => c.type !== 'lunar' && c.type !== 'floating');
   
-  // 取前 N 个（根据行数计算）
+  // 取前 N 个
   const totalItems = itemsPerRow * maxRows;
   const displayItems = filtered.slice(0, totalItems);
   
@@ -221,7 +221,7 @@ export default async function(ctx) {
   const rows = [];
   for (let i = 0; i < displayItems.length; i += itemsPerRow) {
     const rowItems = displayItems.slice(i, i + itemsPerRow);
-    const rowText = rowItems.map(c => `${c.name}${c.days}天`).join(' | ');
+    const rowText = rowItems.map(c => `${c.name}${c.days}天`).join('  |  ');  // ✅ 增加分隔符空格
     rows.push(rowText);
   }
   
@@ -229,18 +229,18 @@ export default async function(ctx) {
   const children = [
     // 标题行（带图标）
     stack([
-      img('calendar', { size: 24, color: { light: '#FF3B30', dark: '#FF453A' } }),
+      img('calendar', { size: 28, color: { light: '#FF3B30', dark: '#FF453A' } }),
       t(title.replace(/^[^\s]+\s*/, ''), { size: 'headline', weight: 'bold' })
-    ], { direction: 'row', gap: 8, align: 'center' })
+    ], { direction: 'row', gap: 10, align: 'center' })
   ];
   
-  // 添加每一行（增加行间距）
+  // 添加每一行
   rows.forEach((row, index) => {
     children.push(
       t(row, { 
         size: 'body', 
         color: { light: '#333333', dark: '#CCCCCC' },
-        weight: index === 0 ? 'semibold' : 'regular'  // 第一行加粗
+        weight: index === 0 ? 'semibold' : 'regular'
       })
     );
   });
@@ -248,7 +248,7 @@ export default async function(ctx) {
   return {
     type: 'widget',
     backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
-    padding: 16,
+    padding: 12,  // ✅ 减少padding
     children: children
   };
 }
