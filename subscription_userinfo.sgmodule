@@ -14,8 +14,9 @@ widgets:
     script_name: "holiday-countdown"
     env:
       TITLE: "节日倒计时"
+      ITEMS_PER_ROW: "3"   # 每行3个
+      MAX_ROWS: "6"        # 显示6行
       SHOW_HOLIDAYS: "true"
       SHOW_TERMS: "true"
       SHOW_TRADITIONAL: "true"
-      ITEMS_PER_ROW: "4"      
-      MAX_ROWS: "5"          
+
