@@ -6,12 +6,11 @@ description: "显示距离节日/节气/传统节日的天数"
 scriptings:
   - generic:
       name: "holiday-countdown"
-      # ⚠️ 请替换为你的 GitHub raw 链接
       script_url: "https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Holiday_Countdown.js"
       timeout: 15
 
 widgets:
-  # 配置1：默认布局（每行4个）
+  # 默认布局（每行4个）
   - name: "📅 节日倒计时"
     script_name: "holiday-countdown"
     env:
