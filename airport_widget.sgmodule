@@ -1,7 +1,6 @@
-name: ＂机场流量小组件＂
-desc: ＂显示机场订阅流量＂
-author: ＂iBL3ND＂
-homepage: https://egernapp.com
+name: 机场流量小组件
+desc: 显示机场订阅流量
+author: iBL3ND
 
 arguments:
   NAME1: 机场1名称
@@ -26,6 +25,6 @@ arguments:
 
 widgets:
   airport_traffic:
-    title: ＂机场流量＂
-    description: "显示机场流量信息"
+    title: 机场流量
+    description: 机场订阅流量信息
     script: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/airport_widget.js
