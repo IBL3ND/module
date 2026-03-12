@@ -1,15 +1,50 @@
-name: "今日黄历 - Widget"
-description: "把今日黄历显示在 iOS 主屏/锁屏小组件上"
-author: "基于 Egern DSL + 免费黄历API"
+# 🧧 Egern 黄历小组件模块 - 配置文件
+# 作者：YourName
+# 描述：显示公历/农历/节气/节日/宜忌，纯本地计算无需网络
+# 使用：Egern → 配置 → Widgets → 添加远程配置 → 填入本文件 raw 链接
+
+name: "🧧 黄历小组件模块"
+author: "YourName"
+description: "今日黄历 · 农历节气 · 宜忌祝福 · 离线可用"
+version: "1.0.0"
+
 scriptings:
   - generic:
-      name: "today-almanac-widget"
-      script_url: "script_url: "https://raw.githubusercontent.com/egerndaddy/quick-start/main/widgets/hello.js"   # 后面提供这个 JS 内容
+      name: "today-almanac"
+      # ⚠️ 请替换为你的 JS 文件 raw 链接
+      script_url: "https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/subscription_userinfo.js"
       timeout: 15
+      update-interval: 1800
+
 widgets:
-  - name: "今日黄历"
-    script_name: "today-almanac-widget"
+  # 🟠 标准尺寸 - 完整信息
+  - name: "📅 黄历·标准"
+    script_name: "today-almanac"
     env:
-      REFRESH_MIN: "30"          # 可选：刷新间隔分钟（脚本里可读）
-      BG_COLOR_LIGHT: "#FFF8E1"  # 浅色背景（米黄）
-      BG_COLOR_DARK:  "#2D1B0F"  # 深色背景（深咖啡）
+      WIDGET_SIZE: "medium"
+      SHOW_LUNAR: "true"
+      SHOW_TERMS: "true"
+      SHOW_FESTIVALS: "true"
+      SHOW_YIJI: "true"
+      THEME: "orange"
+
+  # 🔵 小尺寸 - 核心信息
+  - name: "📅 黄历·精简"
+    script_name: "today-almanac"
+    env:
+      WIDGET_SIZE: "small"
+      SHOW_LUNAR: "true"
+      SHOW_TERMS: "false"
+      SHOW_FESTIVALS: "false"
+      SHOW_YIJI: "false"
+
+  # 🟡 灵动岛/锁屏 - 极简
+  - name: "📅 黄历·灵动"
+    script_name: "today-almanac"
+    env:
+      WIDGET_SIZE: "accessory"
+      SHOW_LUNAR: "false"
+      SHOW_TERMS: "false"
+      SHOW_FESTIVALS: "false"
+      SHOW_YIJI: "false"
+
