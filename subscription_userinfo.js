@@ -1,5 +1,6 @@
 /**
- * 📅 节日倒计时小组件
+ * 📅 节日倒计时小组件 - 智能自适应版
+ * 根据内容自动调整布局，充分利用空间
  */
 
 const HOLIDAYS = {
@@ -123,11 +124,11 @@ function getCountdowns() {
 }
 
 function t(text, opts = {}) {
-  const sizes = { title: 20, headline: 20, body: 25, caption: 11 };
+  const sizes = { title: 20, headline: 18, body: 14, caption: 12 };
   return {
     type: 'text',
     text,
-    font: { size: sizes[opts.size] || 13, weight: opts.weight || 'regular' },
+    font: { size: sizes[opts.size] || 14, weight: opts.weight || 'regular' },
     textColor: opts.color || { light: '#1D1D1F', dark: '#F5F5F7' },
     textAlign: 'left',
     maxLines: 1
@@ -135,11 +136,37 @@ function t(text, opts = {}) {
 }
 
 function stack(children, opts = {}) {
-  return { type: 'stack', direction: opts.direction || 'row', alignItems: opts.align || 'center', gap: opts.gap || 6, children: children.filter(Boolean) };
+  return { type: 'stack', direction: opts.direction || 'row', alignItems: opts.align || 'center', gap: opts.gap || 8, children: children.filter(Boolean) };
 }
 
 function img(src, opts = {}) {
-  return { type: 'image', src: src.startsWith('sf:') ? src.replace('sf:', 'sf-symbol:') : `sf-symbol:${src}`, width: opts.size||20, height: opts.size||20, color: opts.color || { light: '#FF3B30', dark: '#FF453A' } };
+  return { type: 'image', src: src.startsWith('sf:') ? src.replace('sf:', 'sf-symbol:') : `sf-symbol:${src}`, width: opts.size||24, height: opts.size||24, color: opts.color || { light: '#FF3B30', dark: '#FF453A' } };
+}
+
+// ✅ 智能计算每行能放几个项目
+function calculateItemsPerRow(items, maxRows, maxWidth = 320) {
+  if (items.length === 0) return 3;
+  
+  // 尝试不同的每行数量
+  for (let perRow = 4; perRow >= 2; perRow--) {
+    const testRows = [];
+    for (let i = 0; i < Math.min(items.length, perRow * maxRows); i += perRow) {
+      const rowItems = items.slice(i, i + perRow);
+      const rowText = rowItems.map(c => `${c.name}${c.days}天`).join(' | ');
+      testRows.push(rowText);
+    }
+    
+    // 检查每行是否溢出（估算字符宽度）
+    const maxRowLength = Math.max(...testRows.map(r => r.length));
+    // 每个中文字符约10-12px，加上边距和图标
+    const estimatedWidth = maxRowLength * 11 + 40; // 40px 为图标和padding
+    
+    if (estimatedWidth <= maxWidth) {
+      return perRow;
+    }
+  }
+  
+  return 3; // 默认3个
 }
 
 export default async function(ctx) {
@@ -149,16 +176,24 @@ export default async function(ctx) {
   const showTerms = env.SHOW_TERMS !== 'false';
   const showTraditional = env.SHOW_TRADITIONAL !== 'false';
   
-  // ✅ 强制每行3个，最多5行
-  const itemsPerRow = 3;
-  const maxRows = 5;
+  // ✅ 从配置读取，允许用户自定义
+  const configuredItemsPerRow = parseInt(env.ITEMS_PER_ROW) || 0; // 0表示自动
+  const maxRows = parseInt(env.MAX_ROWS) || 5;
+  const fontSize = parseInt(env.FONT_SIZE) || 14;
   
   let countdowns = getCountdowns();
   if (!showHolidays) countdowns = countdowns.filter(c => c.type !== 'holiday');
   if (!showTerms) countdowns = countdowns.filter(c => c.type !== 'term');
   if (!showTraditional) countdowns = countdowns.filter(c => c.type !== 'lunar' && c.type !== 'floating');
   
-  const displayItems = countdowns.slice(0, itemsPerRow * maxRows);
+  // ✅ 智能计算或用户指定
+  const itemsPerRow = configuredItemsPerRow > 0 
+    ? configuredItemsPerRow 
+    : calculateItemsPerRow(countdowns, maxRows);
+  
+  const totalItems = itemsPerRow * maxRows;
+  const displayItems = countdowns.slice(0, totalItems);
+  
   const rows = [];
   for (let i = 0; i < displayItems.length; i += itemsPerRow) {
     const rowItems = displayItems.slice(i, i + itemsPerRow);
@@ -169,8 +204,19 @@ export default async function(ctx) {
     stack([img('calendar'), t(title, { size: 'headline', weight: 'bold' })], { gap: 8 })
   ];
   
-  rows.forEach((row, i) => children.push(t(row, { size: 'body', weight: i===0?'semibold':'regular', color: { light:'#333', dark:'#CCC' } })));
+  rows.forEach((row, i) => {
+    children.push(t(row, { 
+      size: 'body', 
+      weight: i===0?'semibold':'regular', 
+      color: { light:'#333', dark:'#CCC' }
+    }));
+  });
   
-  return { type: 'widget', backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' }, padding: 12, children };
+  return { 
+    type: 'widget', 
+    backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' }, 
+    padding: 12, 
+    children 
+  };
 }
 
