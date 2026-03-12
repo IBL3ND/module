@@ -2,19 +2,21 @@ name: "📡 机场流量小组件"
 author: "iBL3ND"
 description: "显示机场订阅流量"
 
+#!arguments=A名称:机场A名称,A地址:机场A订阅,A重置:重置日,B名称:机场B名称,B地址:机场B订阅,B重置:重置日,C名称:机场C名称,C地址:机场C订阅,C重置:重置日,D名称:机场D名称,D地址:机场D订阅,D重置:重置日,E名称:机场E名称,E地址:机场E订阅,E重置:重置日
+
 scriptings:
   - generic:
       name: "airport-traffic"
-      script_url: "https://raw.githubusercontent.com/IBL3ND/module/main/traffic.js"
+      script_url: "https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/airport_widget.js"
       timeout: 15
 
 widgets:
   - name: "📡 机场流量"
     script_name: "airport-traffic"
     env:
-      NAME1: "机场1"
-      URL1: "https://xxx.com/subscribe"
-      RESET1: "1"
+      NAME1: ""
+      URL1: ""
+      RESET1: ""
       NAME2: ""
       URL2: ""
       RESET2: ""
