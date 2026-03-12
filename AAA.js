@@ -1,5 +1,6 @@
 /**
- * 📅 节日倒计时小组件 - 带年月日
+ * 📅 节日倒计时小组件 - 带年月日（农历格式修复版）
+ * 农历显示格式：农历二月初四
  */
 
 const HOLIDAYS = {
@@ -40,51 +41,61 @@ const FLOATING_HOLIDAYS = {
 };
 
 const Lunar = (function() {
-  const lunarInfo = [0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,0x06ca0,0x0b550,0x15355,0x04da0,0x0a5b0,0x14573,0x052b0,0x0a9a8,0x0e950,0x06aa0,0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b6a0,0x195a6,0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x05ac0,0x0ab60,0x096d5,0x092e0,0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,0x05aa0,0x076a3,0x096d0,0x04afb,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0];
-
-  function getBit(num, n) { return (num >> n) & 1; }
-  function lunarYearDays(y) { let s = 348, i = 0x8000; for (; i > 0x8; i >>= 1) s += getBit(lunarInfo[y - 1900], i) ? 1 : 0; return s + leapDays(y); }
-  function leapDays(y) { return leapMonth(y) ? (getBit(lunarInfo[y - 1900], 0x10000) ? 30 : 29) : 0; }
-  function leapMonth(y) { return lunarInfo[y - 1900] & 0xf; }
-  function monthDays(y, m) { return getBit(lunarInfo[y - 1900], 0x10000 - m) ? 30 : 29; }
-
+  const lunarInfo = [0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,0x06ca0,0x0b550,0x15355,0x04da0,0x0a5b0,0x14573,0x052b0,0x0a9a8,0x0e950,0x06aa0,0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b6a0,0x195a6,0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x05ac0,0x0ab60,0x096d5,0x092e0,0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0xabb7,0x025d0,0x092d0,0x0cab5,0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,0x05aa0,0x076a3,0x096d0,0x04afb,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0];
+  
+  function getBit(num,n){return(num>>n)&1}
+  function lunarYearDays(y){let s=348,i=0x8000;for(;i>0x8;i>>=1)s+=getBit(lunarInfo[y-1900],i)?1:0;return s+leapDays(y)}
+  function leapDays(y){return leapMonth(y)?(getBit(lunarInfo[y-1900],0x10000)?30:29):0}
+  function leapMonth(y){return lunarInfo[y-1900]&0xf}
+  function monthDays(y,m){return getBit(lunarInfo[y-1900],0x10000-m)?30:29}
+  
+  // ✅ 新增：正确的农历日期字符串生成函数（修复"初日"bug）
+  function getDayStr(d) {
+    const ones = ['一','二','三','四','五','六','七','八','九'];
+    if (d === 10) return '初十';
+    if (d === 20) return '二十';
+    if (d === 30) return '三十';
+    const tens = Math.floor(d / 10);
+    const onesDigit = d % 10;
+    if (tens === 0) return '初' + ones[onesDigit - 1];           // 1-9 → 初一~初九
+    if (tens === 1) return '十' + (onesDigit > 0 ? ones[onesDigit - 1] : '');  // 11-19 → 十一~十九
+    if (tens === 2) return '廿' + (onesDigit > 0 ? ones[onesDigit - 1] : '');  // 21-29 → 廿一~廿九
+    return '';
+  }
+  
   function getLunarDate(objDate) {
     let baseDate = new Date(1900, 0, 31);
     let offset = Math.floor((objDate - baseDate) / 86400000);
     let y = 1900, m = 1, d = 1, leap = 0;
-    for (; y < 2100 && offset > 0; y++) {
-      let yDays = lunarYearDays(y);
-      if (offset >= yDays) { offset -= yDays; } else { break; }
+    for(; y < 2050 && offset > 0; y++) {
+      let yearDays = lunarYearDays(y);
+      if(offset > yearDays) offset -= yearDays; else break;
     }
     let lm = leapMonth(y);
-    for (let i = 1; i < 13 && offset > 0; i++) {
-      if (lm > 0 && i === lm + 1 && !leap) { --i; leap = 1; continue; }
-      let mDays = leap ? leapDays(y) : monthDays(y, i);
-      if (offset < mDays) { m = i; d = offset + 1; break; }
-      offset -= mDays; leap = 0;
+    for(let i = 1; i < 13 && offset > 0; i++) {
+      if(lm > 0 && i === lm + 1 && !leap) { --i; leap = 1; continue; }
+      let md = leap ? leapDays(y) : monthDays(y, i);
+      if(offset <= md) { m = i; d = offset; break; }
+      offset -= md; leap = 0;
     }
-
-    const nStr1 = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
-    const nStr2 = ['初', '十', '廿', '卅'];
-    const nStr3 = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '腊'];
-    const animals = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
-    const gan = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
-    const zhi = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-
-    let dayStr = '';
-    if (d === 10) dayStr = '初十';
-    else if (d === 20) dayStr = '二十';
-    else if (d === 30) dayStr = '三十';
-    else dayStr = nStr2[Math.floor((d - 1) / 10)] + nStr1[(d - 1) % 10 + 1];
-
-    return {
-      year: y,
-      month: m,
+    
+    const nStr3 = ['正','二','三','四','五','六','七','八','九','十','冬','腊'];
+    const animals = ['鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪'];
+    const gan = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸'];
+    const zhi = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥'];
+    
+    // ✅ 使用新函数生成正确的 dayStr
+    const dayStr = getDayStr(d);
+    
+    return { 
+      year: y, 
+      month: m, 
       day: d,
-      monthStr: nStr3[m - 1],
+      monthStr: nStr3[m-1], 
       dayStr: dayStr,
-      ganZhi: gan[(y - 4) % 10] + zhi[(y - 4) % 12],
-      animal: animals[(y - 4) % 12]
+      ganZhi: gan[(y-4)%10] + zhi[(y-4)%12],
+      animal: animals[(y-4)%12],
+      isLeap: leap === 1  // ✅ 添加闰月标记（可选增强）
     };
   }
   return { getLunarDate };
@@ -106,27 +117,27 @@ function getCountdowns() {
   const now = new Date();
   const currentYear = now.getFullYear();
   const results = [];
-
+  
   for (const [key, info] of Object.entries(HOLIDAYS)) {
     const [m, d] = key.split('-').map(Number);
     let targetDate = new Date(currentYear, m - 1, d);
     if (targetDate < now) targetDate = new Date(currentYear + 1, m - 1, d);
     results.push({ name: info.name, days: daysDiff(now, targetDate), type: info.type });
   }
-
+  
   for (const [key, info] of Object.entries(FLOATING_HOLIDAYS)) {
     let targetDate = info.calc(currentYear);
     if (targetDate < now) targetDate = info.calc(currentYear + 1);
     results.push({ name: info.name, days: daysDiff(now, targetDate), type: 'floating' });
   }
-
+  
   for (const [key, name] of Object.entries(SOLAR_TERMS)) {
     const [m, d] = key.split('-').map(Number);
     let targetDate = new Date(currentYear, m - 1, d);
     if (targetDate < now) targetDate = new Date(currentYear + 1, m - 1, d);
     results.push({ name, days: daysDiff(now, targetDate), type: 'term' });
   }
-
+  
   const lunar = Lunar.getLunarDate(now);
   for (const [key, name] of Object.entries(LUNAR_HOLIDAYS)) {
     const [lm, ld] = key.split('-').map(Number);
@@ -138,7 +149,7 @@ function getCountdowns() {
     if (targetDate < now) targetDate = new Date(currentYear + 1, targetMonth - 1, ld);
     results.push({ name, days: daysDiff(now, targetDate), type: 'lunar' });
   }
-
+  
   results.sort((a, b) => a.days - b.days);
   const seen = new Set();
   return results.filter(r => { if (seen.has(r.days)) return false; seen.add(r.days); return true; });
@@ -152,33 +163,39 @@ export default async function(ctx) {
   const showTraditional = env.SHOW_TRADITIONAL !== 'false';
   const itemsPerRow = parseInt(env.ITEMS_PER_ROW) || 4;
   const maxRows = parseInt(env.MAX_ROWS) || 5;
-
+  
+  // ✅ 获取当前日期
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
   const day = now.getDate();
   const weekday = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
-
+  
+  // ✅ 获取农历信息
   const lunar = Lunar.getLunarDate(now);
   const solarDate = `${year}年${month}月${day}日 周${weekday}`;
-  const lunarDate = `农历${lunar.monthStr}月${lunar.dayStr} ${lunar.animal}年`;
-
+  
+  // ✅ 修复：农历格式简化为 "农历二月初四"，支持闰月显示
+  const monthDisplay = lunar.isLeap ? `闰${lunar.monthStr}` : lunar.monthStr;
+  const lunarDate = `农历${monthDisplay}月${lunar.dayStr}`;
+  
   let countdowns = getCountdowns();
   if (!showHolidays) countdowns = countdowns.filter(c => c.type !== 'holiday');
   if (!showTerms) countdowns = countdowns.filter(c => c.type !== 'term');
   if (!showTraditional) countdowns = countdowns.filter(c => c.type !== 'lunar' && c.type !== 'floating');
-
+  
   const totalItems = itemsPerRow * maxRows;
   const displayItems = countdowns.slice(0, totalItems);
-
+  
   const rows = [];
   for (let i = 0; i < displayItems.length; i += itemsPerRow) {
     const rowItems = displayItems.slice(i, i + itemsPerRow);
     const rowText = rowItems.map(c => `${c.name}${c.days}天`).join(' | ');
     rows.push(rowText);
   }
-
+  
   const children = [
+    // ✅ 标题行（带图标）
     {
       type: 'stack',
       direction: 'row',
@@ -204,6 +221,7 @@ export default async function(ctx) {
         }
       ]
     },
+    // ✅ 公历日期行
     {
       type: 'text',
       text: solarDate,
@@ -215,6 +233,7 @@ export default async function(ctx) {
       textAlign: 'left',
       maxLines: 1
     },
+    // ✅ 农历日期行（修复后格式：农历二月初四）
     {
       type: 'text',
       text: lunarDate,
@@ -227,7 +246,7 @@ export default async function(ctx) {
       maxLines: 1
     }
   ];
-
+  
   rows.forEach((row, index) => {
     children.push({
       type: 'text',
@@ -241,7 +260,7 @@ export default async function(ctx) {
       maxLines: 1
     });
   });
-
+  
   return {
     type: 'widget',
     backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
@@ -249,3 +268,4 @@ export default async function(ctx) {
     children: children
   };
 }
+
