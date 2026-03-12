@@ -1,21 +1,11 @@
-name: "📅 节日倒计时模块"
-author: "YourName"
-description: "显示距离各种节日/节气的天数"
-
-scriptings:
-  - generic:
-      name: "holiday-countdown"
-      script_url: "https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/subscription_userinfo.js"
-      timeout: 15
-      update-interval: 3600
-
 widgets:
-  - name: "🎉 节日倒计时"
+  - name: "节日倒计时"
     script_name: "holiday-countdown"
     env:
-      TITLE: "天呐，还要多久才放假呀？😭"
+      TITLE: "节日倒计时"
       SHOW_HOLIDAYS: "true"
       SHOW_TERMS: "true"
       SHOW_TRADITIONAL: "true"
       ITEMS_PER_ROW: "3"
+      MAX_ROWS: "6"
 
