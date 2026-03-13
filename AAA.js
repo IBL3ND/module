@@ -1,38 +1,26 @@
 /**
- * ⛽ 实时油价小组件
- * ✅ 小尺寸：一行3个
- * ✅ 中尺寸：一行4个（字体放大）
- * ✅ 显示油价调整趋势
+ * ⛽ 实时油价小组件 - 增强版
  */
-
-// ========== 配置参数 ==========
-// 格式：省份拼音/城市拼音
-// 示例：guangdong/guangzhou, shanxi-3/xian, hainan/haikou
-// 查询省份拼音：http://m.qiyoujiage.com/shanxi-3.shtml
 
 export default async function(ctx) {
   try {
     const env = ctx.env || {};
     const widgetFamily = ctx.widgetFamily || 'systemMedium';
     
-    // 从环境变量获取省份和城市，或默认值
     const region = env.REGION || 'guangdong/guangzhou';
-    const showTrend = env.SHOW_TREND !== 'false'; // 是否显示调整趋势
-    
-    // 构建查询地址
-    const queryAddr = `http://m.qiyoujiage.com/${region}.shtml`;
+    const showTrend = env.SHOW_TREND !== 'false';
     
     // 获取油价数据
     let oilData = null;
     try {
-      oilData = await fetchOilPrice(queryAddr);
+      oilData = await fetchOilPrice(region);
     } catch (e) {
-      console.error('获取油价失败:', e);
+      console.error('获取油价失败:', e.message);
     }
     
     // 🔹 锁屏圆形
     if (widgetFamily === 'accessoryCircular') {
-      const price = oilData && oilData.prices[0] ? oilData.prices[0].value : '--';
+      const price = oilData && oilData.prices[0] ? oilData.prices[0].value.split(' ')[0] : '--';
       return {
         type: 'widget',
         padding: 6,
@@ -42,7 +30,7 @@ export default async function(ctx) {
           type: 'stack', direction: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
           children: [
             { type: 'image', src: 'sf-symbol:fuelpump.fill', color: { light: '#FF9500', dark: '#FF9F0A' }, width: 22, height: 22 },
-            { type: 'text', text: price.split(' ')[0] || '--', font: { size: 14, weight: 'bold' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' }, textAlign: 'center' }
+            { type: 'text', text: price, font: { size: 14, weight: 'bold' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' }, textAlign: 'center' }
           ]
         }]
       };
@@ -72,7 +60,7 @@ export default async function(ctx) {
       
       const children = [];
       
-      // 添加标题
+      // 标题
       children.push({
         type: 'text',
         text: '⛽ 油价',
@@ -81,33 +69,44 @@ export default async function(ctx) {
         maxLines: 1
       });
       
-      // 添加油价（一行3个）
-      for (let i = 0; i < prices.length; i += 3) {
-        const rowItems = prices.slice(i, i + 3);
-        const rowChildren = rowItems.map((p, idx) => ({
-          type: 'text',
-          text: `${p.name.split('油')[0]} ${p.value}`,
-          font: { size: 9, weight: idx === 0 ? 'semibold' : 'regular' },
-          textColor: idx === 0 ? { light: '#FF3B30', dark: '#FF453A' } : { light: '#333333', dark: '#CCCCCC' },
-          flex: 1,
-          maxLines: 1
-        }));
+      // 油价列表
+      if (prices.length > 0) {
+        for (let i = 0; i < prices.length; i += 3) {
+          const rowItems = prices.slice(i, i + 3);
+          const rowChildren = rowItems.map((p, idx) => ({
+            type: 'text',
+            text: `${p.name.split('油')[0]} ${p.value}`,
+            font: { size: 9, weight: idx === 0 ? 'semibold' : 'regular' },
+            textColor: idx === 0 ? { light: '#FF3B30', dark: '#FF453A' } : { light: '#333333', dark: '#CCCCCC' },
+            flex: 1,
+            maxLines: 1
+          }));
+          
+          children.push({
+            type: 'stack',
+            direction: 'row',
+            gap: 2,
+            children: rowChildren
+          });
+        }
         
-        children.push({
-          type: 'stack',
-          direction: 'row',
-          gap: 2,
-          children: rowChildren
-        });
-      }
-      
-      // 添加调整趋势
-      if (showTrend && oilData && oilData.trend) {
+        // 调整趋势
+        if (showTrend && oilData.trend) {
+          children.push({
+            type: 'text',
+            text: `${oilData.trend.date} ${oilData.trend.symbol} ${oilData.trend.value}`,
+            font: { size: 8, weight: 'regular' },
+            textColor: oilData.trend.symbol === '↓' ? { light: '#34C759', dark: '#30D158' } : { light: '#FF3B30', dark: '#FF453A' },
+            maxLines: 1
+          });
+        }
+      } else {
+        // 无数据提示
         children.push({
           type: 'text',
-          text: `${oilData.trend.date} ${oilData.trend.symbol} ${oilData.trend.value}`,
-          font: { size: 8, weight: 'regular' },
-          textColor: oilData.trend.symbol === '↓' ? { light: '#34C759', dark: '#30D158' } : { light: '#FF3B30', dark: '#FF453A' },
+          text: '暂无数据',
+          font: { size: 10, weight: 'regular' },
+          textColor: { light: '#999999', dark: '#666666' },
           maxLines: 1
         });
       }
@@ -121,13 +120,12 @@ export default async function(ctx) {
       };
     }
     
-    // 🔹 中尺寸（2×4）- 一行4个（字体放大）
+    // 🔹 中尺寸（2×4）- 一行4个
     if (widgetFamily === 'systemMedium') {
       const prices = oilData ? oilData.prices : [];
       
       const children = [];
       
-      // 添加标题
       children.push({
         type: 'text',
         text: '⛽ 实时油价',
@@ -136,37 +134,45 @@ export default async function(ctx) {
         maxLines: 1
       });
       
-      // 添加油价（一行4个）
-      for (let i = 0; i < prices.length; i += 4) {
-        const rowItems = prices.slice(i, i + 4);
-        const rowChildren = rowItems.map((p, idx) => {
-          const globalIdx = i + idx;
-          return {
-            type: 'text',
-            text: `${p.name} ${p.value}`,
-            font: { size: 11, weight: globalIdx < 2 ? 'semibold' : 'regular' },
-            textColor: globalIdx < 2 ? { light: '#FF3B30', dark: '#FF453A' } : (globalIdx < 4 ? { light: '#FF9500', dark: '#FF9F0A' } : { light: '#333333', dark: '#CCCCCC' }),
-            flex: 1,
-            maxLines: 1
-          };
-        });
+      if (prices.length > 0) {
+        for (let i = 0; i < prices.length; i += 4) {
+          const rowItems = prices.slice(i, i + 4);
+          const rowChildren = rowItems.map((p, idx) => {
+            const globalIdx = i + idx;
+            return {
+              type: 'text',
+              text: `${p.name} ${p.value}`,
+              font: { size: 11, weight: globalIdx < 2 ? 'semibold' : 'regular' },
+              textColor: globalIdx < 2 ? { light: '#FF3B30', dark: '#FF453A' } : (globalIdx < 4 ? { light: '#FF9500', dark: '#FF9F0A' } : { light: '#333333', dark: '#CCCCCC' }),
+              flex: 1,
+              maxLines: 1
+            };
+          });
+          
+          children.push({
+            type: 'stack',
+            direction: 'row',
+            gap: 3,
+            children: rowChildren
+          });
+        }
         
-        children.push({
-          type: 'stack',
-          direction: 'row',
-          gap: 3,
-          children: rowChildren
-        });
-      }
-      
-      // 添加调整趋势
-      if (showTrend && oilData && oilData.trend) {
+        if (showTrend && oilData.trend) {
+          children.push({
+            type: 'text',
+            text: `📅 ${oilData.trend.date} ${oilData.trend.symbol} ${oilData.trend.value}`,
+            font: { size: 10, weight: 'medium' },
+            textColor: oilData.trend.symbol === '↓' ? { light: '#34C759', dark: '#30D158' } : { light: '#FF3B30', dark: '#FF453A' },
+            maxLines: 1
+          });
+        }
+      } else {
         children.push({
           type: 'text',
-          text: `📅 ${oilData.trend.date} ${oilData.trend.symbol} ${oilData.trend.value}`,
-          font: { size: 10, weight: 'medium' },
-          textColor: oilData.trend.symbol === '↓' ? { light: '#34C759', dark: '#30D158' } : { light: '#FF3B30', dark: '#FF453A' },
-          maxLines: 1
+          text: '暂无数据\n请检查地区配置',
+          font: { size: 11, weight: 'regular' },
+          textColor: { light: '#999999', dark: '#666666' },
+          maxLines: 2
         });
       }
       
@@ -179,7 +185,7 @@ export default async function(ctx) {
       };
     }
     
-    // 🔹 大尺寸（4×4）- 完整显示
+    // 🔹 大尺寸
     const prices = oilData ? oilData.prices : [];
     const children = [];
     
@@ -190,33 +196,41 @@ export default async function(ctx) {
       textColor: { light: '#1D1D1F', dark: '#F5F5F7' }
     });
     
-    // 添加油价（一行4个）
-    for (let i = 0; i < prices.length; i += 4) {
-      const rowItems = prices.slice(i, i + 4);
-      const rowChildren = rowItems.map((p, idx) => ({
-        type: 'text',
-        text: `${p.name} ${p.value}`,
-        font: { size: 12, weight: idx < 2 ? 'semibold' : 'regular' },
-        textColor: idx < 2 ? { light: '#FF3B30', dark: '#FF453A' } : { light: '#333333', dark: '#CCCCCC' },
-        flex: 1,
-        maxLines: 1
-      }));
+    if (prices.length > 0) {
+      for (let i = 0; i < prices.length; i += 4) {
+        const rowItems = prices.slice(i, i + 4);
+        const rowChildren = rowItems.map((p, idx) => ({
+          type: 'text',
+          text: `${p.name} ${p.value}`,
+          font: { size: 12, weight: idx < 2 ? 'semibold' : 'regular' },
+          textColor: idx < 2 ? { light: '#FF3B30', dark: '#FF453A' } : { light: '#333333', dark: '#CCCCCC' },
+          flex: 1,
+          maxLines: 1
+        }));
+        
+        children.push({
+          type: 'stack',
+          direction: 'row',
+          gap: 4,
+          children: rowChildren
+        });
+      }
       
-      children.push({
-        type: 'stack',
-        direction: 'row',
-        gap: 4,
-        children: rowChildren
-      });
-    }
-    
-    // 添加调整趋势
-    if (showTrend && oilData && oilData.trend) {
+      if (showTrend && oilData.trend) {
+        children.push({
+          type: 'text',
+          text: `📅 下次调整：${oilData.trend.date} ${oilData.trend.symbol} ${oilData.trend.value}`,
+          font: { size: 11, weight: 'medium' },
+          textColor: oilData.trend.symbol === '↓' ? { light: '#34C759', dark: '#30D158' } : { light: '#FF3B30', dark: '#FF453A' },
+          maxLines: 2
+        });
+      }
+    } else {
       children.push({
         type: 'text',
-        text: `📅 下次调整：${oilData.trend.date} ${oilData.trend.symbol} ${oilData.trend.value}`,
-        font: { size: 11, weight: 'medium' },
-        textColor: oilData.trend.symbol === '↓' ? { light: '#34C759', dark: '#30D158' } : { light: '#FF3B30', dark: '#FF453A' },
+        text: '暂无数据\n请检查地区配置',
+        font: { size: 12, weight: 'regular' },
+        textColor: { light: '#999999', dark: '#666666' },
         maxLines: 2
       });
     }
@@ -230,6 +244,7 @@ export default async function(ctx) {
     };
     
   } catch (error) {
+    console.error('小组件渲染失败:', error);
     return {
       type: 'widget',
       padding: 12,
@@ -238,7 +253,8 @@ export default async function(ctx) {
         type: 'stack', direction: 'column', alignItems: 'center', gap: 8,
         children: [
           { type: 'image', src: 'sf-symbol:fuelpump.fill', color: { light: '#FF9500', dark: '#FF9F0A' }, width: 22, height: 22 },
-          { type: 'text', text: '加载失败', font: { size: 12, weight: 'medium' }, textColor: { light: '#FF3B30', dark: '#FF453A' } }
+          { type: 'text', text: '加载失败', font: { size: 12, weight: 'medium' }, textColor: { light: '#FF3B30', dark: '#FF453A' } },
+          { type: 'text', text: error.message, font: { size: 10, weight: 'regular' }, textColor: { light: '#999999', dark: '#666666' }, textAlign: 'center' }
         ]
       }]
     };
@@ -246,71 +262,61 @@ export default async function(ctx) {
 }
 
 // 获取油价数据
-async function fetchOilPrice(url) {
+async function fetchOilPrice(region) {
   try {
+    const url = `http://m.qiyoujiage.com/${region}.shtml`;
+    
     const response = await fetch(url, {
       headers: {
-        'referer': 'http://m.qiyoujiage.com/',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
-      }
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
+      },
+      timeout: 5000
     });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
     
     const html = await response.text();
     
-    // 解析油价信息
-    const regPrice = /\s+?(.*油)<\/dt>\s+?(.*)(元)<\/dd>/gm;
+    // 解析油价
     const prices = [];
-    let m = null;
+    const priceRegex = /<dt>([\u4e00-\u9fa5]+油)<\/dt>\s*<dd>([\d.]+)<\/dd>/g;
+    let match;
     
-    while ((m = regPrice.exec(html)) !== null) {
-      if (m.index === regPrice.lastIndex) {
-        regPrice.lastIndex++;
-      }
-      
+    while ((match = priceRegex.exec(html)) !== null) {
       prices.push({
-        name: m[1].trim(),
-        value: `${m[2].trim()} 元/L`
+        name: match[1],
+        value: `${match[2]} 元/L`
       });
     }
     
-    // 解析油价调整趋势
-    let adjustDate = '';
-    let adjustTrend = '';
-    let adjustValue = '';
+    // 解析调整趋势
+    let trend = null;
+    const trendMatch = html.match(/<span[^>]*>([\u4e00-\u9fa5]+价[\d月\d日]*)<\/span>[\s\n]*([\u4e00-\u9fa5]+)/);
     
-    const regAdjustTips = /<span[^>]*>(.*)<\/span>([\s\S]+?)/;
-    const adjustTipsMatch = html.match(regAdjustTips);
-    
-    if (adjustTipsMatch && adjustTipsMatch.length === 3) {
-      adjustDate = adjustTipsMatch[1].split('价')[1].slice(0, -2);
-      adjustValue = adjustTipsMatch[2];
-      adjustTrend = (adjustValue.indexOf('下调') > -1 || adjustValue.indexOf('下跌') > -1) ? '↓' : '↑';
+    if (trendMatch) {
+      const date = trendMatch[1].split('价')[1] || trendMatch[1];
+      const trendText = trendMatch[2];
+      const symbol = (trendText.includes('下调') || trendText.includes('下跌')) ? '↓' : '↑';
       
-      const adjustValueRe = /([\d.]+)元/升-([\d.]+)元/升/;
-      const adjustValueMatch = adjustValue.match(adjustValueRe);
+      const valueMatch = trendText.match(/([\d.]+)\u5143\/\u5347-([\d.]+)\u5143\/\u5347/);
+      let value = trendText;
       
-      if (adjustValueMatch && adjustValueMatch.length === 3) {
-        adjustValue = `${adjustValueMatch[1]}-${adjustValueMatch[2]}元/L`;
-      } else {
-        const adjustValueRe2 = /[\d.]+元/吨/;
-        const adjustValueMatch2 = adjustValue.match(adjustValueRe2);
-        if (adjustValueMatch2) {
-          adjustValue = adjustValueMatch2[0];
-        }
+      if (valueMatch) {
+        value = `${valueMatch[1]}-${valueMatch[2]}元/L`;
       }
+      
+      trend = { date, symbol, value };
     }
     
     return {
-      prices: prices.length === 4 ? prices : [],
-      trend: adjustDate ? {
-        date: adjustDate,
-        symbol: adjustTrend,
-        value: adjustValue
-      } : null
+      prices: prices.length >= 2 ? prices : [],
+      trend
     };
     
   } catch (error) {
-    console.error('获取油价数据失败:', error);
+    console.error('获取油价数据失败:', error.message);
     throw error;
   }
 }
