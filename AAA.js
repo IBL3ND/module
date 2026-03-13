@@ -1,6 +1,8 @@
 /**
- * 📅 节日倒计时小组件➕农历显示
- * ✅ 极致优化：小尺寸显示更多项目
+ * 📅 节日倒计时小组件
+ * ✅ 小尺寸：一行3个
+ * ✅ 中尺寸：一行4个（字体放大）
+ * ✅ 保留"天"字
  */
 
 // ========== 节日数据配置 ==========
@@ -188,24 +190,12 @@ export default async function(ctx) {
     const env = ctx.env || {};
     const widgetFamily = ctx.widgetFamily || 'systemMedium';
     
-    const title = env.TITLE || '节日倒计时';
     const showHolidays = env.SHOW_HOLIDAYS !== 'false';
     const showTerms = env.SHOW_TERMS !== 'false';
     const showTraditional = env.SHOW_TRADITIONAL !== 'false';
-    const itemsPerRow = parseInt(env.ITEMS_PER_ROW) || 4;
-    const maxRows = parseInt(env.MAX_ROWS) || 5;
 
     const now = new Date();
-    const y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate();
-    const solarDate = `${m}月${d}日`;
-
-    let lunarDate = '';
-    try {
-      const lunar = Lunar.getLunarDate(now);
-      if (lunar) {
-        lunarDate = `农历${lunar.monthStr}${lunar.dayStr}`;
-      }
-    } catch (e) { lunarDate = ''; }
+    const m = now.getMonth() + 1, d = now.getDate();
 
     let countdowns = [];
     try { countdowns = getCountdowns(); } catch (e) {}
@@ -213,7 +203,7 @@ export default async function(ctx) {
     if (!showTerms) countdowns = countdowns.filter(c => c.type !== 'term');
     if (!showTraditional) countdowns = countdowns.filter(c => c.type !== 'lunar' && c.type !== 'floating');
 
-    // 🔹 锁屏圆形 (24×24)
+    // 🔹 锁屏圆形
     if (widgetFamily === 'accessoryCircular') {
       const next = countdowns[0];
       return {
@@ -231,7 +221,7 @@ export default async function(ctx) {
       };
     }
 
-    // 🔹 锁屏矩形/内联
+    // 🔹 锁屏矩形
     if (widgetFamily === 'accessoryRectangular' || widgetFamily === 'accessoryInline') {
       const next = countdowns[0];
       return {
@@ -243,117 +233,141 @@ export default async function(ctx) {
           type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
           children: [
             { type: 'image', src: 'sf-symbol:calendar', color: { light: '#FF3B30', dark: '#FF453A' }, width: 18, height: 18 },
-            { type: 'text', text: next ? `${next.name} ${next.days}天` : title, font: { size: 12, weight: 'medium' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' }, maxLines: 1, flex: 1 }
+            { type: 'text', text: next ? `${next.name} ${next.days}天` : '节日倒计时', font: { size: 12, weight: 'medium' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' }, maxLines: 1, flex: 1 }
           ]
         }]
       };
     }
 
-    // 🔹 主屏幕小尺寸 (2×2) - 极致紧凑版：显示8-10个项目
+    // 🔹 小尺寸（2×2）- 一行3个
     if (widgetFamily === 'systemSmall') {
-      // 小尺寸显示 10 个项目
-      const items = countdowns.slice(0, 10);
+      const items = countdowns.slice(0, 18); // 3列 × 6行 = 18个
       
+      const children = [];
+      for (let i = 0; i < items.length; i += 3) {
+        const rowItems = items.slice(i, i + 3);
+        const rowChildren = rowItems.map((c, idx) => {
+          const globalIdx = i + idx;
+          let textColor;
+          let fontWeight;
+          
+          if (globalIdx < 6) {
+            textColor = { light: '#FF3B30', dark: '#FF453A' };
+            fontWeight = 'semibold';
+          } else if (globalIdx < 12) {
+            textColor = { light: '#FF9500', dark: '#FF9F0A' };
+            fontWeight = 'semibold';
+          } else {
+            textColor = { light: '#8E8E93', dark: '#8E8E93' };
+            fontWeight = 'regular';
+          }
+          
+          return {
+            type: 'text',
+            text: `${c.name} ${c.days}天`,
+            font: { size: 9, weight: fontWeight },
+            textColor: textColor,
+            flex: 1,
+            maxLines: 1
+          };
+        });
+        
+        children.push({
+          type: 'stack',
+          direction: 'row',
+          gap: 2,
+          children: rowChildren
+        });
+      }
+
       return {
         type: 'widget',
-        padding: 6,  // 极小边距
+        padding: 6,
         backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
         refreshAfter: 'PT1H',
-        children: [
-          // 标题 + 日期 合并一行（超紧凑）
-          { 
-            type: 'text', 
-            text: `${title} · ${solarDate}${lunarDate ? ' ' + lunarDate : ''}`, 
-            font: { size: 10, weight: 'bold' }, 
-            textColor: { light: '#1D1D1F', dark: '#F5F5F7' },
-            maxLines: 1 
-          },
-          // 倒计时列表（超紧凑格式，每行一个）
-          ...items.map((c, i) => ({ 
-            type: 'text', 
-            text: `${c.name} ${c.days}天`, 
-            font: { size: 9, weight: i < 3 ? 'semibold' : 'regular' }, 
-            textColor: { 
-              light: i < 3 ? '#FF3B30' : (i < 6 ? '#FF9500' : '#333333'), 
-              dark: i < 3 ? '#FF453A' : (i < 6 ? '#FF9F0A' : '#CCCCCC')
-            }, 
-            maxLines: 1 
-          }))
-        ]
+        children
       };
     }
 
-    // 🔹 主屏幕中尺寸（2×4）- 优化版：显示更多项目
+    // 🔹 中尺寸（2×4）- 一行4个（字体放大）
     if (widgetFamily === 'systemMedium') {
-      // 中尺寸每行5个，显示6行 = 30个项目
-      const itemsPerRowMedium = 5;
-      const maxRowsMedium = 6;
-      const total = itemsPerRowMedium * maxRowsMedium;
-      const items = countdowns.slice(0, total);
+      const items = countdowns.slice(0, 24); // 4列 × 6行 = 24个
       
-      const rows = [];
-      for (let i = 0; i < items.length; i += itemsPerRowMedium) {
-        const row = items.slice(i, i + itemsPerRowMedium).map(c => `${c.name}${c.days}天`).join('  ');
-        rows.push(row);
-      }
-
-      const children = [
-        { 
-          type: 'text', 
-          text: `${title} · ${solarDate}${lunarDate ? ' ' + lunarDate : ''}`, 
-          font: { size: 12, weight: 'bold' }, 
-          textColor: { light: '#1D1D1F', dark: '#F5F5F7' },
-          maxLines: 1 
-        }
-      ];
-      
-      rows.forEach((row, i) => {
-        const colorIndex = i < 2 ? 0 : (i < 4 ? 1 : 2);
-        const colors = [
-          { light: '#FF3B30', dark: '#FF453A' },  // 红色（前2行）
-          { light: '#FF9500', dark: '#FF9F0A' },  // 橙色（中间2行）
-          { light: '#333333', dark: '#CCCCCC' }   // 灰色（后续行）
-        ];
-        
-        children.push({ 
-          type: 'text', 
-          text: row, 
-          font: { size: 11, weight: i < 2 ? 'semibold' : 'regular' }, 
-          textColor: colors[colorIndex],
-          maxLines: 1 
+      const children = [];
+      for (let i = 0; i < items.length; i += 4) {
+        const rowItems = items.slice(i, i + 4);
+        const rowChildren = rowItems.map((c, idx) => {
+          const globalIdx = i + idx;
+          let textColor;
+          let fontWeight;
+          
+          if (globalIdx < 8) {
+            textColor = { light: '#FF3B30', dark: '#FF453A' };
+            fontWeight = 'semibold';
+          } else if (globalIdx < 16) {
+            textColor = { light: '#FF9500', dark: '#FF9F0A' };
+            fontWeight = 'semibold';
+          } else {
+            textColor = { light: '#8E8E93', dark: '#8E8E93' };
+            fontWeight = 'regular';
+          }
+          
+          return {
+            type: 'text',
+            text: `${c.name} ${c.days}天`,
+            font: { size: 11, weight: fontWeight },  // 放大字体
+            textColor: textColor,
+            flex: 1,
+            maxLines: 1
+          };
         });
-      });
+        
+        children.push({
+          type: 'stack',
+          direction: 'row',
+          gap: 3,
+          children: rowChildren
+        });
+      }
 
       return {
         type: 'widget',
-        backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
         padding: 8,
+        backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
         refreshAfter: 'PT30M',
         children
       };
     }
 
-    // 🔹 主屏幕大尺寸（4×4）- 完整版
-    const total = itemsPerRow * maxRows;
-    const items = countdowns.slice(0, total);
-    const rows = [];
-    for (let i = 0; i < items.length; i += itemsPerRow) {
-      const row = items.slice(i, i + itemsPerRow).map(c => `${c.name}${c.days}天`).join('  ');
-      rows.push(row);
+    // 🔹 大尺寸（4×4）- 一行5个
+    const items = countdowns.slice(0, 30); // 5列 × 6行 = 30个
+    const children = [];
+    for (let i = 0; i < items.length; i += 5) {
+      const rowItems = items.slice(i, i + 5);
+      const rowChildren = rowItems.map((c, idx) => {
+        const globalIdx = i + idx;
+        return {
+          type: 'text',
+          text: `${c.name} ${c.days}天`,
+          font: { size: 12, weight: globalIdx < 10 ? 'semibold' : 'regular' },
+          textColor: globalIdx < 10 ? { light: '#FF3B30', dark: '#FF453A' } : { light: '#333333', dark: '#CCCCCC' },
+          flex: 1,
+          maxLines: 1
+        };
+      });
+      
+      children.push({
+        type: 'stack',
+        direction: 'row',
+        gap: 4,
+        children: rowChildren
+      });
     }
-
-    const children = [
-      { type: 'text', text: title, font: { size: 15, weight: 'bold' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' } },
-      { type: 'text', text: lunarDate ? `${solarDate} ${lunarDate}` : solarDate, font: { size: 12, weight: 'medium' }, textColor: { light: '#666666', dark: '#999999' }, maxLines: 1 }
-    ];
-    rows.forEach((row, i) => {
-      children.push({ type: 'text', text: row, font: { size: 13, weight: i < 3 ? 'semibold' : 'regular' }, textColor: { light: i < 3 ? '#FF3B30' : '#333333', dark: i < 3 ? '#FF453A' : '#CCCCCC' }, maxLines: 1 });
-    });
 
     return {
       type: 'widget',
       backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
-      padding: 12,
+      padding: 10,
       refreshAfter: 'PT30M',
       children
     };
