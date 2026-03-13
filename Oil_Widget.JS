@@ -1,7 +1,8 @@
 /**
- * 油价实时查询小组件（简洁版）
+ * ⛽ 油价实时查询小组件（完美对齐版）
  * 脚本作者 Egern群友 tg://user?id=5122789128
  * 由iBL3ND二次修改
+ * 
  * 📚 使用教程
  * ═══════════════════════════════════════════════════
  *
@@ -10,7 +11,7 @@
  * 在 Egern 小组件配置中添加以下环境变量：
  *
  * 名称：城市
- * 值：海南（或其他省份名，见下方列表）
+ * 值：海南（或其他省份名）
  *
  * 名称：SHOW_DIESEL
  * 值：true（显示柴油）或 false（不显示柴油）
@@ -18,8 +19,7 @@
  *
  * 2️⃣ 支持的省份/直辖市
  * ─────────────────────────────────────────────────
- * 直辖市：
- * • 北京、上海、天津、重庆
+ * 直辖市：北京、上海、天津、重庆
  *
  * 省份：
  * • 广东、江苏、浙江、山东、河南、河北
@@ -29,27 +29,6 @@
  * • 新疆、西藏、内蒙古
  *
  * 注意：必须填写省份名，不能填写城市名！
- *
- *
- * 3️⃣ 配置示例
- * ─────────────────────────────────────────────────
- * 示例1：查询海南油价（显示柴油）
- * 城市: 海南
- * SHOW_DIESEL: true
- *
- * 示例2：查询北京油价（不显示柴油）
- * 城市: 北京
- * SHOW_DIESEL: false
- *
- *
- * 4️⃣ 功能特性
- * ─────────────────────────────────────────────────
- * ✅ 实时查询汽车之家油价数据
- * ✅ 支持 92号、95号、98号汽油
- * ✅ 可选显示柴油
- * ✅ 纯白背景 + 深浅模式自适应
- * ✅ 6小时自动刷新
- * ✅ 数据缓存，离线也能看
  *
  * ═══════════════════════════════════════════════════
  */
@@ -62,10 +41,8 @@ export default async function (ctx) {
  const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
  const refreshTime = new Date(Date.now() + 6*60*60*1000).toISOString();
 
- // 纯白背景 + 深浅模式自适应
  const backgroundColor = { light: "#FFFFFF", dark: "#1C1C1E" };
 
- // 深浅模式自适应的颜色配置
  const COLORS = {
   primary: { light: "#1A1A1A", dark: "#FFFFFF" },
   secondary: { light: "#666666", dark: "#CCCCCC" },
@@ -78,7 +55,6 @@ export default async function (ctx) {
   diesel: { light: "#30D158", dark: "#5CD67D" },
  };
 
- // 读取缓存
  const CACHE_KEY = `autohome_oil_${city}`;
  let prices = {p92:null,p95:null,p98:null,diesel:null};
  let lastUpdate = null;
@@ -103,19 +79,15 @@ export default async function (ctx) {
   });
   const html = await resp.text();
 
-  // 尝试多种匹配方式
   let match = null;
-
-  // 方式1：精确匹配省份名
   const regex1 = new RegExp(
-   city + "[\s\S]*?(\d+\.\d+)[\s\S]*?(\d+\.\d+)[\s\S]*?(\d+\.\d+)[\s\S]*?(\d+\.\d+)"
+   city + "[\s\S]*?(\d+\\.\\d+)[\s\S]*?(\d+\\.\\d+)[\s\S]*?(\d+\\.\\d+)[\s\S]*?(\d+\\.\\d+)"
   );
   match = html.match(regex1);
 
-  // 方式2：模糊匹配（如果省份名有空格或其他字符）
   if (!match) {
    const regex2 = new RegExp(
-    city.replace(/\s+/g, "\\s*") + "[\s\S]*?(\d+\.\d+)[\s\S]*?(\d+\.\d+)[\s\S]*?(\d+\.\d+)[\s\S]*?(\d+\.\d+)"
+    city.replace(/\s+/g, "\\s*") + "[\s\S]*?(\d+\\.\\d+)[\s\S]*?(\d+\\.\\d+)[\s\S]*?(\d+\\.\\d+)[\s\S]*?(\d+\\.\\d+)"
    );
    match = html.match(regex2);
   }
@@ -126,24 +98,16 @@ export default async function (ctx) {
    prices.p98 = parseFloat(match[3]);
    prices.diesel = SHOW_DIESEL ? parseFloat(match[4]) : null;
    lastUpdate = new Date().toISOString();
-
-   // 保存缓存
    ctx.storage.setJSON(CACHE_KEY, { prices, lastUpdate });
    fetchError = false;
   } else {
-   // 网络请求成功但没找到数据
    if (!hasCache) {
     fetchError = true;
     errorMsg = "未找到油价数据，请检查省份名";
    }
-   console.log("❌ 未匹配到油价数据，省份:", city);
   }
 
  } catch (e) {
-  // 网络请求失败
-  console.log("❌ 网络请求失败:", e.message);
-  
-  // 没有缓存才显示错误
   if (!hasCache) {
    fetchError = true;
    errorMsg = e.message || "网络请求失败";
@@ -151,9 +115,9 @@ export default async function (ctx) {
  }
 
  const rows = [
-  {label:"92号",price:prices.p92,color:COLORS.p92},
-  {label:"95号",price:prices.p95,color:COLORS.p95},
-  {label:"98号",price:prices.p98,color:COLORS.p98},
+  {label:"92 号",price:prices.p92,color:COLORS.p92},
+  {label:"95 号",price:prices.p95,color:COLORS.p95},
+  {label:"98 号",price:prices.p98,color:COLORS.p98},
   ...(SHOW_DIESEL && prices.diesel ? [{label:"柴油",price:prices.diesel,color:COLORS.diesel}]:[])
  ].filter(r => r.price!==null);
 
@@ -163,10 +127,10 @@ export default async function (ctx) {
    direction:"column",
    alignItems:"center",
    justifyContent:"center",
-   width:90,
-   padding:[10,8,10,8],
+   flex:1,  // ✅ 关键：使用 flex 布局，自动等分宽度
+   padding:[8,4,8,4],
    backgroundColor: COLORS.card,
-   borderRadius:14,
+   borderRadius:12,
    borderWidth: 0.5,
    borderColor: COLORS.cardBorder,
    children:[
@@ -175,13 +139,13 @@ export default async function (ctx) {
      direction:"row",
      alignItems:"center",
      justifyContent:"center",
-     width:48,
-     height:24,
+     width:44,
+     height:22,
      backgroundColor: {
       light: row.color.light + "28",
       dark: row.color.dark + "28"
      },
-     borderRadius:7,
+     borderRadius:6,
      borderWidth:0.5,
      borderColor: {
       light: row.color.light + "55",
@@ -191,7 +155,7 @@ export default async function (ctx) {
       {
        type:"text",
        text:row.label,
-       font:{size:"caption1",weight:"bold"},
+       font:{size:"caption2",weight:"bold"},
        textColor: row.color,
        textAlign:"center"
       }
@@ -200,7 +164,7 @@ export default async function (ctx) {
     {
      type:"text",
      text:row.price.toFixed(2),
-     font:{size:"title2",weight:"semibold"},
+     font:{size:"title3",weight:"semibold"},
      textColor: COLORS.primary,
      textAlign:"center",
      lineLimit:1,
@@ -212,8 +176,8 @@ export default async function (ctx) {
 
  return {
   type:"widget",
-  padding:[12,8,12,8],
-  gap:6,
+  padding:[10,8,10,8],
+  gap:5,
   backgroundColor: backgroundColor,
   refreshAfter:refreshTime,
   children:[
@@ -221,13 +185,12 @@ export default async function (ctx) {
     type:"stack",
     direction:"row",
     alignItems:"center",
-    gap:5,
-    padding:[0,8,0,8],
+    gap:4,
+    padding:[0,4,0,4],
     children:[
-     {type:"image",src:"sf-symbol:fuelpump.fill",width:14,height:14,color:COLORS.p92},
-     {type:"text",text:`${city}油价`,font:{size:"caption1",weight:"semibold"},textColor:COLORS.secondary},
+     {type:"image",src:"sf-symbol:fuelpump.fill",width:13,height:13,color:COLORS.p92},
+     {type:"text",text:`${city}油价`,font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary},
      {type:"spacer"},
-     // ✅ 只在完全没有数据时才显示错误
      fetchError
       ? {type:"text",text:errorMsg,font:{size:"caption2"},textColor:COLORS.p98}
       : null
@@ -237,9 +200,9 @@ export default async function (ctx) {
     type:"stack",
     direction:"row",
     alignItems:"center",
-    justifyContent:"space-between",
-    gap:8,
-    padding:[8,4,8,4],
+    justifyContent:"space-between",  // ✅ 配合 flex:1 实现完美对齐
+    gap:6,  // ✅ 卡片之间的间距
+    padding:[6,0,6,0],
     children: rows.map(priceCard)
    } : {
     type:"stack",
@@ -256,7 +219,7 @@ export default async function (ctx) {
     type:"stack",
     direction:"row",
     alignItems:"center",
-    padding:[0,8,0,8],
+    padding:[0,4,0,4],
     children:[
      {type:"text",text:`${timeStr} 更新`,font:{size:"caption2"},textColor:COLORS.tertiary},
      {type:"spacer"},
