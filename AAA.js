@@ -1,8 +1,6 @@
 /**
  * 📅 节日倒计时小组件➕农历显示
- * ✅ 已适配所有 widgetFamily 尺寸
- * ✅ 添加错误降级处理
- * ✅ 添加 refreshAfter 刷新控制
+ * ✅ 已优化小尺寸显示更多项目
  */
 
 // ========== 节日数据配置 ==========
@@ -43,7 +41,7 @@ const FLOATING_HOLIDAYS = {
   'father': { name: '父亲节', calc: (y) => getNthWeekday(y, 6, 0, 3) },
 };
 
-// ========== 农历计算引擎（1900-2100） ==========
+// ========== 农历计算引擎 ==========
 const Lunar = (function() {
   const lunarInfo = [
     0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
@@ -200,16 +198,15 @@ export default async function(ctx) {
     const now = new Date();
     const y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate();
     const weekday = ['日','一','二','三','四','五','六'][now.getDay()];
-    const solarDate = `${m}月${d}日 周${weekday}`;
+    const solarDate = `${m}月${d}日`;
 
     let lunarDate = '';
     try {
       const lunar = Lunar.getLunarDate(now);
       if (lunar) {
-        const mp = lunar.isLeap ? '闰' : '';
-        lunarDate = `农历${lunar.monthStr}月${lunar.dayStr}`;
+        lunarDate = `农历${lunar.monthStr}${lunar.dayStr}`;
       }
-    } catch (e) { lunarDate = '农历 --'; }
+    } catch (e) { lunarDate = ''; }
 
     let countdowns = [];
     try { countdowns = getCountdowns(); } catch (e) {}
@@ -247,50 +244,93 @@ export default async function(ctx) {
           type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
           children: [
             { type: 'image', src: 'sf-symbol:calendar', color: { light: '#FF3B30', dark: '#FF453A' }, width: 18, height: 18 },
-            { type: 'text', text: next ? `${title}: ${next.name} ${next.days}天` : title, font: { size: 12, weight: 'medium' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' }, maxLines: 1, flex: 1 }
+            { type: 'text', text: next ? `${next.name} ${next.days}天` : title, font: { size: 12, weight: 'medium' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' }, maxLines: 1, flex: 1 }
           ]
         }]
       };
     }
 
-    // 🔹 主屏幕小尺寸 (2×2)
+    // 🔹 主屏幕小尺寸 (2×2) - 优化版：显示更多项目
     if (widgetFamily === 'systemSmall') {
-      const items = countdowns.slice(0, 2);
+      // 小尺寸显示 4-5 个项目
+      const items = countdowns.slice(0, 5);
+      
       return {
         type: 'widget',
-        padding: 10,
+        padding: 8,  // 减小边距
         backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
         refreshAfter: 'PT1H',
         children: [
-          { type: 'stack', direction: 'row', alignItems: 'center', gap: 6, children: [
-              { type: 'image', src: 'sf-symbol:calendar.circle.fill', color: { light: '#FF3B30', dark: '#FF453A' }, width: 16, height: 16 },
-              { type: 'text', text: title, font: { size: 12, weight: 'semibold' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' }, maxLines: 1 }
-            ]},
-          { type: 'text', text: `${solarDate} | ${lunarDate}`, font: { size: 9, weight: 'regular' }, textColor: { light: '#666666', dark: '#999999' }, maxLines: 1 },
-          ...items.map((c, i) => ({ type: 'text', text: `${c.name} ${c.days}天`, font: { size: 10, weight: i === 0 ? 'semibold' : 'regular' }, textColor: { light: '#333333', dark: '#CCCCCC' }, maxLines: 1 }))
+          // 标题行（紧凑）
+          { 
+            type: 'text', 
+            text: title, 
+            font: { size: 11, weight: 'bold' }, 
+            textColor: { light: '#1D1D1F', dark: '#F5F5F7' },
+            maxLines: 1 
+          },
+          // 日期行（紧凑，农历可选）
+          { 
+            type: 'text', 
+            text: lunarDate ? `${solarDate} ${lunarDate}` : solarDate, 
+            font: { size: 9, weight: 'regular' }, 
+            textColor: { light: '#666666', dark: '#999999' }, 
+            maxLines: 1 
+          },
+          // 倒计时列表（紧凑格式）
+          ...items.map((c, i) => ({ 
+            type: 'text', 
+            text: `${c.name} ${c.days}天`, 
+            font: { size: 10, weight: i < 2 ? 'semibold' : 'regular' }, 
+            textColor: { light: i < 2 ? '#FF3B30' : '#333333', dark: i < 2 ? '#FF453A' : '#CCCCCC' }, 
+            maxLines: 1 
+          }))
         ]
       };
     }
 
-    // 🔹 主屏幕中/大尺寸（默认完整布局）
+    // 🔹 主屏幕中尺寸（默认完整布局）
+    if (widgetFamily === 'systemMedium') {
+      const total = itemsPerRow * maxRows;
+      const items = countdowns.slice(0, total);
+      const rows = [];
+      for (let i = 0; i < items.length; i += itemsPerRow) {
+        const row = items.slice(i, i + itemsPerRow).map(c => `${c.name} ${c.days}天`).join('  ');
+        rows.push(row);
+      }
+
+      const children = [
+        { type: 'text', text: title, font: { size: 14, weight: 'bold' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' } },
+        { type: 'text', text: lunarDate ? `${solarDate} ${lunarDate}` : solarDate, font: { size: 11, weight: 'medium' }, textColor: { light: '#666666', dark: '#999999' }, maxLines: 1 }
+      ];
+      rows.forEach((row, i) => {
+        children.push({ type: 'text', text: row, font: { size: 12, weight: i < 2 ? 'semibold' : 'regular' }, textColor: { light: i < 2 ? '#FF3B30' : '#333333', dark: i < 2 ? '#FF453A' : '#CCCCCC' }, maxLines: 1 });
+      });
+
+      return {
+        type: 'widget',
+        backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
+        padding: 10,
+        refreshAfter: 'PT30M',
+        children
+      };
+    }
+
+    // 🔹 主屏幕大尺寸（4×4）
     const total = itemsPerRow * maxRows;
     const items = countdowns.slice(0, total);
     const rows = [];
     for (let i = 0; i < items.length; i += itemsPerRow) {
-      const row = items.slice(i, i + itemsPerRow).map(c => `${c.name}${c.days}天`).join(' | ');
+      const row = items.slice(i, i + itemsPerRow).map(c => `${c.name} ${c.days}天`).join('  ');
       rows.push(row);
     }
 
     const children = [
-      { type: 'stack', direction: 'row', alignItems: 'center', gap: 8, children: [
-          { type: 'image', src: 'sf-symbol:calendar', color: { light: '#FF3B30', dark: '#FF453A' }, width: 22, height: 22 },
-          { type: 'text', text: title, font: { size: 15, weight: 'semibold' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' } }
-        ]},
-      { type: 'text', text: solarDate, font: { size: 11, weight: 'medium' }, textColor: { light: '#666666', dark: '#999999' }, maxLines: 1 },
-      { type: 'text', text: lunarDate, font: { size: 10, weight: 'regular' }, textColor: { light: '#999999', dark: '#777777' }, maxLines: 1 }
+      { type: 'text', text: title, font: { size: 15, weight: 'bold' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' } },
+      { type: 'text', text: lunarDate ? `${solarDate} ${lunarDate}` : solarDate, font: { size: 12, weight: 'medium' }, textColor: { light: '#666666', dark: '#999999' }, maxLines: 1 }
     ];
     rows.forEach((row, i) => {
-      children.push({ type: 'text', text: row, font: { size: 12, weight: i === 0 ? 'semibold' : 'regular' }, textColor: { light: '#333333', dark: '#CCCCCC' }, maxLines: 1 });
+      children.push({ type: 'text', text: row, font: { size: 13, weight: i < 3 ? 'semibold' : 'regular' }, textColor: { light: i < 3 ? '#FF3B30' : '#333333', dark: i < 3 ? '#FF453A' : '#CCCCCC' }, maxLines: 1 });
     });
 
     return {
@@ -302,7 +342,6 @@ export default async function(ctx) {
     };
 
   } catch (error) {
-    // 🛡️ 全局降级：确保任何错误下组件仍能显示
     return {
       type: 'widget',
       padding: 12,
