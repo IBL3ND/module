@@ -160,7 +160,7 @@ export default async function (ctx) {
         }
       });
 
-      // 解析调价趋势
+      // 🔹 解析调价趋势（完整信息）
       if (SHOW_TREND) {
         const regTrend = /<div class="tishi">[\s\S]*?<span>([^<]+)<\/span>[\s\S]*?<br\/>([\s\S]+?)<br\/>/;
         const trendMatch = html.match(regTrend);
@@ -168,10 +168,38 @@ export default async function (ctx) {
         if (trendMatch && trendMatch.length >= 3) {
           const datePart = trendMatch[1].split('价')[1]?.slice(0, -2) || "";
           const valuePart = trendMatch[2];
+          
+          // 判断涨跌方向
           const trend = (valuePart.includes('下调') || valuePart.includes('下跌')) ? '↓' : '↑';
-          const amountMatch = valuePart.match(/([\d\.]+) 元\/升 [\s\S]*?([\d\.]+) 元\/升/);
-          const amount = amountMatch ? `${amountMatch[1]}-${amountMatch[2]} 元` : "";
-          trendInfo = `${datePart}${trend}${amount ? ` ${amount}` : ""}`;
+          
+          // 🔹 提取完整的调价金额（优化正则）
+          let amount = "";
+          
+          // 🔸 尝试多种格式匹配
+          // 格式1：提取所有数字+单位 "0.55元/升" 和 "0.67元/升"
+          const allPrices = valuePart.match(/([\d\.]+)\s*元\/升/g);
+          if (allPrices && allPrices.length >= 2) {
+            const nums = allPrices.map(p => p.match(/([\d\.]+)/)[1]);
+            amount = `${nums[0]}-${nums[1]}元/L`;
+          }
+          // 格式2：每吨调整 "200元" 和 "195元"
+          else {
+            const allTons = valuePart.match(/([\d]+)\s*元(?:\/吨)?/g);
+            if (allTons && allTons.length >= 2) {
+              const nums = allTons.map(p => p.match(/([\d]+)/)[1]);
+              amount = `${nums[0]}-${nums[1]}元/吨`;
+            }
+            // 格式3：单个数值
+            else {
+              const singleMatch = valuePart.match(/([\d\.]+)\s*元\/升/);
+              if (singleMatch) {
+                amount = `${singleMatch[1]}元/L`;
+              }
+            }
+          }
+          
+          // 🔹 完整显示调价信息
+          trendInfo = `${datePart}调整 ${trend} ${amount}`.trim();
         }
       }
 
@@ -269,14 +297,17 @@ export default async function (ctx) {
           {type:"image",src:"sf-symbol:fuelpump.fill",width:13,height:13,color:COLORS.p92},
           {type:"text",text:titleText,font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary},
           {type:"spacer"},
+          // 🔹 右上角调价信息
           ...(SHOW_TREND && trendInfo ? [{
             type:"text",
-            text:`📊 ${trendInfo}`,
+            text: trendInfo,
             font:{size:"caption2"},
             textColor: COLORS.trend,
             textAlign:"right",
-            lineLimit:1
+            lineLimit:1,
+            minScale: 0.8
           }] : []),
+          // 错误信息
           ...(fetchError ? [{
             type:"text",text:errorMsg,font:{size:"caption2"},textColor:COLORS.p98
           }] : [])
@@ -312,6 +343,9 @@ export default async function (ctx) {
           {type:"text",text:"元/升",font:{size:"caption2"},textColor:COLORS.tertiary}
         ]
       }
+    ]
+  }
+}
     ]
   }
 }
