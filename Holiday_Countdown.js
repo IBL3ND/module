@@ -1,7 +1,8 @@
 /**
- * 📅 节日倒计时小组件➕农历显示
+ * 📅 节日倒计时小组件
  */
 
+// ========== 节日数据配置 ==========
 const HOLIDAYS = {
   '01-01': { name: '元旦', type: 'holiday' },
   '02-14': { name: '情人节', type: 'holiday' },
@@ -39,10 +40,8 @@ const FLOATING_HOLIDAYS = {
   'father': { name: '父亲节', calc: (y) => getNthWeekday(y, 6, 0, 3) },
 };
 
-// ✅ 精准农历计算（1900-2100年权威数据）
+// ========== 农历计算引擎 ==========
 const Lunar = (function() {
-  // 农历数据表：每一位代表一个月的天数（大月30天，小月29天）
-  // 高4位：闰月信息，低12位：12个月大小
   const lunarInfo = [
     0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
     0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255, 0x0b540, 0x0d6a0, 0x0ada2, 0x095b0, 0x14977,
@@ -74,285 +73,315 @@ const Lunar = (function() {
 
   function lYearDays(y) {
     let i, sum = 348;
-    for (i = 0x8000; i > 0x8; i >>= 1) {
-      sum += (lunarInfo[y - 1900] & i) ? 1 : 0;
-    }
+    for (i = 0x8000; i > 0x8; i >>= 1) sum += (lunarInfo[y - 1900] & i) ? 1 : 0;
     return sum + leapDays(y);
   }
 
   function leapDays(y) {
-    if (leapMonth(y)) {
-      return (lunarInfo[y - 1900] & 0x10000) ? 30 : 29;
-    }
+    if (leapMonth(y)) return (lunarInfo[y - 1900] & 0x10000) ? 30 : 29;
     return 0;
   }
 
-  function leapMonth(y) {
-    return lunarInfo[y - 1900] & 0xf;
-  }
+  function leapMonth(y) { return lunarInfo[y - 1900] & 0xf; }
 
-  function monthDays(y, m) {
-    return (lunarInfo[y - 1900] & (0x10000 >> m)) ? 30 : 29;
-  }
+  function monthDays(y, m) { return (lunarInfo[y - 1900] & (0x10000 >> m)) ? 30 : 29; }
 
   function solarToLunar(yy, mm, dd) {
     let baseDate = new Date(1900, 0, 31);
     let objDate = new Date(yy, mm - 1, dd);
     let offset = Math.floor((objDate - baseDate) / 86400000);
+    let i, year = 1900, temp = 0;
 
-    let i, year = 1900;
-    let temp = 0;
-    
-    // 计算农历年份
     for (i = 1900; i < 2100 && offset > 0; i++) {
       temp = lYearDays(i);
       offset -= temp;
       year = i;
     }
-    
-    if (offset < 0) {
-      offset += temp;
-      year--;
-    }
+    if (offset < 0) { offset += temp; year--; }
 
-    let leap = leapMonth(year);
-    let isLeap = false;
-    
-    // 计算农历月份和日期
+    let leap = leapMonth(year), isLeap = false;
     for (i = 1; i < 13 && offset > 0; i++) {
-      // 闰月
-      if (leap > 0 && i === (leap + 1) && !isLeap) {
-        --i;
-        isLeap = true;
-        temp = leapDays(year);
-      } else {
-        temp = monthDays(year, i);
-      }
-
-      // 解除闰月
-      if (isLeap && i === (leap + 1)) {
-        isLeap = false;
-      }
-
+      if (leap > 0 && i === (leap + 1) && !isLeap) { --i; isLeap = true; temp = leapDays(year); }
+      else { temp = monthDays(year, i); }
+      if (isLeap && i === (leap + 1)) isLeap = false;
       offset -= temp;
-      if (offset < 0) {
-        offset += temp;
-        i++;
-        break;
-      }
+      if (offset < 0) { offset += temp; i++; break; }
     }
 
-    let month = i;
-    let day = offset + 1;
-
-    // 干支纪年
-    let ganIndex = (year - 4) % 10;
-    let zhiIndex = (year - 4) % 12;
-
+    let ganIndex = (year - 4) % 10, zhiIndex = (year - 4) % 12;
     return {
-      year: year,
-      month: month,
-      day: day,
-      isLeap: isLeap,
+      year, month: i, day: offset + 1, isLeap,
       ganZhi: Gan[ganIndex] + Zhi[zhiIndex],
       animal: Animals[zhiIndex],
-      monthStr: lunarMonths[month - 1],
-      dayStr: getDayString(day)
+      monthStr: lunarMonths[i - 1],
+      dayStr: getDayString(offset + 1)
     };
   }
 
   function getDayString(day) {
-    const dayStrs = [
-      '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
-      '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
-      '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'
-    ];
-    return dayStrs[day - 1] || '';
-  }
-
-  function getLunarDate(date) {
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    return solarToLunar(year, month, day);
+    const strs = ['初一','初二','初三','初四','初五','初六','初七','初八','初九','初十',
+                  '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十',
+                  '廿一','廿二','廿三','廿四','廿五','廿六','廿七','廿八','廿九','三十'];
+    return strs[day - 1] || '';
   }
 
   return {
-    getLunarDate: getLunarDate,
-    solarToLunar: solarToLunar
+    getLunarDate: (d) => solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate()),
+    solarToLunar
   };
 })();
 
+// ========== 工具函数 ==========
 function getNthWeekday(year, month, weekday, n) {
-  const firstDay = new Date(year, month - 1, 1);
-  const firstWeekday = firstDay.getDay();
-  const day = (weekday - firstWeekday + 7) % 7 + 1 + (n - 1) * 7;
-  return new Date(year, month - 1, day);
+  const first = new Date(year, month - 1, 1);
+  const diff = (weekday - first.getDay() + 7) % 7;
+  return new Date(year, month - 1, 1 + diff + (n - 1) * 7);
 }
 
 function daysDiff(from, to) {
-  const oneDay = 24 * 60 * 60 * 1000;
-  return Math.ceil((to - from) / oneDay);
+  return Math.ceil((to - from) / (24 * 60 * 60 * 1000));
 }
 
 function getCountdowns() {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const results = [];
-  
-  for (const [key, info] of Object.entries(HOLIDAYS)) {
-    const [m, d] = key.split('-').map(Number);
-    let targetDate = new Date(currentYear, m - 1, d);
-    if (targetDate < now) targetDate = new Date(currentYear + 1, m - 1, d);
-    results.push({ name: info.name, days: daysDiff(now, targetDate), type: info.type });
+  const now = new Date(), year = now.getFullYear(), results = [];
+
+  for (const [k, v] of Object.entries(HOLIDAYS)) {
+    const [m, d] = k.split('-').map(Number);
+    let t = new Date(year, m - 1, d);
+    if (t < now) t = new Date(year + 1, m - 1, d);
+    results.push({ name: v.name, days: daysDiff(now, t), type: v.type });
   }
-  
-  for (const [key, info] of Object.entries(FLOATING_HOLIDAYS)) {
-    let targetDate = info.calc(currentYear);
-    if (targetDate < now) targetDate = info.calc(currentYear + 1);
-    results.push({ name: info.name, days: daysDiff(now, targetDate), type: 'floating' });
+
+  for (const [k, v] of Object.entries(FLOATING_HOLIDAYS)) {
+    let t = v.calc(year);
+    if (t < now) t = v.calc(year + 1);
+    results.push({ name: v.name, days: daysDiff(now, t), type: 'floating' });
   }
-  
-  for (const [key, name] of Object.entries(SOLAR_TERMS)) {
-    const [m, d] = key.split('-').map(Number);
-    let targetDate = new Date(currentYear, m - 1, d);
-    if (targetDate < now) targetDate = new Date(currentYear + 1, m - 1, d);
-    results.push({ name, days: daysDiff(now, targetDate), type: 'term' });
+
+  for (const [k, name] of Object.entries(SOLAR_TERMS)) {
+    const [m, d] = k.split('-').map(Number);
+    let t = new Date(year, m - 1, d);
+    if (t < now) t = new Date(year + 1, m - 1, d);
+    results.push({ name, days: daysDiff(now, t), type: 'term' });
   }
-  
-  const lunar = Lunar.getLunarDate(now);
-  for (const [key, name] of Object.entries(LUNAR_HOLIDAYS)) {
-    const [lm, ld] = key.split('-').map(Number);
-    let targetMonth = lm;
-    if (targetMonth < lunar.month || (targetMonth === lunar.month && ld <= lunar.day)) {
-      targetMonth = (targetMonth % 12) + 1;
+
+  try {
+    const lunar = Lunar.getLunarDate(now);
+    for (const [k, name] of Object.entries(LUNAR_HOLIDAYS)) {
+      const [lm, ld] = k.split('-').map(Number);
+      let tm = (lunar.month > lm || (lunar.month === lm && lunar.day >= ld)) ? lm + 12 : lm;
+      let t = new Date(year, tm - 1, ld);
+      if (t < now) t = new Date(year + 1, tm - 1, ld);
+      results.push({ name, days: daysDiff(now, t), type: 'lunar' });
     }
-    let targetDate = new Date(currentYear, targetMonth - 1, ld);
-    if (targetDate < now) targetDate = new Date(currentYear + 1, targetMonth - 1, ld);
-    results.push({ name, days: daysDiff(now, targetDate), type: 'lunar' });
-  }
-  
+  } catch (e) {}
+
   results.sort((a, b) => a.days - b.days);
   const seen = new Set();
-  return results.filter(r => { 
-    if (seen.has(r.name + r.days)) return false; 
-    seen.add(r.name + r.days); 
-    return true; 
-  });
+  return results.filter(r => !seen.has(r.name + r.days) && seen.add(r.name + r.days));
 }
 
+// ========== 🎯 核心：按尺寸渲染不同布局 ==========
 export default async function(ctx) {
-  const env = ctx.env || {};
-  const title = env.TITLE || '节日倒计时';
-  const showHolidays = env.SHOW_HOLIDAYS !== 'false';
-  const showTerms = env.SHOW_TERMS !== 'false';
-  const showTraditional = env.SHOW_TRADITIONAL !== 'false';
-  const itemsPerRow = parseInt(env.ITEMS_PER_ROW) || 4;
-  const maxRows = parseInt(env.MAX_ROWS) || 5;
-  
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const day = now.getDate();
-  const weekday = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
-  
-  const lunar = Lunar.getLunarDate(now);
-  const solarDate = `${year}年${month}月${day}日 周${weekday}`;
-  
-  // 格式化农历日期（包含干支和生肖）
-  let lunarDate = '';
-  if (lunar) {
-    const monthPrefix = lunar.isLeap ? '闰' : '';
-    // 显示格式：农历丙午年正月廿四
-    lunarDate = `农历${lunar.ganZhi}年${monthPrefix}${lunar.monthStr}月${lunar.dayStr}`;
-  } else {
-    lunarDate = '农历计算中...';
-  }
-  
-  let countdowns = getCountdowns();
-  if (!showHolidays) countdowns = countdowns.filter(c => c.type !== 'holiday');
-  if (!showTerms) countdowns = countdowns.filter(c => c.type !== 'term');
-  if (!showTraditional) countdowns = countdowns.filter(c => c.type !== 'lunar' && c.type !== 'floating');
-  
-  const totalItems = itemsPerRow * maxRows;
-  const displayItems = countdowns.slice(0, totalItems);
-  
-  const rows = [];
-  for (let i = 0; i < displayItems.length; i += itemsPerRow) {
-    const rowItems = displayItems.slice(i, i + itemsPerRow);
-    const rowText = rowItems.map(c => `${c.name}${c.days}天`).join(' | ');
-    rows.push(rowText);
-  }
-  
-  const children = [
-    {
-      type: 'stack',
-      direction: 'row',
-      alignItems: 'center',
-      gap: 8,
-      children: [
-        {
-          type: 'image',
-          src: 'sf-symbol:calendar',
-          color: { light: '#FF3B30', dark: '#FF453A' },
-          width: 24,
-          height: 24
-        },
-        {
-          type: 'text',
-          text: title,
-          font: {
-            size: 16,
-            weight: 'semibold'
-          },
-          textColor: { light: '#1D1D1F', dark: '#F5F5F7' },
-          textAlign: 'left'
-        }
-      ]
-    },
-    {
-      type: 'text',
-      text: solarDate,
-      font: {
-        size: 12,
-        weight: 'medium'
-      },
-      textColor: { light: '#666666', dark: '#999999' },
-      textAlign: 'left',
-      maxLines: 1
-    },
-    {
-      type: 'text',
-      text: lunarDate,
-      font: {
-        size: 11,
-        weight: 'regular'
-      },
-      textColor: { light: '#999999', dark: '#777777' },
-      textAlign: 'left',
-      maxLines: 1
+  try {
+    const env = ctx.env || {};
+    const widgetFamily = ctx.widgetFamily || 'systemMedium';
+    
+    const showHolidays = env.SHOW_HOLIDAYS !== 'false';
+    const showTerms = env.SHOW_TERMS !== 'false';
+    const showTraditional = env.SHOW_TRADITIONAL !== 'false';
+
+    const now = new Date();
+    const m = now.getMonth() + 1, d = now.getDate();
+
+    let countdowns = [];
+    try { countdowns = getCountdowns(); } catch (e) {}
+    if (!showHolidays) countdowns = countdowns.filter(c => c.type !== 'holiday');
+    if (!showTerms) countdowns = countdowns.filter(c => c.type !== 'term');
+    if (!showTraditional) countdowns = countdowns.filter(c => c.type !== 'lunar' && c.type !== 'floating');
+
+    // 🔹 锁屏圆形
+    if (widgetFamily === 'accessoryCircular') {
+      const next = countdowns[0];
+      return {
+        type: 'widget',
+        padding: 6,
+        backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
+        refreshAfter: 'PT1H',
+        children: [{
+          type: 'stack', direction: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+          children: [
+            { type: 'image', src: 'sf-symbol:calendar.circle.fill', color: { light: '#FF3B30', dark: '#FF453A' }, width: 22, height: 22 },
+            { type: 'text', text: next ? String(next.days) : '--', font: { size: 16, weight: 'bold' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' }, textAlign: 'center' }
+          ]
+        }]
+      };
     }
-  ];
-  
-  rows.forEach((row, index) => {
-    children.push({
-      type: 'text',
-      text: row,
-      font: {
-        size: 13,
-        weight: index === 0 ? 'semibold' : 'regular'
-      },
-      textColor: { light: '#333333', dark: '#CCCCCC' },
-      textAlign: 'left',
-      maxLines: 1
-    });
-  });
-  
-  return {
-    type: 'widget',
-    backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
-    padding: 12,
-    children: children
-  };
+
+    // 🔹 锁屏矩形
+    if (widgetFamily === 'accessoryRectangular' || widgetFamily === 'accessoryInline') {
+      const next = countdowns[0];
+      return {
+        type: 'widget',
+        padding: 8,
+        backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
+        refreshAfter: 'PT1H',
+        children: [{
+          type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
+          children: [
+            { type: 'image', src: 'sf-symbol:calendar', color: { light: '#FF3B30', dark: '#FF453A' }, width: 18, height: 18 },
+            { type: 'text', text: next ? `${next.name} ${next.days}天` : '节日倒计时', font: { size: 12, weight: 'medium' }, textColor: { light: '#1D1D1F', dark: '#F5F5F7' }, maxLines: 1, flex: 1 }
+          ]
+        }]
+      };
+    }
+
+    // 🔹 小尺寸（2×2）- 一行3个
+    if (widgetFamily === 'systemSmall') {
+      const items = countdowns.slice(0, 18); // 3列 × 6行 = 18个
+      
+      const children = [];
+      for (let i = 0; i < items.length; i += 3) {
+        const rowItems = items.slice(i, i + 3);
+        const rowChildren = rowItems.map((c, idx) => {
+          const globalIdx = i + idx;
+          let textColor;
+          let fontWeight;
+          
+          if (globalIdx < 6) {
+            textColor = { light: '#FF3B30', dark: '#FF453A' };
+            fontWeight = 'semibold';
+          } else if (globalIdx < 12) {
+            textColor = { light: '#FF9500', dark: '#FF9F0A' };
+            fontWeight = 'semibold';
+          } else {
+            textColor = { light: '#8E8E93', dark: '#8E8E93' };
+            fontWeight = 'regular';
+          }
+          
+          return {
+            type: 'text',
+            text: `${c.name} ${c.days}天`,
+            font: { size: 9, weight: fontWeight },
+            textColor: textColor,
+            flex: 1,
+            maxLines: 1
+          };
+        });
+        
+        children.push({
+          type: 'stack',
+          direction: 'row',
+          gap: 2,
+          children: rowChildren
+        });
+      }
+
+      return {
+        type: 'widget',
+        padding: 6,
+        backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
+        refreshAfter: 'PT1H',
+        children
+      };
+    }
+
+    // 🔹 中尺寸（2×4）- 一行4个（字体放大）
+    if (widgetFamily === 'systemMedium') {
+      const items = countdowns.slice(0, 24); // 4列 × 6行 = 24个
+      
+      const children = [];
+      for (let i = 0; i < items.length; i += 4) {
+        const rowItems = items.slice(i, i + 4);
+        const rowChildren = rowItems.map((c, idx) => {
+          const globalIdx = i + idx;
+          let textColor;
+          let fontWeight;
+          
+          if (globalIdx < 8) {
+            textColor = { light: '#FF3B30', dark: '#FF453A' };
+            fontWeight = 'semibold';
+          } else if (globalIdx < 16) {
+            textColor = { light: '#FF9500', dark: '#FF9F0A' };
+            fontWeight = 'semibold';
+          } else {
+            textColor = { light: '#8E8E93', dark: '#8E8E93' };
+            fontWeight = 'regular';
+          }
+          
+          return {
+            type: 'text',
+            text: `${c.name} ${c.days}天`,
+            font: { size: 11, weight: fontWeight },  // 放大字体
+            textColor: textColor,
+            flex: 1,
+            maxLines: 1
+          };
+        });
+        
+        children.push({
+          type: 'stack',
+          direction: 'row',
+          gap: 3,
+          children: rowChildren
+        });
+      }
+
+      return {
+        type: 'widget',
+        padding: 8,
+        backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
+        refreshAfter: 'PT30M',
+        children
+      };
+    }
+
+    // 🔹 大尺寸（4×4）- 一行5个
+    const items = countdowns.slice(0, 30); // 5列 × 6行 = 30个
+    const children = [];
+    for (let i = 0; i < items.length; i += 5) {
+      const rowItems = items.slice(i, i + 5);
+      const rowChildren = rowItems.map((c, idx) => {
+        const globalIdx = i + idx;
+        return {
+          type: 'text',
+          text: `${c.name} ${c.days}天`,
+          font: { size: 12, weight: globalIdx < 10 ? 'semibold' : 'regular' },
+          textColor: globalIdx < 10 ? { light: '#FF3B30', dark: '#FF453A' } : { light: '#333333', dark: '#CCCCCC' },
+          flex: 1,
+          maxLines: 1
+        };
+      });
+      
+      children.push({
+        type: 'stack',
+        direction: 'row',
+        gap: 4,
+        children: rowChildren
+      });
+    }
+
+    return {
+      type: 'widget',
+      backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
+      padding: 10,
+      refreshAfter: 'PT30M',
+      children
+    };
+
+  } catch (error) {
+    return {
+      type: 'widget',
+      padding: 12,
+      backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
+      children: [{
+        type: 'stack', direction: 'column', alignItems: 'center', gap: 8,
+        children: [
+          { type: 'image', src: 'sf-symbol:exclamationmark.triangle.fill', color: { light: '#FF9500', dark: '#FF9F0A' }, width: 22, height: 22 },
+          { type: 'text', text: '加载失败', font: { size: 12, weight: 'medium' }, textColor: { light: '#FF3B30', dark: '#FF453A' } }
+        ]
+      }]
+    };
+  }
 }
 
