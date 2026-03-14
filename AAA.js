@@ -1,12 +1,10 @@
 /**
- * 🌤️ 和风天气 - Egern 小组件（经纬度 AQI 版）
+ * 🌤️ 和风天气 - Egern 小组件 测试版
  * 
  * 环境变量：
  * KEY: 和风天气 API Key（必填）
  * LOCATION: 城市名（用于查经纬度）
  * API_HOST: 专属域名（必填）
- * 
- * ✅ 空气质量只使用经纬度获取
  */
 
 export default async function(ctx) {
@@ -26,15 +24,11 @@ export default async function(ctx) {
 
   try {
     const host = normalizeHost(apiHost);
-    // 获取经纬度（城市名→经纬度）
     const { lon, lat, city } = await getLocation(ctx, location, apiKey, host);
-    
-    // 用经纬度获取天气
     const now = await fetchWeatherNow(ctx, apiKey, lon, lat, host);
 
     let air = null;
     if (widgetFamily !== 'systemSmall') {
-      // 用经纬度获取空气质量（不支持城市名）
       air = await fetchAirQuality(ctx, apiKey, lon, lat, host);
     }
 
@@ -57,7 +51,6 @@ function normalizeHost(host) {
   return h.replace(/\/$/, '');
 }
 
-// 获取经纬度
 async function getLocation(ctx, location, apiKey, apiHost) {
   const presetLocations = {
     '北京': { lon: '116.4074', lat: '39.9042' },
@@ -166,7 +159,6 @@ async function getLocation(ctx, location, apiKey, apiHost) {
     '常德': { lon: '111.6985', lat: '29.0319' },
     '衡阳': { lon: '112.6079', lat: '26.8968' },
     '宣城': { lon: '118.7580', lat: '30.9456' },
-    '芜湖': { lon: '118.3764', lat: '31.3263' },
     '马鞍山': { lon: '118.5079', lat: '31.6893' },
     '铜陵': { lon: '117.8166', lat: '30.1477' },
     '池州': { lon: '117.4892', lat: '30.6560' },
@@ -176,9 +168,7 @@ async function getLocation(ctx, location, apiKey, apiHost) {
     '淮北': { lon: '116.7946', lat: '33.9717' },
     '亳州': { lon: '115.7829', lat: '33.8693' },
     '六安': { lon: '116.5077', lat: '31.7528' },
-    '黄山': { lon: '118.3373', lat: '29.7116' },
-    '宿州': { lon: '116.9840', lat: '33.6338' },
-    '蚌埠': { lon: '117.3632', lat: '32.9397' }
+    '宿州': { lon: '116.9840', lat: '33.6338' }
   };
 
   const cityName = location && location !== 'auto' ? location : '北京';
@@ -192,13 +182,11 @@ async function getLocation(ctx, location, apiKey, apiHost) {
     const geoResp = await ctx.http.get(geoUrl, { timeout: 5000 });
     const geoData = await geoResp.json();
     
-    if (geoData.code === '200' && geoData.location?.[0]) {
+    if (geoData.code == 200 && geoData.location?.[0]) {
       const loc = geoData.location[0];
       return { lon: loc.lon, lat: loc.lat, city: loc.name || cityName };
     }
-  } catch (e) {
-    // 忽略
-  }
+  } catch (e) {}
 
   return { lon: '116.4074', lat: '39.9042', city: cityName };
 }
@@ -208,7 +196,7 @@ async function fetchWeatherNow(ctx, key, lon, lat, apiHost) {
   const resp = await ctx.http.get(url, { timeout: 8000 });
   const data = await resp.json();
 
-  if (data.code !== '200') {
+  if (data.code != 200 && data.code !== '200' && data.code !== 'ok') {
     throw new Error(data.msg || '天气获取失败');
   }
 
@@ -224,103 +212,60 @@ async function fetchWeatherNow(ctx, key, lon, lat, apiHost) {
   };
 }
 
-// 空气质量 - 只使用经纬度获取
+// 🔥 空气质量 - 完全按照参考脚本逻辑
 async function fetchAirQuality(ctx, key, lon, lat, apiHost) {
-  let result = null;
-  
-  // 方法1: V7 air/now（经度，纬度）
+  let aqi = null;
+  let categoryText = '--';
+  let categoryColor = { light: '#999999', dark: '#888888' };
+
+  // 尝试新版 V1 接口
   try {
-    const url = `${apiHost}/v7/air/now?location=${lon},${lat}&key=${key}`;
-    const resp = await ctx.http.get(url, { timeout: 8000 });
-    const data = await resp.json();
-    
-    if (data.code === '200') {
-      let aqi = null;
-      
-      if (data.now && data.now.aqi !== undefined && data.now.aqi !== null) {
-        aqi = Number(data.now.aqi);
-      }
-      
-      if (aqi === null && data.indexes) {
-        for (let idx of data.indexes) {
-          if (idx.code === 'cn-mee' && idx.aqi !== undefined && idx.aqi !== null) {
-            aqi = Number(idx.aqi);
-            break;
-          }
+    const urlV1 = `${apiHost}/airquality/v1/current/${lat}/${lon}?key=${key}&lang=zh`;
+    const respV1 = await ctx.http.get(urlV1, { timeout: 8000 });
+    const dataV1 = await respV1.json();
+
+    if (dataV1.code == 200 || dataV1.code === '200' || dataV1.code === 'ok') {
+      if (Array.isArray(dataV1.indexes) && dataV1.indexes.length > 0) {
+        const cnMee = dataV1.indexes.find(i => i.code === 'cn-mee');
+        const info = cnMee || dataV1.indexes[0];
+        if (info && info.aqi != null) {
+          aqi = Number(info.aqi);
+          categoryText = info.category || getAQICategory(aqi).text;
+          categoryColor = getAQICategory(aqi).color;
         }
-      }
-      
-      if (aqi === null && data.indexes) {
-        for (let idx of data.indexes) {
-          if (idx.code === 'cn-mee-1h' && idx.aqi !== undefined && idx.aqi !== null) {
-            aqi = Number(idx.aqi);
-            break;
-          }
-        }
-      }
-      
-      if (aqi === null && data.indexes) {
-        for (let idx of data.indexes) {
-          if (idx.aqi !== undefined && idx.aqi !== null && !isNaN(Number(idx.aqi))) {
-            aqi = Number(idx.aqi);
-            break;
-          }
-        }
-      }
-      
-      if (aqi !== null && !isNaN(aqi)) {
-        result = { aqi: Math.round(aqi), category: getAQICategory(aqi) };
       }
     }
   } catch (e) {
-    // 继续尝试 V1
+    console.log('❌ AQI V1 请求失败:', e.message);
   }
-  
-  if (result) return result;
-  
-  // 方法2: V1 airquality（纬度/经度）⚠️ 顺序相反
-  try {
-    const url = `${apiHost}/airquality/v1/current/${lat}/${lon}?key=${key}&lang=zh`;
-    const resp = await ctx.http.get(url, { timeout: 8000 });
-    const data = await resp.json();
-    
-    if (data.code === '200' && data.indexes) {
-      let aqi = null;
-      
-      for (let idx of data.indexes) {
-        if (idx.code === 'cn-mee' && idx.aqi !== undefined && idx.aqi !== null) {
-          aqi = Number(idx.aqi);
-          break;
+
+  // fallback: 旧版 V7 接口（兼容备用）
+  if (aqi == null || isNaN(aqi)) {
+    try {
+      const urlV7 = `${apiHost}/v7/air/now?location=${lon},${lat}&key=${key}&lang=zh`;
+      const respV7 = await ctx.http.get(urlV7, { timeout: 8000 });
+      const dataV7 = await respV7.json();
+      if (dataV7.code == 200 || dataV7.code === '200' || dataV7.code === 'ok') {
+        if (dataV7.now && dataV7.now.aqi) {
+          aqi = Number(dataV7.now.aqi);
+          categoryText = dataV7.now.category || getAQICategory(aqi).text;
+          categoryColor = getAQICategory(aqi).color;
         }
       }
-      
-      if (aqi === null) {
-        for (let idx of data.indexes) {
-          if (idx.code === 'cn-mee-1h' && idx.aqi !== undefined && idx.aqi !== null) {
-            aqi = Number(idx.aqi);
-            break;
-          }
-        }
-      }
-      
-      if (aqi === null) {
-        for (let idx of data.indexes) {
-          if (idx.aqi !== undefined && idx.aqi !== null && !isNaN(Number(idx.aqi))) {
-            aqi = Number(idx.aqi);
-            break;
-          }
-        }
-      }
-      
-      if (aqi !== null && !isNaN(aqi)) {
-        result = { aqi: Math.round(aqi), category: getAQICategory(aqi) };
-      }
+    } catch (e) {
+      console.log('⚠️ AQI V7 请求失败:', e.message);
     }
-  } catch (e) {
-    // 失败
   }
-  
-  return result || { aqi: '--', category: getAQICategory(null) };
+
+  // 统一返回
+  if (aqi != null && !isNaN(aqi)) {
+    return {
+      aqi: Math.round(aqi),
+      category: { text: categoryText, color: categoryColor }
+    };
+  } else {
+    return { aqi: '--', category: { text: '--', color: categoryColor } };
+  }
 }
 
 function getAQICategory(aqi) {
@@ -496,7 +441,7 @@ function renderSmall(now, city) {
 function renderMedium(now, air, city) {
   const icon = getWeatherIcon(now.icon);
   const color = getWeatherColor(now.icon);
-  const aqiColor = air ? getAQICategory(air.aqi).color : { light: '#999999', dark: '#888888' };
+  const aqiColor = air ? air.category.color : { light: '#999999', dark: '#888888' };
   const aqiText = air ? air.category.text : '--';
   const nowTime = new Date();
   const timeStr = `${nowTime.getMonth()+1}/${nowTime.getDate()} ${nowTime.getHours()}:${String(nowTime.getMinutes()).padStart(2, '0')}`;
@@ -540,9 +485,10 @@ function renderMedium(now, air, city) {
             alignItems: 'center',
             gap: 8,
             children: [
+              // ✅ 采用参考脚本的显示格式：AQI 数值 • 分类
               {
                 type: 'text',
-                text: `AQI ${air?.aqi || '--'}`,
+                text: `AQI ${air?.aqi || '--'} • ${aqiText}`,
                 font: { size: 'caption1', weight: 'semibold' },
                 textColor: aqiColor
               },
