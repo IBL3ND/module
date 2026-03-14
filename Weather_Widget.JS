@@ -1,37 +1,56 @@
 /**
- * 🌤️ 和风天气 - Egern 小组件（清爽版）
+ * 🌤️ 和风天气 - Egern 小组件（API Host版）
+ * 
+ * ⚠️ 重要：必须使用个人API Host，公共域名已停止服务！
+ * 
  * 环境变量：
- *   KEY: 和风天气 API Key（必填）
- *   LOCATION: 城市名，如"北京"（可选，默认自动定位）
+ * KEY: 和风天气 API Key（必填）
+ * API_HOST: 你的个人API Host（必填！从控制台获取）
+ * LOCATION: 城市名，如"北京"（可选，北京）
+ *
+ * ⚠️ 重要提示
+ * 1.	公共域名已停用： devapi.qweather.com 、 api.qweather.com  等将从2026年起逐步停止服务
+ * 2.	必须使用个人API Host：每个开发者账号都有独立的API Host
+ * 3.	从控制台复制：登录 https://console.qweather.com/ → 设置 → 复制API Host
  */
 
 export default async function(ctx) {
   const env = ctx.env || {};
   const widgetFamily = ctx.widgetFamily || 'systemMedium';
   const apiKey = env.KEY;
+  const apiHost = env.API_HOST;  // 👈 必须配置个人API Host
   const location = env.LOCATION || 'auto';
-  
+
   if (!apiKey) {
     return renderError('⚠️ 请配置 KEY 环境变量');
   }
   
+  if (!apiHost) {
+    return renderError('⚠️ 请配置 API_HOST 环境变量\n\n获取方式：\n1. 登录和风天气控制台\n2. 进入 控制台→设置\n3. 复制你的API Host');
+  }
+
   try {
     const { lon, lat, city } = await getLocation(ctx, location);
-    const now = await fetchWeatherNow(ctx, apiKey, lon, lat);
     
+    const now = await fetchWeatherNow(ctx, apiKey, lon, lat, apiHost);
+
     let air = null;
     if (widgetFamily !== 'systemSmall') {
-      air = await fetchAirNow(ctx, apiKey, lon, lat);
+      air = await fetchAirNow(ctx, apiKey, lon, lat, apiHost);
     }
-    
+
     if (widgetFamily === 'systemSmall') {
       return renderSmall(now, city);
     } else {
       return renderMedium(now, air, city);
     }
-    
+
   } catch (e) {
-    return renderError(`❌ ${e.message}`);
+    const msg = e.message;
+    if (msg.includes('401') || msg.includes('403')) {
+      return renderError('❌ API Key或API Host无效\n\n请检查：\n1. KEY是否正确\n2. API_HOST是否从控制台复制');
+    }
+    return renderError(`❌ ${msg}`);
   }
 }
 
@@ -46,21 +65,21 @@ async function getLocation(ctx, location) {
     '杭州': { lon: '120.1551', lat: '30.2741' },
     '成都': { lon: '104.0665', lat: '30.5728' }
   };
-  
+
   const pos = locations[location] || locations['北京'];
   return { ...pos, city: location };
 }
 
 // 获取实时天气
-async function fetchWeatherNow(ctx, key, lon, lat) {
-  const url = `https://devapi.qweather.com/v7/weather/now?location=${lon},${lat}&key=${key}`;
-  const resp = await ctx.http.get(url, { timeout: 8000 });
+async function fetchWeatherNow(ctx, key, lon, lat, apiHost) {
+  const url = `https://${apiHost}/v7/weather/now?location=${lon},${lat}&key=${key}`;
+  const resp = await ctx.http.get(url, { timeout: 10000 });
   const data = await resp.json();
-  
+
   if (data.code !== '200') {
     throw new Error(data.msg || '天气获取失败');
   }
-  
+
   const now = data.now;
   return {
     temp: now.temp,
@@ -74,9 +93,9 @@ async function fetchWeatherNow(ctx, key, lon, lat) {
 }
 
 // 获取空气质量
-async function fetchAirNow(ctx, key, lon, lat) {
-  const url = `https://devapi.qweather.com/v7/air/now?location=${lon},${lat}&key=${key}`;
-  const resp = await ctx.http.get(url, { timeout: 8000 });
+async function fetchAirNow(ctx, key, lon, lat, apiHost) {
+  const url = `https://${apiHost}/v7/air/now?location=${lon},${lat}&key=${key}`;
+  const resp = await ctx.http.get(url, { timeout: 10000 });
   const data = await resp.json();
   return {
     aqi: data.now?.aqi || '--',
@@ -186,7 +205,7 @@ function renderSmall(now, city) {
   const color = getWeatherColor(now.icon);
   const nowTime = new Date();
   const timeStr = `${nowTime.getHours()}:${String(nowTime.getMinutes()).padStart(2, '0')}`;
-  
+
   return {
     type: 'widget',
     padding: [14, 14, 14, 14],
@@ -299,7 +318,7 @@ function renderSmall(now, city) {
   };
 }
 
-// 中尺寸渲染（去掉背景版）
+// 中尺寸渲染
 function renderMedium(now, air, city) {
   const icon = getWeatherIcon(now.icon);
   const color = getWeatherColor(now.icon);
@@ -307,14 +326,13 @@ function renderMedium(now, air, city) {
   const aqiText = air ? air.category.text : '--';
   const nowTime = new Date();
   const timeStr = `${nowTime.getMonth()+1}/${nowTime.getDate()} ${nowTime.getHours()}:${String(nowTime.getMinutes()).padStart(2, '0')}`;
-  
+
   return {
     type: 'widget',
     padding: [16, 16, 16, 16],
     gap: 10,
     backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
     children: [
-      // 标题行
       {
         type: 'stack',
         direction: 'row',
@@ -364,8 +382,7 @@ function renderMedium(now, air, city) {
           }
         ]
       },
-      
-      // 主内容区
+
       {
         type: 'stack',
         direction: 'row',
@@ -420,14 +437,12 @@ function renderMedium(now, air, city) {
           }
         ]
       },
-      
-      // 详细数据（无背景版）
+
       {
         type: 'stack',
         direction: 'row',
         gap: 16,
         children: [
-          // 湿度
           {
             type: 'stack',
             direction: 'row',
@@ -462,8 +477,7 @@ function renderMedium(now, air, city) {
               }
             ]
           },
-          
-          // 风力
+
           {
             type: 'stack',
             direction: 'row',
@@ -498,8 +512,7 @@ function renderMedium(now, air, city) {
               }
             ]
           },
-          
-          // 风速
+
           {
             type: 'stack',
             direction: 'row',
