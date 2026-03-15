@@ -1,10 +1,18 @@
 /**
  * 🌤️ 和风天气 - Egern 小组件
  * 
- * 环境变量（必填）：
- * KEY       和风天气 API Key
- * API_HOST  专属域名（如 devapi.qweather.com 或 devapi.heweather.net）
- * LOCATION  城市中文名（支持预设城市自动经纬度，非预设城市会尝试 geo 查询）
+ * ⚠️ 重要：必须使用个人API Host，公共域名已停止服务！
+ * 
+ * 环境变量：
+ * KEY: 和风天气 API Key（必填）
+ * API_HOST: 你的个人API Host（必填！从控制台获取）
+ * LOCATION: 城市名，如"北京" （支持预设城市自动经纬度，非预设城市会尝试 geo 查询）
+ *
+ * ⚠️ 重要提示
+ * 1.	公共域名已停用： devapi.qweather.com 、 api.qweather.com  等将从2026年起逐步停止服务
+ * 2.	必须使用个人API Host：每个开发者账号都有独立的API Host
+ * 3.	从控制台复制：登录 https://console.qweather.com/ → 设置 → 复制API Host
+ *
  */
 
 export default async function(ctx) {
@@ -25,7 +33,6 @@ export default async function(ctx) {
     const { lon, lat, city } = await getLocation(ctx, location, apiKey, apiHost);
     const now = await fetchWeatherNow(ctx, apiKey, lon, lat, apiHost);
 
-    // 小尺寸不显示空气质量，节省请求
     let air = null;
     if (widgetFamily !== 'systemSmall' && !isAccessoryFamily(widgetFamily)) {
       air = await fetchAirQuality(ctx, apiKey, lon, lat, apiHost);
@@ -42,13 +49,13 @@ export default async function(ctx) {
     }
 
   } catch (e) {
-    console.error(e); // 方便调试
+    console.error(e);
     return renderError(`请求失败：${e.message.slice(0, 60)}`);
   }
 }
 
 // ────────────────────────────────────────────────
-// 辅助函数
+// 辅助函数（不变）
 // ────────────────────────────────────────────────
 
 function normalizeHost(host) {
@@ -62,23 +69,57 @@ function isAccessoryFamily(family) {
 }
 
 async function getLocation(ctx, locName, key, host) {
-  // 常用城市预设（2025–2026 常用经纬度，精度更高）
   const presets = {
-    '北京':     { lon: '116.407396', lat: '39.904211' },
-    '上海':     { lon: '121.473701', lat: '31.230416' },
-    '广州':     { lon: '113.264435', lat: '23.129112' },
-    '深圳':     { lon: '114.057868', lat: '22.543099' },
-    '杭州':     { lon: '120.15507',  lat: '30.274084' },
-    '成都':     { lon: '104.065735', lat: '30.659462' },
-    // ... 可继续补充常用城市，此处省略大量条目以节省篇幅
-    // 如果你的城市不在列表中，会走下方 geo 查询
+    // ── 海南省 ──
+    '海口':       { lon: '110.3288', lat: '20.0310' },
+    '三亚':       { lon: '109.5119', lat: '18.2528' },
+    '儋州':       { lon: '109.5768', lat: '19.5209' },
+    '琼海':       { lon: '110.4746', lat: '19.2584' },
+    '万宁':       { lon: '110.3893', lat: '18.7953' },
+    '文昌':       { lon: '110.7530', lat: '19.6129' },
+    '东方':       { lon: '108.6536', lat: '19.1017' },
+    '五指山':     { lon: '109.5169', lat: '18.7752' },
+    '陵水':       { lon: '110.0372', lat: '18.5050' },
+    '保亭':       { lon: '109.7026', lat: '18.6390' },
+    '屯昌':       { lon: '110.1029', lat: '19.3638' },
+    '澄迈':       { lon: '110.0073', lat: '19.7364' },
+    '临高':       { lon: '109.6877', lat: '19.9084' },
+    '定安':       { lon: '110.3593', lat: '19.6849' },
+    '乐东':       { lon: '109.1717', lat: '18.7478' },
+    '昌江':       { lon: '109.0556', lat: '19.2983' },
+    '白沙':       { lon: '109.4515', lat: '19.2240' },
+    '琼中':       { lon: '109.8335', lat: '18.9982' },
+
+    // ── 其他热门城市 ──
+    '北京':       { lon: '116.4074', lat: '39.9042' },
+    '上海':       { lon: '121.4737', lat: '31.2304' },
+    '广州':       { lon: '113.2644', lat: '23.1291' },
+    '深圳':       { lon: '114.0579', lat: '22.5431' },
+    '杭州':       { lon: '120.1551', lat: '30.2741' },
+    '成都':       { lon: '104.0657', lat: '30.6595' },
+    '重庆':       { lon: '106.5049', lat: '29.5630' },
+    '武汉':       { lon: '114.2986', lat: '30.5844' },
+    '西安':       { lon: '108.9480', lat: '34.2632' },
+    '南京':       { lon: '118.7674', lat: '32.0415' },
+    '天津':       { lon: '117.2008', lat: '39.0842' },
+    '苏州':       { lon: '120.5853', lat: '31.2989' },
+    '青岛':       { lon: '120.3826', lat: '36.0671' },
+    '厦门':       { lon: '118.0894', lat: '24.4798' },
+    '长沙':       { lon: '112.9388', lat: '28.2282' },
+    '郑州':       { lon: '113.6654', lat: '34.7579' },
+    '沈阳':       { lon: '123.4315', lat: '41.8057' },
+    '大连':       { lon: '121.6147', lat: '38.9140' },
+    '昆明':       { lon: '102.8329', lat: '25.0406' },
+    '哈尔滨':     { lon: '126.5350', lat: '45.8038' },
+    '济南':       { lon: '117.0009', lat: '36.6758' },
+    '合肥':       { lon: '117.2272', lat: '31.8206' },
+    '福州':       { lon: '119.3062', lat: '26.0753' },
   };
 
   if (presets[locName]) {
     return { ...presets[locName], city: locName };
   }
 
-  // 非预设城市 → 调用和风 geo 接口
   try {
     const url = `${host}/geo/v2/city/lookup?location=${encodeURIComponent(locName)}&key=${key}&number=1&lang=zh`;
     const resp = await ctx.http.get(url, { timeout: 6000 });
@@ -94,7 +135,6 @@ async function getLocation(ctx, locName, key, host) {
     }
   } catch {}
 
-  // 兜底：北京
   return { lon: '116.4074', lat: '39.9042', city: locName || '北京' };
 }
 
@@ -120,7 +160,6 @@ async function fetchWeatherNow(ctx, key, lon, lat, host) {
 }
 
 async function fetchAirQuality(ctx, key, lon, lat, host) {
-  // 优先尝试新版接口（路径顺序 lat,lon）
   let aqiData = null;
 
   try {
@@ -138,11 +177,8 @@ async function fetchAirQuality(ctx, key, lon, lat, host) {
         };
       }
     }
-  } catch (e) {
-    // console.log('AQI v1 失败:', e.message);
-  }
+  } catch (e) {}
 
-  // fallback 旧版
   if (!aqiData) {
     try {
       const url = `${host}/v7/air/now?location=${lon},${lat}&key=${key}&lang=zh`;
@@ -175,22 +211,17 @@ function getAQICategory(val) {
 
 function getWeatherIcon(code) {
   const map = {
-    // 晴 & 云
     '100': 'sun.max.fill',     '101': 'cloud.sun.fill',   '102': 'cloud.fill',
     '103': 'cloud.sun.fill',   '104': 'cloud.fill',
-    // 雨
     '300': 'cloud.drizzle.fill','301': 'cloud.drizzle.fill','302': 'cloud.sun.rain.fill',
     '303': 'cloud.heavyrain.fill','305': 'cloud.rain.fill','306': 'cloud.rain.fill',
     '307': 'cloud.heavyrain.fill','308': 'cloud.heavyrain.fill','309': 'cloud.rain.fill',
     '310': 'cloud.heavyrain.fill','311': 'cloud.heavyrain.fill','312': 'cloud.heavyrain.fill',
     '313': 'cloud.bolt.rain.fill',
-    // 雪
     '400': 'snowflake', '401': 'snowflake', '402': 'snowflake', '403': 'snowflake',
     '404': 'cloud.sleet.fill', '405': 'cloud.sleet.fill', '406': 'cloud.sleet.fill', '407': 'cloud.sleet.fill',
-    // 雾/霾
     '500': 'cloud.fog.fill', '501': 'cloud.fog.fill', '502': 'cloud.fog.fill',
     '503': 'cloud.fog.fill', '504': 'cloud.fog.fill', '507': 'cloud.fog.fill', '508': 'cloud.fog.fill',
-    // 风
     '800': 'wind', '801': 'wind', '802': 'wind', '803': 'wind', '804': 'wind'
   };
   return map[code] || 'cloud.fill';
@@ -206,7 +237,7 @@ function getWeatherColor(code) {
 }
 
 // ────────────────────────────────────────────────
-// 渲染函数
+// 渲染函数（已改为纯白/纯黑背景）
 // ────────────────────────────────────────────────
 
 function renderSmall(now, city) {
@@ -219,7 +250,7 @@ function renderSmall(now, city) {
     type: 'widget',
     padding: 14,
     gap: 6,
-    backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
+    backgroundColor: { light: '#FFFFFF', dark: '#000000' },
     children: [
       {
         type: 'stack',
@@ -264,9 +295,8 @@ function renderMedium(now, air, city) {
     type: 'widget',
     padding: 16,
     gap: 12,
-    backgroundColor: { light: '#F9F9F9', dark: '#1C1C1E' },
+    backgroundColor: { light: '#FFFFFF', dark: '#000000' },
     children: [
-      // 标题行：城市 + AQI + 时间
       {
         type: 'stack',
         direction: 'row',
@@ -294,7 +324,6 @@ function renderMedium(now, air, city) {
         ]
       },
 
-      // 主内容行
       {
         type: 'stack',
         direction: 'row',
@@ -327,7 +356,6 @@ function renderMedium(now, air, city) {
         ]
       },
 
-      // 底部三列信息
       {
         type: 'stack',
         direction: 'row',
@@ -368,7 +396,7 @@ function renderAccessoryCompact(now, city, family) {
   return {
     type: 'widget',
     padding: 8,
-    backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
+    backgroundColor: { light: '#FFFFFF', dark: '#000000' },
     children: [
       {
         type: 'stack',
@@ -388,7 +416,7 @@ function renderError(msg) {
   return {
     type: 'widget',
     padding: 16,
-    backgroundColor: { light: '#FFF', dark: '#1C1C1E' },
+    backgroundColor: { light: '#FFFFFF', dark: '#000000' },
     children: [
       {
         type: 'stack',
