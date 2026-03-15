@@ -1,5 +1,5 @@
 /**
- * 机场订阅流量监控小组件 - Egern原生深浅色适配版
+ * 机场订阅流量监控小组件
  * 
  * 📝 使用说明：
  * 
@@ -38,7 +38,7 @@
  *    - 自动适配系统深色/浅色模式（无需配置）
  * 
  * @author 机场订阅监控
- * @version 3.0
+ * @version 3.1
  */
 
 export default async function (ctx) {
@@ -59,130 +59,119 @@ export default async function (ctx) {
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
-  // ✅ Egern 原生深浅色配置（自动切换）
+  // 高级配色系统
   const colors = {
-    bgCard: { light: "#FFFFFF", dark: "#2C2C2E" },
-    bgCardBorder: { light: "#E5E5E7", dark: "#3A3A3C" },
-    textPrimary: { light: "#1D1D1F", dark: "#FFFFFF" },
-    textSecondary: { light: "#666666", dark: "#EBEBF5" },
-    textTertiary: { light: "#999999", dark: "#AEAEB2" },
-    textMuted: { light: "#CCCCCC", dark: "#636366" },
-    iconPrimary: { light: "#5856D6", dark: "#5856D6" },
-    iconSecondary: { light: "#8E8E93", dark: "#8E8E93" },
-    iconMuted: { light: "#D1D1D6", dark: "#48484A" },
-    error: { light: "#FF3B30", dark: "#FF453A" },
-    warning: { light: "#FF9500", dark: "#FF9F0A" },
-    success: { light: "#34C759", dark: "#30D158" },
-    progressBg: { light: "#E5E5EA", dark: "#3A3A3C" },
+    textPrimary: { light: "#000000", dark: "#FFFFFF" },
+    textSecondary: { light: "#555555", dark: "#EBEBF5" },
+    textTertiary: { light: "#888888", dark: "#8E8E93" },
+    accentBlue: { light: "#007AFF", dark: "#0A84FF" },
+    accentGreen: { light: "#34C759", dark: "#30D158" },
+    accentOrange: { light: "#FF9500", dark: "#FF9F0A" },
+    accentRed: { light: "#FF3B30", dark: "#FF453A" },
+    accentPurple: { light: "#5856D6", dark: "#5856D6" },
+    divider: { light: "#E5E5EA", dark: "#48484A" },
   };
 
+  // 🔧 修改：背景渐变 - 浅色纯白 #FFFFFF / 深色 #2C2C2E
   const bgGradient = {
     type: "linear",
     colors: [
-      { light: "#F5F5F7", dark: "#1C1C1E" },
       { light: "#FFFFFF", dark: "#2C2C2E" },
-      { light: "#F8F8FA", dark: "#1C1C1E" },
       { light: "#FFFFFF", dark: "#2C2C2E" },
     ],
-    stops: [0, 0.35, 0.7, 1],
+    stops: [0, 1],
     startPoint: { x: 0, y: 0 },
-    endPoint: { x: 0.8, y: 1 },
+    endPoint: { x: 0, y: 1 },
   };
 
   if (!slots.length) {
     return {
       type: "widget",
-      padding: 16,
-      gap: 10,
       backgroundGradient: bgGradient,
+      padding: 16,
+      gap: 12,
       refreshAfter: refreshTime,
       children: [
         {
           type: "stack",
-          direction: "row",
+          direction: "column",
+          gap: 10,
           alignItems: "center",
-          gap: 6,
           children: [
             {
               type: "image",
-              src: "sf-symbol:chart.bar.fill",
-              width: 13,
-              height: 13,
-              color: colors.iconPrimary,
+              src: "sf-symbol:wifi.slash",
+              width: 32,
+              height: 32,
+              color: colors.accentRed,
             },
             {
               type: "text",
-              text: "订阅流量",
-              font: { size: "caption1", weight: "semibold" },
-              textColor: colors.textSecondary,
+              text: "未配置订阅",
+              font: { size: "headline", weight: "semibold" },
+              textColor: colors.textPrimary,
+            },
+            {
+              type: "text",
+              text: "请添加 URL1 环境变量",
+              font: { size: "caption1" },
+              textColor: colors.textTertiary,
             },
           ],
-        },
-        { type: "spacer" },
-        {
-          type: "text",
-          text: "请配置 URL1 环境变量",
-          font: { size: "caption1" },
-          textColor: colors.error,
-          textAlign: "center",
         },
       ],
     };
   }
 
   const results = await Promise.all(slots.map((s) => fetchInfo(ctx, s)));
-  const cards = results.map((r) => buildCard(r, slots.length, colors));
+
+  // 根据小组件尺寸调整显示
+  const isMedium = ctx.widgetFamily === "systemMedium";
+  const isLarge = ctx.widgetFamily === "systemLarge";
 
   return {
     type: "widget",
-    padding: [14, 14, 12, 14],
-    gap: 10,
     backgroundGradient: bgGradient,
+    padding: 14,
+    gap: 10,
     refreshAfter: refreshTime,
     children: [
-      // 顶部标题栏
+      // 顶部标题 - 紧凑设计
       {
         type: "stack",
         direction: "row",
         alignItems: "center",
-        gap: 5,
+        gap: 8,
         children: [
           {
             type: "image",
-            src: "sf-symbol:chart.bar.fill",
-            width: 13,
-            height: 13,
-            color: colors.iconPrimary,
+            src: "sf-symbol:network",
+            width: 14,
+            height: 14,
+            color: colors.accentBlue,
           },
           {
             type: "text",
-            text: "订阅流量",
-            font: { size: "caption1", weight: "semibold" },
-            textColor: colors.textSecondary,
+            text: "机场订阅流量监控",
+            font: { size: "subheadline", weight: "bold" },
+            textColor: colors.textPrimary,
           },
           { type: "spacer" },
           {
-            type: "image",
-            src: "sf-symbol:clock",
-            width: 11,
-            height: 11,
-            color: colors.iconMuted,
-          },
-          {
             type: "text",
             text: timeStr,
-            font: { size: "caption2" },
+            font: { size: "caption2", weight: "medium" },
             textColor: colors.textTertiary,
           },
         ],
       },
 
-      // 卡片列表
+      // 卡片容器
       {
         type: "stack",
         direction: "column",
-        gap: slots.length === 1 ? 0 : 7,
-        children: cards,
+        gap: 7,
+        children: results.map((r, idx) => buildCompactCard(r, colors, idx)),
       },
 
       { type: "spacer" },
@@ -190,121 +179,129 @@ export default async function (ctx) {
   };
 }
 
-// ─── 卡片构建 ─────────────────────────────────────────────────
+// ─── 紧凑卡片设计 ─────────────────────────────────────────────
 
-function buildCard(result, total, colors) {
+function buildCompactCard(result, colors, index) {
   const { name, error, used, totalBytes, percent, expire, remainDays } = result;
 
-  const usageColor =
-    error
-      ? colors.error
-      : percent >= 90
-      ? colors.error
-      : percent >= 70
-      ? colors.warning
-      : colors.success;
+  // 状态颜色判断
+  let statusColor = colors.accentGreen;
+  if (error) {
+    statusColor = colors.accentRed;
+  } else if (percent >= 95) {
+    statusColor = colors.accentRed;
+  } else if (percent >= 80) {
+    statusColor = colors.accentOrange;
+  } else if (percent >= 50) {
+    statusColor = colors.accentPurple;
+  }
 
-  // 错误卡片
+  // 错误状态
   if (error) {
     return {
       type: "stack",
       direction: "row",
       alignItems: "center",
-      gap: 6,
-      padding: [9, 11, 9, 11],
-      backgroundColor: colors.bgCard,
-      borderRadius: 11,
-      borderWidth: 0.5,
-      borderColor: { light: colors.error.light + "40", dark: colors.error.dark + "40" },
+      gap: 8,
+      padding: [10, 12],
+      backgroundColor: { light: "#FFF5F5", dark: "#3B1F1F" },
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: { light: colors.accentRed.light + "20", dark: colors.accentRed.dark + "20" },
       children: [
         {
           type: "image",
           src: "sf-symbol:exclamationmark.circle.fill",
-          width: 12,
-          height: 12,
-          color: colors.error,
+          width: 14,
+          height: 14,
+          color: colors.accentRed,
         },
         {
           type: "text",
           text: name,
-          font: { size: "caption1", weight: "semibold" },
+          font: { size: "footnote", weight: "semibold" },
           textColor: colors.textPrimary,
           maxLines: 1,
-          minScale: 0.8,
           flex: 1,
         },
         {
           type: "text",
-          text: "获取失败",
-          font: { size: "caption2" },
-          textColor: colors.error,
+          text: "失败",
+          font: { size: "caption2", weight: "semibold" },
+          textColor: colors.accentRed,
         },
       ],
     };
   }
 
-  // 到期文字
-  let expireText = "";
-  let expireColor = colors.textMuted;
+  // 获取到期信息
+  let expireLabel = "";
+  let expireColor = colors.textTertiary;
+
   if (expire) {
     const daysLeft = Math.ceil((expire * 1000 - Date.now()) / 86400000);
     if (daysLeft < 0) {
-      expireText = "已到期";
-      expireColor = colors.error;
+      expireLabel = "已到期";
+      expireColor = colors.accentRed;
     } else if (daysLeft <= 7) {
-      expireText = `${daysLeft}天后到期`;
-      expireColor = colors.warning;
-    } else {
-      expireText = formatDate(expire);
+      expireLabel = `${daysLeft}d`;
+      expireColor = colors.accentOrange;
+    } else if (daysLeft <= 30) {
+      expireLabel = `${daysLeft}d`;
+      expireColor = colors.textSecondary;
     }
-  } else if (remainDays !== null) {
-    expireText = `${remainDays}天重置`;
-    expireColor = remainDays <= 3 ? colors.warning : colors.textMuted;
+  } else if (remainDays !== null && remainDays <= 3) {
+    expireLabel = `${remainDays}d重置`;
+    expireColor = colors.accentOrange;
   }
 
-  const barFilled = Math.round(Math.min(Math.max(percent, 0), 100) / 10);
-  const barEmpty = 10 - barFilled;
-  const isSingle = total === 1;
+  const progressPercent = Math.min(Math.max(percent, 0), 100);
 
   return {
     type: "stack",
     direction: "column",
-    gap: 0,
-    padding: isSingle ? [11, 13, 11, 13] : [9, 11, 9, 11],
-    backgroundColor: colors.bgCard,
-    borderRadius: 11,
-    borderWidth: 0.5,
-    borderColor: colors.bgCardBorder,
+    gap: 6,
+    padding: [10, 11],
+    backgroundColor: { light: "#FFFFFF", dark: "#2B2B2D" },
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.divider,
     children: [
-      // ── 第一行：名称 + 到期 ──
+      // 第一行：名称 + 百分比 + 到期
       {
         type: "stack",
         direction: "row",
         alignItems: "center",
-        gap: 5,
+        gap: 6,
         children: [
           {
             type: "image",
-            src: "sf-symbol:dot.radiowaves.left.and.right",
-            width: 12,
-            height: 12,
-            color: usageColor,
+            src: "sf-symbol:circle.fill",
+            width: 8,
+            height: 8,
+            color: statusColor,
           },
           {
             type: "text",
             text: name,
-            font: { size: "caption1", weight: "semibold" },
+            font: { size: "footnote", weight: "semibold" },
             textColor: colors.textPrimary,
             maxLines: 1,
-            minScale: 0.75,
             flex: 1,
+            minScale: 0.85,
           },
-          ...(expireText
+          {
+            type: "text",
+            text: `${progressPercent.toFixed(0)}%`,
+            font: { size: "caption1", weight: "bold" },
+            textColor: statusColor,
+          },
+          ...(expireLabel
             ? [
                 {
                   type: "text",
-                  text: expireText,
-                  font: { size: "caption2" },
+                  text: expireLabel,
+                  font: { size: "caption2", weight: "medium" },
                   textColor: expireColor,
                 },
               ]
@@ -312,74 +309,56 @@ function buildCard(result, total, colors) {
         ],
       },
 
-      // ── 名称与进度条之间固定间距 ──
+      // 第二行：进度条
       {
         type: "stack",
         direction: "row",
-        height: 10,
-        children: [],
+        height: 4,
+        gap: 1,
+        children: Array.from({ length: 10 }, (_, i) => {
+          const filled = i < Math.ceil((progressPercent / 100) * 10);
+          return {
+            type: "stack",
+            flex: 1,
+            height: 4,
+            backgroundColor: filled ? statusColor : { light: "#E8E8EA", dark: "#2C2C2E" },
+            borderRadius: 2,
+            children: [],
+          };
+        }),
       },
 
-      // ── 第二行：进度条 ──
-      {
-        type: "stack",
-        direction: "row",
-        gap: 3,
-        alignItems: "center",
-        children: [
-          ...(barFilled > 0
-            ? [
-                {
-                  type: "stack",
-                  flex: barFilled,
-                  height: isSingle ? 5 : 4,
-                  backgroundColor: usageColor,
-                  borderRadius: 99,
-                  children: [],
-                },
-              ]
-            : []),
-          ...(barEmpty > 0
-            ? [
-                {
-                  type: "stack",
-                  flex: barEmpty,
-                  height: isSingle ? 5 : 4,
-                  backgroundColor: colors.progressBg,
-                  borderRadius: 99,
-                  children: [],
-                },
-              ]
-            : []),
-        ],
-      },
-
-      // ── 进度条与用量行之间固定间距 ──
-      {
-        type: "stack",
-        direction: "row",
-        height: 5,
-        children: [],
-      },
-
-      // ── 第三行：用量 + 百分比 ──
+      // 第三行：用量信息
       {
         type: "stack",
         direction: "row",
         alignItems: "center",
+        gap: 8,
         children: [
           {
             type: "text",
-            text: `${bytesToSize(used)} / ${bytesToSize(totalBytes)}`,
-            font: { size: "caption2", weight: "medium" },
+            text: bytesToSize(used),
+            font: { size: "caption2", weight: "semibold" },
             textColor: colors.textSecondary,
+          },
+          {
+            type: "text",
+            text: "/",
+            font: { size: "caption2" },
+            textColor: colors.textTertiary,
+          },
+          {
+            type: "text",
+            text: bytesToSize(totalBytes),
+            font: { size: "caption2", weight: "semibold" },
+            textColor: colors.textTertiary,
           },
           { type: "spacer" },
           {
             type: "text",
-            text: `${percent.toFixed(1)}%`,
-            font: { size: "caption2", weight: "semibold" },
-            textColor: usageColor,
+            text: `剩 ${bytesToSize(totalBytes - used)}`,
+            font: { size: "caption2", weight: "medium" },
+            textColor: colors.accentGreen,
           },
         ],
       },
@@ -465,7 +444,7 @@ function bytesToSize(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 function formatDate(ts) {
@@ -482,7 +461,6 @@ function getRemainingDays(resetDay) {
 }
 
 function inferName(url) {
-  // 如果环境变量中没有设置名称，返回默认名称
   return "机场订阅";
 }
 
