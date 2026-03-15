@@ -45,7 +45,7 @@
 export default async function(ctx) {
   // 🎨 主题配置
   const theme = {
-    bg: { light: "#FFFFFF", dark: "#1C1C1E" },
+    bg: { light: "#FFFFFF", dark: "#2C2C2E" },
     text: { light: "#000000", dark: "#FFFFFF" },
     textSecondary: { light: "#666666", dark: "#AAAAAA" },
     up: { light: "#00AA00", dark: "#30D158" },
