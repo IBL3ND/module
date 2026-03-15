@@ -105,7 +105,6 @@ export default async function(ctx) {
           { type: 'image', src: 'sf-symbol:paperplane.fill', color: C_TITLE, width: 16, height: 16 },
           { type: 'text', text: '代理检测', font: { size: 14, weight: 'heavy' }, textColor: C_TITLE },
           { type: 'spacer' },
-          { type: 'image', src: 'sf-symbol:arrow.clockwise', color: C_SUB, width: 12, height: 12 }
         ]
       },
       // 内容区域
