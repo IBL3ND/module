@@ -316,7 +316,7 @@ function renderMedium(now, air, city) {
           { type: 'spacer' },
           {
             type: 'text',
-            text: `AQI ${air.aqi} • ${air.category}`,
+            text: `AQI ${air.aqi}`,
             font: { size: 'caption1', weight: 'semibold' },
             textColor: aqiColor
           },
