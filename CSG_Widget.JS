@@ -5,7 +5,7 @@
  * Token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxx"
  *
  * 获取 x-auth-token 教程
- * 抓包工具 → 登录账号 → 进入「我的用电」或「电费查询」页面 → 等待几秒让数据加载完成 → 回到 抓包工具 → 点击「停止抓取」→ 搜索关键词：95598.csg.cn → 找到请求：/ucs/ma/zt/eleCustNumber/queryBindEleUsers → 点击该请求 → 查看「请求头」(Request Headers) → 找到 `x-auth-token` 字段 → 长按复制整个值（一串长字符）
+ * 抓包工具 → 登录账号 → 进入「我的用电」或「电费查询」页面 → 等待几秒让数据加载完成 → 回到 抓包工具 → 点击「停止抓取」→ 搜索关键词：getAuthenticationResult → 找到请求：/mp/w2/wx/userauth/user/manage/getAuthenticationResult → 点击该请求 → 查看「请求头」(Request Headers) → 找到 `x-auth-token` 字段 → 长按复制整个值（一串长字符）
  * 示例格式：
  *x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxx
  */
