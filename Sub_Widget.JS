@@ -1,9 +1,8 @@
 /**
  * 机场订阅流量监控小组件
  * 
- * 📝 使用说明：
- * 
- * 1️⃣ 添加环境变量（在 Egern 中进入"编辑环境变量"）：
+ * 📝 使用说明
+ * 1️⃣ 添加环境变量（在 Egern 中进入小组件"编辑环境变量"）：
  * 
  *    格式：名称（大写）= 值
  * 
@@ -46,7 +45,7 @@ export default async function (ctx) {
  const url = (ctx.env[`URL${i}`] || "").trim();
  if (!url) continue;
  slots.push({
- name: (ctx.env[`NAME${i}`] || "").trim() || inferName(url),
+ name: (ctx.env[`NAME${i}`] || "").trim() || "机场订阅",
  url,
  resetDay: parseInt(ctx.env[`RESET${i}`] || "", 10) || null,
  });
@@ -56,7 +55,6 @@ export default async function (ctx) {
  const now = new Date();
  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
- // 高级配色系统
  const colors = {
  textPrimary: { light: "#000000", dark: "#FFFFFF" },
  textSecondary: { light: "#555555", dark: "#EBEBF5" },
@@ -69,7 +67,6 @@ export default async function (ctx) {
  divider: { light: "#E5E5EA", dark: "#48484A" },
  };
 
- // 背景渐变 - 浅色纯白 #FFFFFF / 深色 #2C2C2E
  const bgGradient = {
  type: "linear",
  colors: [
@@ -108,12 +105,6 @@ export default async function (ctx) {
  font: { size: "headline", weight: "semibold" },
  textColor: colors.textPrimary,
  },
- {
- type: "text",
- text: "请添加 URL1 环境变量",
- font: { size: "caption1" },
- textColor: colors.textTertiary,
- },
  ],
  },
  ],
@@ -122,71 +113,64 @@ export default async function (ctx) {
 
  const results = await Promise.all(slots.map((s) => fetchInfo(ctx, s)));
 
- // ✅ 根据订阅数量动态调整布局
- const numSubs = slots.length;
+ const numSubs = Math.min(slots.length, 3);
  const isCompact = numSubs >= 3;
- const isVeryCompact = numSubs >= 4;
 
  return {
  type: "widget",
  backgroundGradient: bgGradient,
- padding: isVeryCompact ? 8 : (isCompact ? 10 : 14),
- gap: isVeryCompact ? 4 : (isCompact ? 6 : 10),
+ padding: isCompact ? 8 : 12,
+ gap: isCompact ? 5 : 8,
  refreshAfter: refreshTime,
  children: [
- // ✅ 标题栏 - 极致紧凑设计
  {
  type: "stack",
  direction: "row",
  alignItems: "center",
- gap: isVeryCompact ? 4 : 6,
+ gap: 6,
  children: [
  {
  type: "image",
  src: "sf-symbol:network",
- width: isVeryCompact ? 10 : (isCompact ? 12 : 14),
- height: isVeryCompact ? 10 : (isCompact ? 12 : 14),
+ width: 12,
+ height: 12,
  color: colors.accentBlue,
  },
  {
  type: "text",
  text: "机场订阅",
- font: { 
- size: isVeryCompact ? "caption2" : (isCompact ? "caption1" : "subheadline"), 
- weight: "bold" 
- },
+ font: { size: "subheadline", weight: "bold" },
  textColor: colors.textPrimary,
  },
  { type: "spacer" },
  {
+ type: "image",
+ src: "sf-symbol:arrow.clockwise",
+ width: 12,
+ height: 12,
+ color: colors.textTertiary,
+ },
+ {
  type: "text",
  text: timeStr,
- font: { 
- size: isVeryCompact ? "caption2" : "caption2", 
- weight: "medium" 
- },
+ font: { size: "caption2", weight: "medium" },
  textColor: colors.textTertiary,
  },
  ],
  },
-
- // 卡片容器
  {
  type: "stack",
  direction: "column",
- gap: isVeryCompact ? 4 : (isCompact ? 5 : 7),
- children: results.map((r, idx) => buildUltraCompactCard(r, colors, idx, isVeryCompact)),
+ gap: 6,
+ children: results.slice(0, 3).map((r, idx) => buildCard(r, colors, isCompact)),
  },
  ],
  };
 }
 
-// ─── 极致紧凑卡片设计 ─────────────────────────────────────────────
-
-function buildUltraCompactCard(result, colors, index, isVeryCompact = false) {
+function buildCard(result, colors, isCompact) {
  const { name, error, used, totalBytes, percent, expire, remainDays } = result;
 
- // 状态颜色判断
  let statusColor = colors.accentGreen;
  if (error) {
  statusColor = colors.accentRed;
@@ -198,24 +182,21 @@ function buildUltraCompactCard(result, colors, index, isVeryCompact = false) {
  statusColor = colors.accentPurple;
  }
 
- // 错误状态
  if (error) {
  return {
  type: "stack",
  direction: "row",
  alignItems: "center",
- gap: 4,
- padding: [6, 8],
+ gap: 6,
+ padding: [8, 10],
  backgroundColor: { light: "#FFF5F5", dark: "#3B1F1F" },
- borderRadius: 6,
- borderWidth: 1,
- borderColor: { light: colors.accentRed.light + "20", dark: colors.accentRed.dark + "20" },
+ borderRadius: 8,
  children: [
  {
  type: "image",
  src: "sf-symbol:exclamationmark.circle.fill",
- width: 10,
- height: 10,
+ width: 12,
+ height: 12,
  color: colors.accentRed,
  },
  {
@@ -223,9 +204,7 @@ function buildUltraCompactCard(result, colors, index, isVeryCompact = false) {
  text: name,
  font: { size: "caption2", weight: "semibold" },
  textColor: colors.textPrimary,
- maxLines: 1,
  flex: 1,
- minScale: 0.8,
  },
  {
  type: "text",
@@ -237,138 +216,82 @@ function buildUltraCompactCard(result, colors, index, isVeryCompact = false) {
  };
  }
 
- // 获取到期信息
- let expireLabel = "";
- let expireColor = colors.textTertiary;
-
- if (expire) {
- const daysLeft = Math.ceil((expire * 1000 - Date.now()) / 86400000);
- if (daysLeft < 0) {
- expireLabel = "已到期";
- expireColor = colors.accentRed;
- } else if (daysLeft <= 7) {
- expireLabel = `${daysLeft}d`;
- expireColor = colors.accentOrange;
- } else if (daysLeft <= 30) {
- expireLabel = `${daysLeft}d`;
- expireColor = colors.textSecondary;
- }
- } else if (remainDays !== null && remainDays <= 3) {
- expireLabel = `${remainDays}d重置`;
- expireColor = colors.accentOrange;
- }
-
  const progressPercent = Math.min(Math.max(percent, 0), 100);
-
- // ✅ 极致紧凑参数
- const cardPadding = isVeryCompact ? [6, 7] : [8, 9];
- const cardGap = isVeryCompact ? 3 : 4;
- const rowGap = isVeryCompact ? 3 : 5;
- const fontSize = "caption2";
- const progressHeight = isVeryCompact ? 2 : 3;
- const progressSegments = isVeryCompact ? 6 : 8;
+ const usedStr = formatBytes(used);
+ const totalStr = formatBytes(totalBytes);
+ const remainStr = formatBytes(totalBytes - used);
 
  return {
  type: "stack",
  direction: "column",
- gap: cardGap,
- padding: cardPadding,
+ gap: 5,
+ padding: [8, 10],
  backgroundColor: { light: "#FFFFFF", dark: "#2B2B2D" },
- borderRadius: 6,
+ borderRadius: 8,
  borderWidth: 1,
  borderColor: colors.divider,
  children: [
- // 第一行：名称 + 百分比 + 到期（合并到一行）
  {
  type: "stack",
  direction: "row",
  alignItems: "center",
- gap: 3,
+ gap: 5,
  children: [
  {
  type: "image",
  src: "sf-symbol:circle.fill",
- width: isVeryCompact ? 5 : 6,
- height: isVeryCompact ? 5 : 6,
+ width: 6,
+ height: 6,
  color: statusColor,
  },
  {
  type: "text",
  text: name,
- font: { size: fontSize, weight: "semibold" },
+ font: { size: "caption2", weight: "semibold" },
  textColor: colors.textPrimary,
- maxLines: 1,
  flex: 1,
- minScale: 0.75,
  },
  {
  type: "text",
- text: `${progressPercent.toFixed(0)}%`,
- font: { size: fontSize, weight: "bold" },
+ text: `${Math.round(progressPercent)}%`,
+ font: { size: "caption2", weight: "bold" },
  textColor: statusColor,
  },
- ...(expireLabel
- ? [
- {
- type: "text",
- text: expireLabel,
- font: { size: "caption2", weight: "medium" },
- textColor: expireColor,
- },
- ]
- : []),
  ],
  },
-
- // 第二行：进度条
  {
  type: "stack",
  direction: "row",
- height: progressHeight,
- gap: 1,
- children: Array.from({ length: progressSegments }, (_, i) => {
- const filled = i < Math.ceil((progressPercent / 100) * progressSegments);
+ height: 3,
+ gap: 2,
+ children: Array.from({ length: 8 }, (_, i) => {
+ const filled = i < Math.ceil((progressPercent / 100) * 8);
  return {
  type: "stack",
  flex: 1,
- height: progressHeight,
+ height: 3,
  backgroundColor: filled ? statusColor : { light: "#E8E8EA", dark: "#2C2C2E" },
  borderRadius: 1,
- children: [],
  };
  }),
  },
-
- // 第三行：用量信息
  {
  type: "stack",
  direction: "row",
  alignItems: "center",
- gap: rowGap,
+ gap: 5,
  children: [
  {
  type: "text",
- text: bytesToSize(used),
- font: { size: "caption2", weight: "semibold" },
+ text: `${usedStr}/${totalStr}`,
+ font: { size: "caption2", weight: "medium" },
  textColor: colors.textSecondary,
- },
- {
- type: "text",
- text: "/",
- font: { size: "caption2" },
- textColor: colors.textTertiary,
- },
- {
- type: "text",
- text: bytesToSize(totalBytes),
- font: { size: "caption2", weight: "semibold" },
- textColor: colors.textTertiary,
  },
  { type: "spacer" },
  {
  type: "text",
- text: `剩 ${bytesToSize(totalBytes - used)}`,
- font: { size: "caption2", weight: "medium" },
+ text: `剩${remainStr}`,
+ font: { size: "caption2", weight: "semibold" },
  textColor: colors.accentGreen,
  },
  ],
@@ -376,8 +299,6 @@ function buildUltraCompactCard(result, colors, index, isVeryCompact = false) {
  ],
  };
 }
-
-// ─── 网络请求 ─────────────────────────────────────────────────
 
 const UA_LIST = [
  { "User-Agent": "Quantumult%20X/1.5.2" },
@@ -429,7 +350,6 @@ function buildVariants(url) {
  add(url);
  add(withParam(url, "flag", "clash"));
  add(withParam(url, "flag", "meta"));
- add(withParam(url, "target", "clash"));
  return out;
 }
 
@@ -449,18 +369,12 @@ function parseUserInfo(header) {
  );
 }
 
-// ─── 工具函数 ─────────────────────────────────────────────────
-
-function bytesToSize(bytes) {
- if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+function formatBytes(bytes) {
+ if (!Number.isFinite(bytes) || bytes <= 0) return "0B";
  const units = ["B", "KB", "MB", "GB", "TB"];
  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
- return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function formatDate(ts) {
- const d = new Date(ts > 1e12 ? ts : ts * 1000);
- return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+ const value = bytes / Math.pow(1024, i);
+ return `${value >= 10 ? Math.round(value) : value.toFixed(1)}${units[i]}`;
 }
 
 function getRemainingDays(resetDay) {
@@ -469,9 +383,5 @@ function getRemainingDays(resetDay) {
  let next = new Date(now.getFullYear(), now.getMonth(), resetDay);
  if (day >= resetDay) next = new Date(now.getFullYear(), now.getMonth() + 1, resetDay);
  return Math.max(0, Math.ceil((next - now) / 86400000));
-}
-
-function inferName(url) {
- return "机场订阅";
 }
 
