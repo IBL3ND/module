@@ -14,7 +14,7 @@
  *    URL2 = https://yyy.com/sub...
  *    RESET2 = 15                     # 每月15日重置
  * 
- *    ... 最多支持 5 个机场（NAME1-5, URL1-5, RESET1-5）
+ *    最多支持 5 个机场 中尺寸建议只添加两个 需要显示多条 可以在组件页面右上角 重新添加组件就可以了（NAME1-5, URL1-5, RESET1-5）
  * 
  * 2️⃣ 参数说明：
  *    - NAME1-5：机场名称，显示在卡片上（必填，否则显示"机场订阅"）
@@ -262,18 +262,24 @@ function buildCard(result, colors, isCompact) {
  {
  type: "stack",
  direction: "row",
- height: 3,
- gap: 2,
- children: Array.from({ length: 8 }, (_, i) => {
- const filled = i < Math.ceil((progressPercent / 100) * 8);
- return {
+ height: 5,
+ borderRadius: 3,
+ children: [
+ {
  type: "stack",
- flex: 1,
- height: 3,
- backgroundColor: filled ? statusColor : { light: "#E8E8EA", dark: "#2C2C2E" },
- borderRadius: 1,
- };
- }),
+ flex: Math.max(progressPercent, 1),
+ height: 5,
+ backgroundColor: statusColor,
+ borderRadius: 3,
+ },
+ {
+ type: "stack",
+ flex: Math.max(100 - progressPercent, 1),
+ height: 5,
+ backgroundColor: { light: "#E8E8EA", dark: "#48484A" },
+ borderRadius: 3,
+ },
+ ],
  },
  {
  type: "stack",
