@@ -131,7 +131,7 @@ export default async function(ctx) {
 
     const ispColor = currentISP.includes("电信") ? C.blue : C.main;
 
-    const r1Content = [internalIP, gatewayIP !== internalIP ? gatewayIP : null].filter(Boolean).join(" / ");
+    const r1Content = [internalIP, gatewayIP !== internalIP ? gatewayIP : null].filter(Boolean).join(" - ");
 
     // ✅ 修改后的省市逻辑：过滤干扰项并去重提取
     let locStr = "";
@@ -139,16 +139,16 @@ export default async function(ctx) {
       const tags = local.location.filter(i => i && !/电信|移动|联通|广电|IP|China|中国|数据中心/i.test(i));
       const uniqueTags = [...new Set(tags)]; // 去重处理，防止“上海.上海”
       if (uniqueTags.length >= 2) {
-        locStr = `${uniqueTags[uniqueTags.length - 2]}.${uniqueTags[uniqueTags.length - 1]}`;
+        locStr = `${uniqueTags[uniqueTags.length - 2]} - ${uniqueTags[uniqueTags.length - 1]}`;
       } else if (uniqueTags.length === 1) {
         locStr = uniqueTags[0];
       }
     }
-    const r2Content = [local.ip || "获取中...", locStr].filter(Boolean).join(" / ");
+    const r2Content = [local.ip || "获取中...", locStr].filter(Boolean).join(" - ");
 
     const nodeLoc = [getFlagEmoji(node.countryCode), node.country, node.city].filter(Boolean).join(" ");
     const asnStr = node.as ? String(node.as).split(' ')[0] : "";
-    const r3Content = [node.query || node.ip || "获取中...", nodeLoc, asnStr].filter(Boolean).join(" / ");
+    const r3Content = [node.query || node.ip || "获取中...", nodeLoc, asnStr].filter(Boolean).join(" - ");
 
     const nativeText = pure.isResidential === true ? "家宽" : (pure.isResidential === false ? "机房" : "未知属性");
     const risk = pure.fraudScore || 0;
@@ -198,7 +198,7 @@ export default async function(ctx) {
             buildRow('house.fill','内网', [{type:'text', text:r1Content, font:{size:12.5,weight:'regular'}, textColor:C.teal}], C.teal),
             buildRow('location.circle.fill','本地', [{type:'text', text:r2Content, font:{size:12.5,weight:'regular'}, textColor:C.blue}], C.blue),
             buildRow('map.fill','落地', [{type:'text', text:r3Content, font:{size:12.5,weight:'regular'}, textColor:C.purple}], C.purple),
-            buildRow('shield.lefthalf.filled','属性', [{type:'text', text:`${nativeText} / ${risk} (${riskLevel})`, font:{size:12.5,weight:'regular'}, textColor:riskColor}], riskColor),
+            buildRow('shield.lefthalf.filled','属性', [{type:'text', text:`${nativeText} - ${risk} (${riskLevel})`, font:{size:12.5,weight:'regular'}, textColor:riskColor}], riskColor),
             buildRow('play.tv','解锁', mediaContent, C.orange)
         ]},
         { type: 'spacer' }
