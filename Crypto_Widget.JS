@@ -5,32 +5,20 @@
  * ════════════════════════════════════════════════════
  * 
  * ⚙️ 配置方法：
- *   在 Egern 小组件配置中添加 `btcType` 参数
+ *   在 Egern 小组件配置环境变量中添加 `btcType` 参数
  *   格式：币种符号，多个用英文逗号分隔
- * 
- * 📋 支持的币种（符号/全称均可，大小写不敏感）：
- *   ┌──────┬─────────────┬──────┬─────────────┐
- *   │ 符号 │    名称     │ 符号 │    名称     │
- *   ├──────┼─────────────┼──────┼─────────────┤
- *   │ BTC  │ 比特币      │ ETH  │ 以太坊      │
- *   │ BNB  │ 币安币      │ SOL  │ 索拉纳      │
- *   │ XRP  │ 瑞波币      │ ADA  │ 卡尔达诺    │
- *   │ DOGE │ 狗狗币      │ DOT  │ 波卡        │
- *   │ MATIC│ Polygon     │ AVAX │ 雪崩        │
- *   │ LINK │ Chainlink   │ UNI  │ Uniswap     │
- *   └──────┴─────────────┴──────┴─────────────┘
  * 
  * 💡 配置示例：
  *   ✓ btcType: "BTC"                    // 只显示比特币
  *   ✓ btcType: "BTC,ETH"                // 显示比特币+以太坊
- *   ✓ btcType: "BTC, ETH, SOL"          // 空格会自动忽略
+ *   ✓ btcType: "BTC, ETH, BNB"          // 空格会自动忽略
  *   ✓ btcType: "bitcoin,ethereum"       // 支持英文全称
- *   ✓ 最多支持 6 个币种，超出部分自动忽略
+ *   ✓ 最多支持 8 个币种，超出部分自动忽略
  * 
  * 📊 尺寸说明：
- *   • systemSmall  : 显示 1 个币种（大字价格+涨跌幅）
- *   • systemMedium : 显示 3 个币种列表
- *   • systemLarge  : 显示 6 个币种列表
+ *   • 小尺寸  : 目前显示异常
+ *   • 中尺寸  : 显示 3 个币种列表
+ *   • 大尺寸  : 显示 8 个币种列表
  * 
  * 🎨 深色模式：
  *   • 所有颜色使用 { light, dark } 格式
@@ -41,9 +29,7 @@
  * ════════════════════════════════════════════════════
  */
 
-// 比特币价格小组件 - Egern 适配版（使用 Binance API - 更稳定）
 export default async function(ctx) {
-  // 🎨 主题配置
   const theme = {
     bg: { light: "#FFFFFF", dark: "#2C2C2E" },
     text: { light: "#000000", dark: "#FFFFFF" },
@@ -53,50 +39,43 @@ export default async function(ctx) {
   };
 
   const widgetFamily = ctx.widgetFamily || "systemMedium";
-  const btcType = ctx.config?.btcType || "BTC,ETH,BNB";
-
-  // 🔹 Binance API（无需 Key，无速率限制）
+  const btcType = ctx.env?.btcType || "BTC,ETH,BNB";
   const API = "https://api.binance.com/api/v3";
 
-  // 🔹 币种符号映射（Binance 交易对）
   const SYMBOL_MAP = {
-    "BTC": "BTCUSDT",
-    "ETH": "ETHUSDT",
-    "BNB": "BNBUSDT",
-    "SOL": "SOLUSDT",
-    "XRP": "XRPUSDT",
-    "ADA": "ADAUSDT",
-    "DOGE": "DOGEUSDT",
-    "DOT": "DOTUSDT",
-    "MATIC": "MATICUSDT",
-    "AVAX": "AVAXUSDT",
-    "LINK": "LINKUSDT",
-    "UNI": "UNIUSDT"
+    "BTC": "BTCUSDT", "ETH": "ETHUSDT", "BNB": "BNBUSDT",
+    "SOL": "SOLUSDT", "XRP": "XRPUSDT", "ADA": "ADAUSDT",
+    "DOGE": "DOGEUSDT", "DOT": "DOTUSDT", "MATIC": "MATICUSDT",
+    "AVAX": "AVAXUSDT", "LINK": "LINKUSDT", "UNI": "UNIUSDT",
+    "SHIB": "SHIBUSDT", "PEPE": "PEPEUSDT", "FLOKI": "FLOKIUSDT",
+    "BONK": "BONKUSDT", "WIF": "WIFUSDT", "BOME": "BOMEUSDT",
+    "TRX": "TRXUSDT", "LTC": "LTCUSDT", "APT": "APTUSDT"
   };
 
-  // 🔹 解析用户配置
   const parseSymbols = (input) => {
     if (!input) return ["BTCUSDT"];
     return input.split(",")
       .map(s => s.trim().toUpperCase())
       .map(s => SYMBOL_MAP[s] || `${s}USDT`)
-      .slice(0, 6);
+      .slice(0, 8);
   };
 
-  // 🔹 获取价格数据
+  const formatPrice = (price) => {
+    if (price === null || price === undefined) return "0";
+    if (price >= 1000) return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (price >= 1) return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+    if (price >= 0.01) return price.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+    return price.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 8 });
+  };
+
   const fetchPrices = async () => {
     const symbols = parseSymbols(btcType);
-    
     try {
-      // 批量获取价格（Binance 支持一次查询多个交易对）
       const promises = symbols.map(symbol => 
-        ctx.http.get(`${API}/ticker/24hr?symbol=${symbol}`, {
-          timeout: 8000
-        }).then(resp => resp.json()).catch(() => null)
+        ctx.http.get(`${API}/ticker/24hr?symbol=${symbol}`, { timeout: 8000 })
+          .then(resp => resp.json()).catch(() => null)
       );
-      
       const results = await Promise.all(promises);
-      
       return results.filter(Boolean).map(data => ({
         symbol: data.symbol.replace("USDT", ""),
         name: getCoinName(data.symbol.replace("USDT", "")),
@@ -112,233 +91,142 @@ export default async function(ctx) {
     }
   };
 
-  // 🔹 币种名称映射
   const getCoinName = (symbol) => {
     const names = {
-      "BTC": "Bitcoin",
-      "ETH": "Ethereum",
-      "BNB": "BNB",
-      "SOL": "Solana",
-      "XRP": "XRP",
-      "ADA": "Cardano",
-      "DOGE": "Dogecoin",
-      "DOT": "Polkadot",
-      "MATIC": "Polygon",
-      "AVAX": "Avalanche",
-      "LINK": "Chainlink",
-      "UNI": "Uniswap"
+      "BTC": "Bitcoin", "ETH": "Ethereum", "BNB": "BNB",
+      "SOL": "Solana", "XRP": "XRP", "ADA": "Cardano",
+      "DOGE": "Dogecoin", "DOT": "Polkadot", "MATIC": "Polygon",
+      "AVAX": "Avalanche", "LINK": "Chainlink", "UNI": "Uniswap",
+      "SHIB": "Shiba Inu", "PEPE": "Pepe", "FLOKI": "Floki",
+      "BONK": "Bonk", "WIF": "dogwifhat", "BOME": "Book of Meme",
+      "TRX": "Tron", "LTC": "Litecoin", "APT": "Aptos"
     };
     return names[symbol] || symbol;
   };
 
-  // 🔹 获取数据
   let dataSource = await fetchPrices();
   
-  // 🔹 空状态
   if (!dataSource || dataSource.length === 0) {
     return {
-      type: "widget",
-      padding: 16,
-      backgroundColor: theme.bg,
+      type: "widget", padding: 16, backgroundColor: theme.bg,
       children: [{
-        type: "stack",
-        direction: "column",
-        alignItems: "center",
-        gap: 8,
+        type: "stack", direction: "column", alignItems: "center", gap: 8,
         children: [
-          {
-            type: "text",
-            text: "⚠️ 数据加载失败",
-            font: { size: "subheadline", weight: "medium" },
-            textColor: theme.textSecondary,
-            textAlign: "center"
-          },
-          {
-            type: "text",
-            text: "请检查网络连接",
-            font: { size: "caption2" },
-            textColor: theme.textSecondary,
-            textAlign: "center"
-          }
+          { type: "text", text: "⚠️ 数据加载失败", font: { size: 15, weight: "medium" }, textColor: theme.textSecondary, textAlign: "center" },
+          { type: "text", text: "请检查网络连接", font: { size: 11 }, textColor: theme.textSecondary, textAlign: "center" }
         ]
       }]
     };
   }
 
-  // 🔹 渲染单行
   const renderRow = (coin) => {
     const isUp = coin.change >= 0;
     const color = isUp ? theme.up : theme.down;
-    
     return {
-      type: "stack",
-      direction: "row",
-      alignItems: "center",
-      padding: [8, 0],
+      type: "stack", direction: "row", alignItems: "center", padding: [8, 0],
       url: `https://www.binance.com/zh-CN/price/${coin.symbol}`,
       children: [
         {
-          type: "stack",
-          direction: "column",
-          flex: 1,
+          type: "stack", direction: "column", flex: 1,
           children: [
             {
-              type: "stack",
-              direction: "row",
+              type: "stack", direction: "row",
               children: [
-                {
-                  type: "text",
-                  text: coin.symbol,
-                  font: { size: "subheadline", weight: "semibold" },
-                  textColor: theme.text
-                },
+                { type: "text", text: coin.symbol, font: { size: 15, weight: "semibold" }, textColor: theme.text },
                 { type: "spacer", flex: 1 },
-                {
-                  type: "text",
-                  text: `$${coin.price.toLocaleString()}`,
-                  font: { size: "subheadline", weight: "semibold" },
-                  textColor: theme.text,
-                  textAlign: "right"
-                }
+                { type: "text", text: `$${formatPrice(coin.price)}`, font: { size: 15, weight: "semibold" }, textColor: theme.text, textAlign: "right" }
               ]
             },
             {
-              type: "stack",
-              direction: "row",
+              type: "stack", direction: "row",
               children: [
-                {
-                  type: "text",
-                  text: coin.name,
-                  font: { size: "caption2" },
-                  textColor: theme.textSecondary
-                },
+                { type: "text", text: coin.name, font: { size: 11 }, textColor: theme.textSecondary },
                 { type: "spacer", flex: 1 },
-                {
-                  type: "text",
-                  text: `H:${coin.high.toFixed(2)} L:${coin.low.toFixed(2)}`,
-                  font: { size: "caption2" },
-                  textColor: theme.textSecondary,
-                  textAlign: "right"
-                }
+                { type: "text", text: `H:${formatPrice(coin.high)} L:${formatPrice(coin.low)}`, font: { size: 11 }, textColor: theme.textSecondary, textAlign: "right" }
               ]
             }
           ]
         },
         { type: "spacer", length: 8 },
         {
-          type: "stack",
-          width: 70,
-          height: 26,
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: 4,
-          backgroundColor: color,
+          type: "stack", width: 70, height: 26, alignItems: "center", justifyContent: "center", borderRadius: 4, backgroundColor: color,
           children: [{
-            type: "text",
-            text: `${isUp ? "+" : ""}${coin.change.toFixed(2)}%`,
-            font: { size: "caption2", weight: "semibold" },
-            textColor: { light: "#FFFFFF", dark: "#FFFFFF" },
-            textAlign: "center",
-            lineLimit: 1,
-            minScale: 0.6
+            type: "text", text: `${isUp ? "+" : ""}${coin.change.toFixed(2)}%`,
+            font: { size: 11, weight: "semibold" }, textColor: { light: "#FFFFFF", dark: "#FFFFFF" },
+            textAlign: "center", lineLimit: 1, minScale: 0.6
           }]
         }
       ]
     };
   };
 
-  // 🔹 小尺寸
+  // ⬅️ 小尺寸（已修复对齐）
   if (widgetFamily === "systemSmall") {
-    const coin = dataSource[0];
-    const isUp = coin.change >= 0;
-    const color = isUp ? theme.up : theme.down;
+    const coin1 = dataSource[0];
+    const coin2 = dataSource[1] || dataSource[0];
     
     return {
-      type: "widget",
-      padding: 12,
-      backgroundColor: theme.bg,
-      url: `https://www.binance.com/zh-CN/price/${coin.symbol}`,
-      refreshAfter: "PT1M",
+      type: "widget", padding: 12, backgroundColor: theme.bg,
+      url: `https://www.binance.com/zh-CN/price/${coin1.symbol}`, refreshAfter: "PT1M",
       children: [
         {
-          type: "stack",
-          direction: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
+          type: "stack", direction: "column",
           children: [
             {
-              type: "stack",
-              direction: "column",
+              type: "stack", direction: "row", alignItems: "flex-start",
               children: [
                 {
-                  type: "text",
-                  text: coin.symbol,
-                  font: { size: "title2", weight: "bold" },
-                  textColor: theme.text
+                  type: "stack", direction: "column", width: 72,
+                  children: [
+                    { type: "text", text: coin1.symbol, font: { size: 18, weight: "bold" }, textColor: theme.text },
+                    { type: "text", text: coin1.name, font: { size: 11 }, textColor: theme.textSecondary }
+                  ]
                 },
+                { type: "spacer", flex: 1 },
                 {
-                  type: "text",
-                  text: coin.name,
-                  font: { size: "caption2" },
-                  textColor: theme.textSecondary
+                  type: "text", text: `$${formatPrice(coin1.price)}`,
+                  font: { size: 18, weight: "semibold" }, textColor: theme.text,
+                  textAlign: "right"
+                }
+              ]
+            },
+            { type: "spacer", length: 12 },
+            {
+              type: "stack", direction: "row", alignItems: "flex-start",
+              children: [
+                {
+                  type: "stack", direction: "column", width: 72,
+                  children: [
+                    { type: "text", text: coin2.symbol, font: { size: 18, weight: "bold" }, textColor: theme.text },
+                    { type: "text", text: coin2.name, font: { size: 11 }, textColor: theme.textSecondary }
+                  ]
+                },
+                { type: "spacer", flex: 1 },
+                {
+                  type: "text", text: `$${formatPrice(coin2.price)}`,
+                  font: { size: 18, weight: "semibold" }, textColor: theme.text,
+                  textAlign: "right"
                 }
               ]
             }
           ]
-        },
-        { type: "spacer", length: 8 },
-        {
-          type: "text",
-          text: `${isUp ? "📈" : "📉"} ${coin.change.toFixed(2)}%`,
-          font: { size: "title3", weight: "semibold" },
-          textColor: color,
-          textAlign: "right"
-        },
-        {
-          type: "text",
-          text: `$${coin.price.toLocaleString()}`,
-          font: { size: "title1", weight: "bold" },
-          textColor: theme.text,
-          textAlign: "right",
-          lineLimit: 1,
-          minScale: 0.5
-        },
-        {
-          type: "text",
-          text: `H:${coin.high.toFixed(2)} L:${coin.low.toFixed(2)}`,
-          font: { size: "caption2" },
-          textColor: theme.textSecondary,
-          textAlign: "right",
-          lineLimit: 1
         }
       ]
     };
   }
 
-  // 🔹 中尺寸（3行）
   if (widgetFamily === "systemMedium") {
     return {
-      type: "widget",
-      padding: 12,
-      backgroundColor: theme.bg,
-      refreshAfter: "PT1M",
-      children: dataSource.slice(0, 3).flatMap((coin, i) => [
-        renderRow(coin),
-        i < 2 ? { type: "spacer", length: 6 } : null
-      ]).filter(Boolean)
+      type: "widget", padding: 12, backgroundColor: theme.bg, refreshAfter: "PT1M",
+      children: dataSource.slice(0, 3).flatMap((coin, i) => [ renderRow(coin), i < 2 ? { type: "spacer", length: 6 } : null ]).filter(Boolean)
     };
   }
 
-  // 🔹 大尺寸（6行）
   return {
-    type: "widget",
-    padding: 12,
-    backgroundColor: theme.bg,
-    refreshAfter: "PT1M",
-    children: dataSource.slice(0, 6).flatMap((coin, i) => [
+    type: "widget", padding: 12, backgroundColor: theme.bg, refreshAfter: "PT1M",
+    children: dataSource.slice(0, 8).flatMap((coin, i) => [
       renderRow(coin),
-      i < 5 ? { type: "spacer", length: 6 } : null
+      i < 7 ? { type: "spacer", length: 6 } : null
     ]).filter(Boolean)
   };
 }
-
