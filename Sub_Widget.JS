@@ -14,15 +14,13 @@
  *    URL2 = https://yyy.com/sub...
  *    RESET2 = 15                     # 每月15日重置
  * 
- *    最多支持 5 个机场 中小尺寸建议只添加两个 需要显示多条 可以在组件页面右上角 重新添加组件就可以了 祝您使用愉快！
- * 
  * 2️⃣ 参数说明：
  *    - NAME1-5：机场名称，显示在卡片上（必填，否则显示"机场订阅"）
  *    - URL1-5：订阅地址，从机场后台复制（必填）
  *    - RESET1-5：流量重置日，1-28 的数字（可选）
  * 
  * 3️⃣ 示例：
- *    NAME1 = 翻墙
+ *    NAME1 = 机场订阅
  *    URL1 = https://example.com/sub?token=abc123
  *    RESET1 = 1
  * 
@@ -35,6 +33,12 @@
  *    - 订阅地址需要包含完整的 token
  *    - 小组件每小时自动刷新
  *    - 自动适配系统深色/浅色模式（无需配置）
+ *
+ * 5️⃣ 显示数量说明：
+ * - 小尺寸 (systemSmall)：自动显示 2 条
+ * - 中尺寸 (systemMedium)：自动显示 2 条
+ * - 大尺寸 (systemLarge)：自动显示 5 条
+ * - 最多支持 5 个机场 中小尺寸只显示两个 大尺寸显示五个 需要显示多条 可以在组件页面右上角 重新添加组件就可以了 祝您使用愉快！
  */
 
 export default async function (ctx) {
@@ -113,8 +117,15 @@ export default async function (ctx) {
 
  const results = await Promise.all(slots.map((s) => fetchInfo(ctx, s)));
 
- const numSubs = Math.min(slots.length, 3);
- const isCompact = numSubs >= 3;
+ // 🔧 根据官方文档使用 ctx.widgetFamily 检测尺寸
+ const widgetFamily = ctx.widgetFamily;
+ 
+ // 🔧 大尺寸显示 5 条，中小尺寸显示 2 条
+ const isLarge = widgetFamily === "systemLarge";
+ const maxDisplay = isLarge ? 5 : 2;
+
+ const numSubs = Math.min(slots.length, maxDisplay);
+ const isCompact = numSubs >= 2;
 
  return {
  type: "widget",
@@ -162,7 +173,7 @@ export default async function (ctx) {
  type: "stack",
  direction: "column",
  gap: 6,
- children: results.slice(0, 3).map((r, idx) => buildCard(r, colors, isCompact)),
+ children: results.slice(0, maxDisplay).map((r, idx) => buildCard(r, colors, isCompact)),
  },
  ],
  };
@@ -319,7 +330,7 @@ async function fetchInfo(ctx, slot) {
  for (const url of urls) {
  for (const headers of UA_LIST) {
  try {
- const resp = await ctx.http[method](url, { headers, timeout: 3000 });
+ const resp = await ctx.http[method](url, { headers });
  const raw = resp.headers.get("subscription-userinfo") || "";
  const info = parseUserInfo(raw);
  if (info) {
