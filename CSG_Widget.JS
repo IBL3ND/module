@@ -9,11 +9,10 @@
  * 示例格式：
  *x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxxxxx
  */
+
 export default async function(ctx) {
-  // ── 1. 读取环境变量 ─────────────────────────────────
   const token = (ctx.env.Token || "").trim();
 
-  // ── 2. 颜色配置（深浅色模式）───────────────────────
   const colors = {
     bg:        { light: "#FFFFFF", dark: "#2C2C2E" },
     border:    { light: "#E5E5EA", dark: "#3A3A3C" },
@@ -25,10 +24,9 @@ export default async function(ctx) {
     accent:    { light: "#FF9500", dark: "#FF9F0A" },
   };
 
-  // ── 3. 默认数据 ───────────────────────────────────
   let data = {
-    yst:   { title: "昨日用电", value: "--", unit: "千瓦时" },
-    total: { title: "本月累计", value: "--", unit: "千瓦时" },
+    yst:   { title: "昨日用电", value: "--", unit: "度" },
+    total: { title: "本月累计", value: "--", unit: "度" },
     bal:   { title: "账户余额", value: "--", unit: "元" },
     fee:   "0.00",
     updateTime: "--:--",
@@ -36,14 +34,12 @@ export default async function(ctx) {
     debugInfo: [],
   };
 
-  // ── 4. 配置验证 & 数据请求 ─────────────────────────
   if (!token) {
     data.error = "配置缺失";
     data.debugInfo.push("❌ 未填写「Token」");
     data.debugInfo.push("💡 请在小组件配置页 → 环境变量中添加");
   } else {
     try {
-      // 用户信息查询
       const resp = await ctx.http.post(
         "https://95598.csg.cn/ucs/ma/zt/eleCustNumber/queryBindEleUsers",
         {
@@ -56,7 +52,6 @@ export default async function(ctx) {
       if (res?.data?.[0]) {
         const u = res.data[0];
 
-        // 余额请求
         const bResp = await ctx.http.post(
           "https://95598.csg.cn/ucs/ma/zt/charge/queryUserAccountNumberSurplus",
           {
@@ -65,10 +60,8 @@ export default async function(ctx) {
           }
         );
         const bRes = await bResp.json();
-        const balance = bRes.data?.[0]?.balance ?? "0.00";
-        data.bal.value = String(balance);
+        data.bal.value = String(bRes.data?.[0]?.balance ?? "0.00");
 
-        // 电量请求
         const ym = new Date().toISOString().slice(0, 7).replace(/-/g, '');
         const pResp = await ctx.http.post(
           "https://95598.csg.cn/ucs/ma/zt/charge/queryDayElectricByMPoint",
@@ -90,13 +83,10 @@ export default async function(ctx) {
             data.yst.value = String(list[list.length - 1].power ?? "0.00");
           }
         }
-        data.fee = String((parseFloat(data.total.value) * 0.61).toFixed(2));
+
         data.updateTime = new Date().toLocaleTimeString("zh-CN", { 
           hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" 
         });
-      } else {
-        data.error = "API 返回异常";
-        data.debugInfo.push("未查询到用户信息", "可能 Token 已过期");
       }
     } catch (e) {
       data.error = "请求失败";
@@ -104,7 +94,6 @@ export default async function(ctx) {
     }
   }
 
-  // ── 5. 胶囊组件工厂（完全复制联通样式）──────────────
   function makeCapsule(title, value, unit, isNegative = false) {
     const valueColor = isNegative && parseFloat(value) < 0 ? colors.error : colors.value;
     
@@ -150,44 +139,50 @@ export default async function(ctx) {
     };
   }
 
-  // ── 6. 错误/调试界面 ───────────────────────────────
-  if (data.error || data.debugInfo.length > 0) {
+  const isSmall = ctx.widgetFamily === "systemSmall";
+
+  function makeSmallCapsule(title, value, unit) {
     return {
-      type: "widget",
-      backgroundColor: colors.bg,
-      padding: 14,
-      gap: 9,
+      type: "stack",
+      direction: "row",
+      alignItems: "center",
+      padding: [6, 14, 6, 14],
+      backgroundColor: colors.capsuleBg,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
       children: [
         {
-          type: "stack",
-          direction: "row",
-          alignItems: "center",
-          gap: 6,
-          children: [
-            { type: "image", src: "sf-symbol:exclamationmark.triangle.fill", color: colors.error, width: 14, height: 14 },
-            { type: "text", text: data.error || "🔍 调试信息", font: { size: "headline", weight: "bold" }, textColor: colors.error },
-          ],
-        },
-        ...data.debugInfo.map(msg => ({
           type: "text",
-          text: `• ${msg}`,
-          font: { size: "caption2" },
+          text: `${title} ${value}${unit ? " " + unit : ""}`,
+          font: { size: "body", weight: "medium" },
           textColor: colors.title,
-          maxLines: 1,
-        })),
+          textAlign: "center",
+          numberOfLines: 1,
+        },
       ],
     };
   }
 
-  // ── 7. 正常界面：完全复制联通布局 ──────────────────
+  function wrapCenter(child) {
+    return {
+      type: "stack",
+      direction: "row",
+      children: [
+        { type: "spacer" },
+        child,
+        { type: "spacer" },
+      ],
+    };
+  }
+
   return {
     type: "widget",
     backgroundColor: colors.bg,
-    padding: [10, 14, 10, 14],
-    gap: 12,
+    padding: isSmall ? [10, 12, 10, 12] : [10, 14, 10, 14],
+    gap: isSmall ? 6 : 12,
     refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     children: [
-      // ── 顶部标题栏（完全复制联通）──────────────
       {
         type: "stack",
         direction: "row",
@@ -197,10 +192,10 @@ export default async function(ctx) {
             type: "stack",
             direction: "row",
             alignItems: "center",
-            gap: 7,
+            gap: isSmall ? 5 : 7,
             children: [
-              { type: "image", src: "sf-symbol:bolt.square.fill", color: colors.accent, width: 18, height: 18 },
-              { type: "text", text: "南方电网", font: { size: "headline", weight: "semibold" }, textColor: colors.value },
+              { type: "image", src: "sf-symbol:bolt.square.fill", color: colors.accent, width: isSmall ? 14 : 18, height: isSmall ? 14 : 18 },
+              { type: "text", text: "南方电网", font: { size: isSmall ? "subheadline" : "headline", weight: "semibold" }, textColor: colors.value },
             ],
           },
           { type: "spacer" },
@@ -217,20 +212,22 @@ export default async function(ctx) {
         ],
       },
 
-      // ── 三个胶囊卡片（完全复制联通）────────────
       {
         type: "stack",
-        direction: "row",
+        direction: isSmall ? "column" : "row",
         alignItems: "center",
-        gap: 9,
-        children: [
+        gap: isSmall ? 6 : 9,
+        children: isSmall ? [
+          wrapCenter(makeSmallCapsule("昨日", data.yst.value, "度")),
+          wrapCenter(makeSmallCapsule("本月", data.total.value, "度")),
+          wrapCenter(makeSmallCapsule("余额", data.bal.value, "元")),
+        ] : [
           makeCapsule(data.yst.title, data.yst.value, data.yst.unit),
           makeCapsule(data.total.title, data.total.value, data.total.unit),
           makeCapsule(data.bal.title, data.bal.value, data.bal.unit, true),
         ],
       },
 
-      // ── 底部装饰条（完全复制联通）────────────
       {
         type: "stack",
         direction: "row",
@@ -250,4 +247,3 @@ export default async function(ctx) {
     ],
   };
 }
-
