@@ -1,4 +1,4 @@
-// AppStore 限免小组件
+// AppStore 内购限免小组件
 
 export default async function(ctx) {
   const widgetFamily = ctx.widgetFamily || 'systemMedium';
@@ -129,7 +129,7 @@ function buildWidget(apps, source) {
     children: [
       {
         type: 'text',
-        text: `🎁 iOS限免 · ${apps.length}款`,
+        text: `🎁 iOS内购限免 · ${apps.length}款`,
         font: { size: 'subheadline', weight: 'bold' },
         textColor: { light: '#1D1D1F', dark: '#F5F5F7' },
         flex: 1
