@@ -178,19 +178,34 @@ function buildCard(result, colors, ctx) {
  const remainStr = formatBytes(totalBytes - used);
 
  let expireText = "";
- if (remainDays != null) {
-  expireText = `重置${remainDays}天`;
- } else if (expire) {
-  let ts = Number(expire);
-  if (ts < 1e12) ts *= 1000;
-  const d = new Date(ts);
+let expireColor = colors.textTertiary;
 
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+if (remainDays != null) {
+ expireText = `重置${remainDays}天`;
 
-  expireText = `${y}-${m}-${day}`;
+} else if (expire && Number(expire) > 0) {
+
+ let ts = Number(expire);
+ if (ts < 1e12) ts *= 1000;
+
+ const now = Date.now();
+ const diffDays = (ts - now) / (1000 * 60 * 60 * 24);
+
+ const d = new Date(ts);
+ const y = d.getFullYear();
+ const m = String(d.getMonth() + 1).padStart(2, "0");
+ const day = String(d.getDate()).padStart(2, "0");
+
+ expireText = `${y}-${m}-${day}`;
+
+ if (diffDays <= 3 && diffDays >= 0) {
+  expireColor = colors.accentRed;
  }
+
+} else {
+ expireText = "永久有效";
+ expireColor = colors.textTertiary;
+}
 
  return {
   type: "stack",
