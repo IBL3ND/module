@@ -1,14 +1,17 @@
 // AppStore 内购限免小组件
+// 数据源：api.zxki.cn / api.03k.org
 
 export default async function(ctx) {
   const widgetFamily = ctx.widgetFamily || 'systemMedium';
   
+  // 根据尺寸调整显示数量
   let maxItems = 7;
   if (widgetFamily === 'systemLarge') {
     maxItems = 12;
   }
   maxItems = parseInt(ctx.env?.maxItems) || maxItems;
 
+  // 不支持的尺寸
   if (['systemSmall', 'accessoryCircular', 'accessoryInline', 'accessoryRectangular'].includes(widgetFamily)) {
     return {
       type: 'widget',
@@ -27,6 +30,7 @@ export default async function(ctx) {
   let apps = [];
   let source = 'none';
 
+  // 获取数据
   try {
     apps = await fetchFromAPI(ctx);
     if (apps.length > 0) source = 'api';
@@ -34,6 +38,7 @@ export default async function(ctx) {
     console.log('API error:', e.message);
   }
 
+  // 使用缓存（24 小时内）
   if (apps.length === 0) {
     const cached = ctx.storage.getJSON('ithome_cache');
     const cacheTime = ctx.storage.get('ithome_cache_time');
@@ -46,6 +51,7 @@ export default async function(ctx) {
     }
   }
 
+  // 保存缓存
   if (apps.length > 0) {
     ctx.storage.setJSON('ithome_cache', apps);
     ctx.storage.set('ithome_cache_time', Date.now().toString());
@@ -53,6 +59,8 @@ export default async function(ctx) {
 
   return buildWidget(apps.slice(0, maxItems), source);
 }
+
+// ============ 数据获取 ============
 
 async function fetchFromAPI(ctx) {
   const apis = [
@@ -73,6 +81,7 @@ async function fetchFromAPI(ctx) {
   return [];
 }
 
+// 解析 zxki.cn API - 强化清理逻辑
 function parseZXKI(json) {
   const apps = [];
   if (json.apps) {
@@ -80,11 +89,22 @@ function parseZXKI(json) {
       const items = json.apps[cat];
       if (Array.isArray(items)) {
         items.forEach(item => {
-          const name = item.name ? item.name.replace(/\/\/.*/, '').trim() : '';
+          let name = item.name ? item.name.trim() : '';
           if (name) {
+            name = name.replace(/\/\//g, ' — ');
+            name = name.replace(/\s*\[.*?\]/g, '');
+            const httpsIndex = name.toLowerCase().lastIndexOf('http');
+            if (httpsIndex !== -1) {
+              name = name.substring(0, httpsIndex).trim();
+            }
+            name = name.replace(/[\s—]+$/, '').trim();
+            if (name.length > 50) {
+              name = name.substring(0, 50).trim() + '...';
+            }
+            const searchName = name.split(' — ')[0].trim();
             apps.push({
               name: name,
-              url: item.url || `https://apps.apple.com/search?term=${encodeURIComponent(name)}`,
+              url: item.url || `https://apps.apple.com/search?term=${encodeURIComponent(searchName)}`,
               isFree: true
             });
           }
@@ -95,15 +115,28 @@ function parseZXKI(json) {
   return apps;
 }
 
+// 解析通用 API - 强化清理逻辑
 function parseGeneric(json) {
   const apps = [];
   const items = json.data || json;
   if (Array.isArray(items)) {
     items.forEach(item => {
       if (item.name || item.title) {
+        let name = item.name || item.title;
+        name = name.replace(/\/\//g, ' — ');
+        name = name.replace(/\s*\[.*?\]/g, '');
+        const httpsIndex = name.toLowerCase().lastIndexOf('http');
+        if (httpsIndex !== -1) {
+          name = name.substring(0, httpsIndex).trim();
+        }
+        name = name.replace(/[\s—]+$/, '').trim();
+        if (name.length > 50) {
+          name = name.substring(0, 50).trim() + '...';
+        }
+        const searchName = name.split(' — ')[0].trim();
         apps.push({
-          name: item.name || item.title,
-          url: item.url || item.link,
+          name: name,
+          url: item.url || item.link || `https://apps.apple.com/search?term=${encodeURIComponent(searchName)}`,
           isFree: true
         });
       }
@@ -111,6 +144,8 @@ function parseGeneric(json) {
   }
   return apps;
 }
+
+// ============ 构建组件 ============
 
 function buildWidget(apps, source) {
   const children = [];
@@ -121,6 +156,7 @@ function buildWidget(apps, source) {
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const timeStr = `${hours}:${minutes}`;
   
+  // 标题行：左侧标题 + 右侧时间
   children.push({
     type: 'stack',
     direction: 'row',
@@ -129,7 +165,7 @@ function buildWidget(apps, source) {
     children: [
       {
         type: 'text',
-        text: `🎁 iOS内购限免 · ${apps.length}款`,
+        text: `🎁 iOS 内购限免 · ${apps.length}款`,
         font: { size: 'subheadline', weight: 'bold' },
         textColor: { light: '#1D1D1F', dark: '#F5F5F7' },
         flex: 1
@@ -158,6 +194,7 @@ function buildWidget(apps, source) {
     ]
   });
   
+  // 空状态
   if (apps.length === 0) {
     children.push({
       type: 'text',
@@ -168,7 +205,9 @@ function buildWidget(apps, source) {
       padding: [20, 0]
     });
   } else {
+    // 应用列表
     apps.forEach((app, i) => {
+      // 分隔线
       if (i > 0) {
         children.push({
           type: 'stack',
@@ -178,6 +217,7 @@ function buildWidget(apps, source) {
         });
       }
       
+      // 应用项
       children.push({
         type: 'stack',
         direction: 'row',
