@@ -46,13 +46,13 @@ export default async function (ctx) {
  const slots = [];
 
  for (let i = 1; i <= MAX; i++) {
- const url = (ctx.env[`URL${i}`] || "").trim();
- if (!url) continue;
- slots.push({
- name: (ctx.env[`NAME${i}`] || "").trim() || "机场订阅",
- url,
- resetDay: parseInt(ctx.env[`RESET${i}`] || "", 10) || null,
- });
+  const url = (ctx.env[`URL${i}`] || "").trim();
+  if (!url) continue;
+  slots.push({
+   name: (ctx.env[`NAME${i}`] || "").trim() || "机场订阅",
+   url,
+   resetDay: parseInt(ctx.env[`RESET${i}`] || "", 10) || null,
+  });
  }
 
  const refreshTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -60,171 +60,116 @@ export default async function (ctx) {
  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
  const colors = {
- textPrimary: { light: "#000000", dark: "#FFFFFF" },
- textSecondary: { light: "#555555", dark: "#EBEBF5" },
- textTertiary: { light: "#888888", dark: "#8E8E93" },
- accentBlue: { light: "#007AFF", dark: "#0A84FF" },
- accentGreen: { light: "#34C759", dark: "#30D158" },
- accentOrange: { light: "#FF9500", dark: "#FF9F0A" },
- accentRed: { light: "#FF3B30", dark: "#FF453A" },
- accentPurple: { light: "#5856D6", dark: "#5856D6" },
- divider: { light: "#E5E5EA", dark: "#48484A" },
+  textPrimary: { light: "#000000", dark: "#FFFFFF" },
+  textSecondary: { light: "#555555", dark: "#EBEBF5" },
+  textTertiary: { light: "#888888", dark: "#8E8E93" },
+  accentBlue: { light: "#007AFF", dark: "#0A84FF" },
+  accentGreen: { light: "#34C759", dark: "#30D158" },
+  accentOrange: { light: "#FF9500", dark: "#FF9F0A" },
+  accentRed: { light: "#FF3B30", dark: "#FF453A" },
+  accentPurple: { light: "#5856D6", dark: "#5856D6" },
+  divider: { light: "#E5E5EA", dark: "#48484A" },
  };
 
  const bgGradient = {
- type: "linear",
- colors: [
- { light: "#FFFFFF", dark: "#2C2C2E" },
- { light: "#FFFFFF", dark: "#2C2C2E" },
- ],
- stops: [0, 1],
- startPoint: { x: 0, y: 0 },
- endPoint: { x: 0, y: 1 },
+  type: "linear",
+  colors: [
+   { light: "#FFFFFF", dark: "#2C2C2E" },
+   { light: "#FFFFFF", dark: "#2C2C2E" },
+  ],
+  stops: [0, 1],
+  startPoint: { x: 0, y: 0 },
+  endPoint: { x: 0, y: 1 },
  };
 
  if (!slots.length) {
- return {
- type: "widget",
- backgroundGradient: bgGradient,
- padding: 16,
- gap: 12,
- refreshAfter: refreshTime,
- children: [
- {
- type: "stack",
- direction: "column",
- gap: 10,
- alignItems: "center",
- children: [
- {
- type: "image",
- src: "sf-symbol:wifi.slash",
- width: 32,
- height: 32,
- color: colors.accentRed,
- },
- {
- type: "text",
- text: "未配置订阅",
- font: { size: "headline", weight: "semibold" },
- textColor: colors.textPrimary,
- },
- ],
- },
- ],
- };
+  return {
+   type: "widget",
+   backgroundGradient: bgGradient,
+   padding: 16,
+   gap: 12,
+   refreshAfter: refreshTime,
+   children: [
+    {
+     type: "stack",
+     direction: "column",
+     gap: 10,
+     alignItems: "center",
+     children: [
+      { type: "image", src: "sf-symbol:wifi.slash", width: 32, height: 32, color: colors.accentRed },
+      { type: "text", text: "未配置订阅", font: { size: "headline", weight: "semibold" }, textColor: colors.textPrimary },
+     ],
+    },
+   ],
+  };
  }
 
  const results = await Promise.all(slots.map((s) => fetchInfo(ctx, s)));
 
- // 🔧 根据官方文档使用 ctx.widgetFamily 检测尺寸
  const widgetFamily = ctx.widgetFamily;
- 
- // 🔧 大尺寸显示 5 条，中小尺寸显示 2 条
  const isLarge = widgetFamily === "systemLarge";
+ const isSmall = widgetFamily === "systemSmall";
  const maxDisplay = isLarge ? 5 : 2;
 
  const numSubs = Math.min(slots.length, maxDisplay);
  const isCompact = numSubs >= 2;
 
  return {
- type: "widget",
- backgroundGradient: bgGradient,
- padding: isCompact ? 8 : 12,
- gap: isCompact ? 5 : 8,
- refreshAfter: refreshTime,
- children: [
- {
- type: "stack",
- direction: "row",
- alignItems: "center",
- gap: 6,
- children: [
- {
- type: "image",
- src: "sf-symbol:network",
- width: 12,
- height: 12,
- color: colors.accentBlue,
- },
- {
- type: "text",
- text: "机场订阅",
- font: { size: "subheadline", weight: "bold" },
- textColor: colors.textPrimary,
- },
- { type: "spacer" },
- {
- type: "image",
- src: "sf-symbol:arrow.clockwise",
- width: 12,
- height: 12,
- color: colors.textTertiary,
- },
- {
- type: "text",
- text: timeStr,
- font: { size: "caption2", weight: "medium" },
- textColor: colors.textTertiary,
- },
- ],
- },
- {
- type: "stack",
- direction: "column",
- gap: 6,
- children: results.slice(0, maxDisplay).map((r, idx) => buildCard(r, colors, isCompact)),
- },
- ],
+  type: "widget",
+  backgroundGradient: bgGradient,
+  padding: isCompact ? 8 : 12,
+  gap: isCompact ? 5 : 8,
+  refreshAfter: refreshTime,
+  children: [
+   {
+    type: "stack",
+    direction: "row",
+    alignItems: "center",
+    gap: 6,
+    children: [
+     { type: "image", src: "sf-symbol:network", width: 12, height: 12, color: colors.accentBlue },
+     { type: "text", text: "机场订阅", font: { size: "subheadline", weight: "bold" }, textColor: colors.textPrimary },
+     { type: "spacer" },
+     { type: "image", src: "sf-symbol:arrow.clockwise", width: 12, height: 12, color: colors.textTertiary },
+     { type: "text", text: timeStr, font: { size: "caption2", weight: "medium" }, textColor: colors.textTertiary },
+    ],
+   },
+   {
+    type: "stack",
+    direction: "column",
+    gap: 6,
+    children: results.slice(0, maxDisplay).map((r) => buildCard(r, colors, ctx)),
+   },
+  ],
  };
 }
 
-function buildCard(result, colors, isCompact) {
+function buildCard(result, colors, ctx) {
+ const isSmall = ctx.widgetFamily === "systemSmall";
+
  const { name, error, used, totalBytes, percent, expire, remainDays } = result;
 
  let statusColor = colors.accentGreen;
- if (error) {
- statusColor = colors.accentRed;
- } else if (percent >= 95) {
- statusColor = colors.accentRed;
- } else if (percent >= 80) {
- statusColor = colors.accentOrange;
- } else if (percent >= 50) {
- statusColor = colors.accentPurple;
- }
+ if (error) statusColor = colors.accentRed;
+ else if (percent >= 95) statusColor = colors.accentRed;
+ else if (percent >= 80) statusColor = colors.accentOrange;
+ else if (percent >= 50) statusColor = colors.accentPurple;
 
  if (error) {
- return {
- type: "stack",
- direction: "row",
- alignItems: "center",
- gap: 6,
- padding: [8, 10],
- backgroundColor: { light: "#FFF5F5", dark: "#3B1F1F" },
- borderRadius: 8,
- children: [
- {
- type: "image",
- src: "sf-symbol:exclamationmark.circle.fill",
- width: 12,
- height: 12,
- color: colors.accentRed,
- },
- {
- type: "text",
- text: name,
- font: { size: "caption2", weight: "semibold" },
- textColor: colors.textPrimary,
- flex: 1,
- },
- {
- type: "text",
- text: "失败",
- font: { size: "caption2", weight: "semibold" },
- textColor: colors.accentRed,
- },
- ],
- };
+  return {
+   type: "stack",
+   direction: "row",
+   alignItems: "center",
+   gap: 6,
+   padding: [8, 10],
+   backgroundColor: { light: "#FFF5F5", dark: "#3B1F1F" },
+   borderRadius: 8,
+   children: [
+    { type: "image", src: "sf-symbol:exclamationmark.circle.fill", width: 12, height: 12, color: colors.accentRed },
+    { type: "text", text: name, font: { size: "caption2", weight: "semibold" }, textColor: colors.textPrimary, flex: 1 },
+    { type: "text", text: "失败", font: { size: "caption2", weight: "semibold" }, textColor: colors.accentRed },
+   ],
+  };
  }
 
  const progressPercent = Math.min(Math.max(percent, 0), 100);
@@ -232,88 +177,74 @@ function buildCard(result, colors, isCompact) {
  const totalStr = formatBytes(totalBytes);
  const remainStr = formatBytes(totalBytes - used);
 
+ let expireText = "";
+ if (remainDays != null) {
+  expireText = `重置${remainDays}天`;
+ } else if (expire) {
+  let ts = Number(expire);
+  if (ts < 1e12) ts *= 1000;
+  const d = new Date(ts);
+
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+
+  expireText = `${y}-${m}-${day}`;
+ }
+
  return {
- type: "stack",
- direction: "column",
- gap: 5,
- padding: [8, 10],
- backgroundColor: { light: "#FFFFFF", dark: "#2B2B2D" },
- borderRadius: 8,
- borderWidth: 1,
- borderColor: colors.divider,
- children: [
- {
- type: "stack",
- direction: "row",
- alignItems: "center",
- gap: 5,
- children: [
- {
- type: "image",
- src: "sf-symbol:circle.fill",
- width: 6,
- height: 6,
- color: statusColor,
- },
- {
- type: "text",
- text: name,
- font: { size: "caption2", weight: "semibold" },
- textColor: colors.textPrimary,
- flex: 1,
- },
- {
- type: "text",
- text: `${Math.round(progressPercent)}%`,
- font: { size: "caption2", weight: "bold" },
- textColor: statusColor,
- },
- ],
- },
- {
- type: "stack",
- direction: "row",
- height: 5,
- borderRadius: 3,
- children: [
- {
- type: "stack",
- flex: Math.max(progressPercent, 1),
- height: 5,
- backgroundColor: statusColor,
- borderRadius: 3,
- },
- {
- type: "stack",
- flex: Math.max(100 - progressPercent, 1),
- height: 5,
- backgroundColor: { light: "#E8E8EA", dark: "#48484A" },
- borderRadius: 3,
- },
- ],
- },
- {
- type: "stack",
- direction: "row",
- alignItems: "center",
- gap: 5,
- children: [
- {
- type: "text",
- text: `${usedStr}/${totalStr}`,
- font: { size: "caption2", weight: "medium" },
- textColor: colors.textSecondary,
- },
- { type: "spacer" },
- {
- type: "text",
- text: `剩${remainStr}`,
- font: { size: "caption2", weight: "semibold" },
- textColor: colors.accentGreen,
- },
- ],
- },
- ],
+  type: "stack",
+  direction: "column",
+  gap: 5,
+  padding: [8, 10],
+  backgroundColor: { light: "#FFFFFF", dark: "#2B2B2D" },
+  borderRadius: 8,
+  borderWidth: 1,
+  borderColor: colors.divider,
+  children: [
+   {
+    type: "stack",
+    direction: "row",
+    alignItems: "center",
+    gap: 5,
+    children: [
+     { type: "image", src: "sf-symbol:circle.fill", width: 6, height: 6, color: statusColor },
+     { type: "text", text: name, font: { size: "caption2", weight: "semibold" }, textColor: colors.textPrimary, flex: 1 },
+     { type: "text", text: `${Math.round(progressPercent)}%`, font: { size: "caption2", weight: "bold" }, textColor: statusColor },
+    ],
+   },
+   {
+    type: "stack",
+    direction: "row",
+    height: 5,
+    borderRadius: 3,
+    children: [
+     { type: "stack", flex: Math.max(progressPercent, 1), height: 5, backgroundColor: statusColor, borderRadius: 3 },
+     { type: "stack", flex: Math.max(100 - progressPercent, 1), height: 5, backgroundColor: { light: "#E8E8EA", dark: "#48484A" }, borderRadius: 3 },
+    ],
+   },
+   {
+    type: "stack",
+    direction: "row",
+    alignItems: "center",
+    gap: 5,
+    children: [
+     { type: "text", text: `${usedStr}/${totalStr}`, font: { size: "caption2", weight: "medium" }, textColor: colors.textSecondary },
+     { type: "spacer" },
+
+     ...(!isSmall && expireText ? [{
+      type: "text",
+      text: expireText,
+      font: { size: "caption2", weight: "medium" },
+      textColor: colors.textTertiary,
+     }] : []),
+
+     { type: "spacer" },
+
+     { type: "text", text: `剩${remainStr}`, font: { size: "caption2", weight: "semibold" }, textColor: colors.accentGreen },
+    ],
+   },
+  ],
  };
 }
 
@@ -327,43 +258,37 @@ async function fetchInfo(ctx, slot) {
  const urls = buildVariants(slot.url);
 
  for (const method of ["head", "get"]) {
- for (const url of urls) {
- for (const headers of UA_LIST) {
- try {
- const resp = await ctx.http[method](url, { headers });
- const raw = resp.headers.get("subscription-userinfo") || "";
- const info = parseUserInfo(raw);
- if (info) {
- const used = (info.upload || 0) + (info.download || 0);
- const totalBytes = info.total || 0;
- const percent = totalBytes > 0 ? (used / totalBytes) * 100 : 0;
- return {
- name: slot.name,
- error: null,
- used,
- totalBytes,
- percent,
- expire: info.expire || null,
- remainDays: slot.resetDay ? getRemainingDays(slot.resetDay) : null,
- };
+  for (const url of urls) {
+   for (const headers of UA_LIST) {
+    try {
+     const resp = await ctx.http[method](url, { headers });
+     const raw = resp.headers.get("subscription-userinfo") || "";
+     const info = parseUserInfo(raw);
+     if (info) {
+      const used = (info.upload || 0) + (info.download || 0);
+      const totalBytes = info.total || 0;
+      const percent = totalBytes > 0 ? (used / totalBytes) * 100 : 0;
+      return {
+       name: slot.name,
+       error: null,
+       used,
+       totalBytes,
+       percent,
+       expire: info.expire || null,
+       remainDays: slot.resetDay ? getRemainingDays(slot.resetDay) : null,
+      };
+     }
+    } catch (_) {}
+   }
+  }
  }
- } catch (_) {}
- }
- }
- }
-
  return { name: slot.name, error: true };
 }
 
 function buildVariants(url) {
  const seen = new Set();
  const out = [];
- const add = (u) => {
- if (u && !seen.has(u)) {
- seen.add(u);
- out.push(u);
- }
- };
+ const add = (u) => { if (u && !seen.has(u)) { seen.add(u); out.push(u); } };
  add(url);
  add(withParam(url, "flag", "clash"));
  add(withParam(url, "flag", "meta"));
@@ -378,12 +303,10 @@ function parseUserInfo(header) {
  if (!header) return null;
  const pairs = header.match(/\w+=[\d.eE+-]+/g) || [];
  if (!pairs.length) return null;
- return Object.fromEntries(
- pairs.map((p) => {
- const [k, v] = p.split("=");
- return [k, Number(v)];
- })
- );
+ return Object.fromEntries(pairs.map(p => {
+  const [k, v] = p.split("=");
+  return [k, Number(v)];
+ }));
 }
 
 function formatBytes(bytes) {
@@ -401,4 +324,3 @@ function getRemainingDays(resetDay) {
  if (day >= resetDay) next = new Date(now.getFullYear(), now.getMonth() + 1, resetDay);
  return Math.max(0, Math.ceil((next - now) / 86400000));
 }
-
