@@ -9,246 +9,233 @@
  *
  */
 export default async function(ctx) {
-  // ── 1. 读取环境变量 ─────────────────────────────────
-  const cookie = ctx.env.Cookie || "";
-  const phone = ctx.env.手机号 || "";
+ const cookie = ctx.env.Cookie || "";
+ const phone = ctx.env.手机号 || "";
 
-  // ── 2. 颜色配置（深浅色模式）───────────────────────
-  const colors = {
-    bg:        { light: "#FFFFFF", dark: "#2C2C2E" },
-    border:    { light: "#E5E5EA", dark: "#3A3A3C" },
-    title:     { light: "#666666", dark: "#8E8E93" },
-    value:     { light: "#1C1C1E", dark: "#FFFFFF" },
-    time:      { light: "#999999", dark: "#666666" },
-    error:     { light: "#FF3B30", dark: "#FF453A" },
-    capsuleBg: { light: "#F5F5F7", dark: "#3A3A3C" },
-    accent:    { light: "#007AFF", dark: "#0A84FF" },
-  };
+ const colors = {
+ bg: { light: "#FFFFFF", dark: "#2C2C2E" },
+ border: { light: "#E5E5EA", dark: "#3A3A3C" },
+ title: { light: "#666666", dark: "#8E8E93" },
+ value: { light: "#1C1C1E", dark: "#FFFFFF" },
+ time: { light: "#999999", dark: "#666666" },
+ error: { light: "#FF3B30", dark: "#FF453A" },
+ capsuleBg: { light: "#F5F5F7", dark: "#3A3A3C" },
+ accent: { light: "#007AFF", dark: "#0A84FF" },
+ };
 
-  // ── 3. 默认数据 ───────────────────────────────────
-  let data = {
-    fee:   { title: "剩余话费", value: "--", unit: "元" },
-    voice: { title: "剩余语音", value: "--", unit: "分钟" },
-    flow:  { title: "剩余流量", value: "--", unit: "MB" },
-    updateTime: "--:--",
-    error: null,
-    debugInfo: [],
-  };
+ let data = {
+ fee: { title: "剩余话费", value: "--", unit: "元" },
+ voice: { title: "剩余语音", value: "--", unit: "分钟" },
+ flow: { title: "剩余流量", value: "--", unit: "MB" },
+ updateTime: "--:--",
+ error: null,
+ debugInfo: [],
+ };
 
-  // ── 4. 配置验证 & 数据请求 ─────────────────────────
-  if (!phone || !cookie) {
-    data.error = "配置缺失";
-    if (!phone) data.debugInfo.push("❌ 未填写「手机号」");
-    if (!cookie) data.debugInfo.push("❌ 未填写「Cookie」");
-    data.debugInfo.push("💡 请在小组件配置页 → 环境变量中添加");
-  } else {
-    try {
-      const url = `https://m.client.10010.com/mobileserviceimportant/home/queryUserInfoSeven?version=iphone_c@10.0100&desmobiel=${encodeURIComponent(phone)}&showType=0`;
-      
-      const resp = await ctx.http.get(url, {
-        timeout: 8000,
-        headers: {
-          "Host": "m.client.10010.com",
-          "User-Agent": "ChinaUnicom.x CFNetwork iOS/16.3",
-          "cookie": cookie,
-        },
-      });
-      
-      const res = await resp.json();
-      
-      if (res?.code === "Y" && res.feeResource && res.voiceResource && res.flowResource) {
-        data.fee = {
-          title: res.feeResource.dynamicFeeTitle || "剩余话费",
-          value: res.feeResource.feePersent ?? 0,
-          unit:  res.feeResource.newUnit || "元",
-        };
-        data.voice = {
-          title: res.voiceResource.dynamicVoiceTitle || "剩余语音",
-          value: res.voiceResource.voicePersent ?? 0,
-          unit:  res.voiceResource.newUnit || "分钟",
-        };
-        data.flow = {
-          title: res.flowResource.dynamicFlowTitle || "剩余流量",
-          value: res.flowResource.flowPersent ?? 0,
-          unit:  res.flowResource.newUnit || "MB",
-        };
-        data.updateTime = new Date().toLocaleTimeString("zh-CN", { 
-          hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" 
-        });
-      } else {
-        data.error = "API 返回异常";
-        data.debugInfo.push(`响应 code: ${res?.code}`, "可能 Cookie 已过期");
-      }
-    } catch (e) {
-      data.error = "请求失败";
-      data.debugInfo.push(`错误: ${e.message}`);
-    }
-  }
+ if (!phone || !cookie) {
+ data.error = "配置缺失";
+ if (!phone) data.debugInfo.push("❌ 未填写「手机号」");
+ if (!cookie) data.debugInfo.push("❌ 未填写「Cookie」");
+ data.debugInfo.push("💡 请在小组件配置页 → 环境变量中添加");
+ } else {
+ try {
+ const url = `https://m.client.10010.com/mobileserviceimportant/home/queryUserInfoSeven?version=iphone_c@10.0100&desmobiel=${encodeURIComponent(phone)}&showType=0`;
 
-  // ── 5. 胶囊组件工厂（核心样式复用）──────────────────
-  function makeCapsule(title, value, unit) {
-    return {
-      type: "stack",
-      direction: "column",                    // 垂直排列标题+数值
-      alignItems: "center",                   // 水平居中
-      flex: 1,                                // 🔑 弹性等宽：三列平分
-      padding: [8, 10, 8, 10],                // 内边距决定胶囊形状
-      backgroundColor: colors.capsuleBg,
-      borderRadius: 14,                       // 圆角形成胶囊造型
-      borderWidth: 1,
-      borderColor: colors.border,
-      children: [
-        // 标题
-        {
-          type: "text",
-          text: title,
-          font: { size: "caption2", weight: "medium" },
-          textColor: colors.title,
-          maxLines: 1,
-        },
-        // 数值 + 单位
-        {
-          type: "stack",
-          direction: "row",
-          alignItems: "center",
-          gap: 3,
-          children: [
-            {
-              type: "text",
-              text: String(value),
-              font: { size: "title2", weight: "semibold" },
-              textColor: colors.value,
-            },
-            {
-              type: "text",
-              text: unit,
-              font: { size: "caption2", weight: "regular" },
-              textColor: colors.title,
-            },
-          ],
-        },
-      ],
-    };
-  }
+ const resp = await ctx.http.get(url, {
+ timeout: 8000,
+ headers: {
+ "Host": "m.client.10010.com",
+ "User-Agent": "ChinaUnicom.x CFNetwork iOS/16.3",
+ "cookie": cookie,
+ },
+ });
 
-  // ── 6. 错误/调试界面 ───────────────────────────────
-  if (data.error || data.debugInfo.length > 0) {
-    return {
-      type: "widget",
-      backgroundColor: colors.bg,
-      padding: 14,
-      gap: 9,
-      children: [
-        {
-          type: "stack",
-          direction: "row",
-          alignItems: "center",
-          gap: 6,
-          children: [
-            { type: "image", src: "sf-symbol:exclamationmark.triangle.fill", color: colors.error, width: 14, height: 14 },
-            { type: "text", text: data.error || "🔍 调试信息", font: { size: "headline", weight: "bold" }, textColor: colors.error },
-          ],
-        },
-        ...data.debugInfo.map(msg => ({
-          type: "text",
-          text: `• ${msg}`,
-          font: { size: "caption2" },
-          textColor: colors.title,
-          maxLines: 1,
-        })),
-        { type: "spacer", length: 2 },
-        {
-          type: "stack",
-          direction: "row",
-          alignItems: "center",
-          gap: 5,
-          padding: [6, 10, 6, 10],
-          backgroundColor: colors.capsuleBg,
-          borderRadius: 10,
-          borderWidth: 1,
-          borderColor: colors.border,
-          children: [
-            { type: "image", src: "sf-symbol:phone.circle", color: colors.time, width: 12, height: 12 },
-            { type: "text", text: phone || "未配置", font: { size: "caption2" }, textColor: colors.time, maxLines: 1 },
-          ],
-        },
-      ],
-    };
-  }
+ const res = await resp.json();
 
-  // ── 7. 正常界面：胶囊式三列弹性布局 ─────────────────
-  return {
-    type: "widget",
-    backgroundColor: colors.bg,
-    padding: [10, 14, 10, 14],
-    gap: 12,
-    refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    children: [
-      // ── 顶部标题栏（两端对齐：用 spacer 实现）──────
-      {
-        type: "stack",
-        direction: "row",
-        alignItems: "center",
-        children: [
-          // 左侧：图标 + 文字
-          {
-            type: "stack",
-            direction: "row",
-            alignItems: "center",
-            gap: 7,
-            children: [
-              { type: "image", src: "sf-symbol:simcard.fill", color: colors.accent, width: 18, height: 18 },
-              { type: "text", text: "中国联通", font: { size: "headline", weight: "semibold" }, textColor: colors.value },
-            ],
-          },
-          // 中间弹性占位（推右侧内容到最右）
-          { type: "spacer" },
-          // 右侧：刷新图标 + 时间
-          {
-            type: "stack",
-            direction: "row",
-            alignItems: "center",
-            gap: 5,
-            children: [
-              { type: "image", src: "sf-symbol:arrow.clockwise", color: colors.time, width: 12, height: 12 },
-              { type: "text", text: data.updateTime, font: { size: "caption2" }, textColor: colors.time },
-            ],
-          },
-        ],
-      },
+ if (res?.code === "Y" && res.feeResource && res.voiceResource && res.flowResource) {
+ data.fee = {
+ title: res.feeResource.dynamicFeeTitle || "剩余话费",
+ value: res.feeResource.feePersent ?? 0,
+ unit: res.feeResource.newUnit || "元",
+ };
+ data.voice = {
+ title: res.voiceResource.dynamicVoiceTitle || "剩余语音",
+ value: res.voiceResource.voicePersent ?? 0,
+ unit: res.voiceResource.newUnit || "分钟",
+ };
+ data.flow = {
+ title: res.flowResource.dynamicFlowTitle || "剩余流量",
+ value: res.flowResource.flowPersent ?? 0,
+ unit: res.flowResource.newUnit || "MB",
+ };
+ data.updateTime = new Date().toLocaleTimeString("zh-CN", {
+ hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai"
+ });
+ } else {
+ data.error = "API 返回异常";
+ data.debugInfo.push(`响应 code: ${res?.code}`, "可能 Cookie 已过期");
+ }
+ } catch (e) {
+ data.error = "请求失败";
+ data.debugInfo.push(`错误: ${e.message}`);
+ }
+ }
 
-      // ── 核心数据区：三列胶囊（弹性等宽）────────────
-      {
-        type: "stack",
-        direction: "row",
-        alignItems: "center",
-        gap: 9,
-        children: [
-          makeCapsule(data.fee.title,   data.fee.value,   data.fee.unit),
-          makeCapsule(data.voice.title, data.voice.value, data.voice.unit),
-          makeCapsule(data.flow.title,  data.flow.value,  data.flow.unit),
-        ],
-      },
+ const widgetFamily = ctx.widgetFamily;
+ const isSmall = widgetFamily === "systemSmall";
 
-      // ── 底部装饰条（用 stack 模拟 rect）────────────
-      {
-        type: "stack",
-        direction: "row",
-        justifyContent: "center",  // ⚠️ 注意：这里实际无效，用 spacer 替代
-        alignItems: "center",
-        children: [
-          { type: "spacer" },
-          {
-            type: "stack",
-            width: 48,
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: colors.border,
-          },
-          { type: "spacer" },
-        ],
-      },
-    ],
-  };
+ const feeTitle = isSmall ? "话费" : data.fee.title;
+ const voiceTitle = isSmall ? "语音" : data.voice.title;
+ const flowTitle = isSmall ? "流量" : data.flow.title;
+
+ function makeSmallCapsule(title, value, unit) {
+ return {
+ type: "stack",
+ direction: "row",
+ alignItems: "center",
+ padding: [6, 14, 6, 14],
+ backgroundColor: colors.capsuleBg,
+ borderRadius: 8,
+ borderWidth: 1,
+ borderColor: colors.border,
+ children: [
+ {
+ type: "text",
+ text: `${title} ${value} ${unit}`,
+ font: { size: "body", weight: "medium" },
+ textColor: colors.title,
+ textAlign: "center",
+ numberOfLines: 1,
+ },
+ ],
+ };
+ }
+
+ function wrapCenter(child) {
+ return {
+ type: "stack",
+ direction: "row",
+ children: [
+ { type: "spacer" },
+ child,
+ { type: "spacer" },
+ ],
+ };
+ }
+
+ function makeMediumCapsule(title, value, unit) {
+ return {
+ type: "stack",
+ direction: "column",
+ alignItems: "center",
+ flex: 1,
+ padding: [8, 10, 8, 10],
+ backgroundColor: colors.capsuleBg,
+ borderRadius: 14,
+ borderWidth: 1,
+ borderColor: colors.border,
+ children: [
+ {
+ type: "text",
+ text: title,
+ font: { size: "caption2", weight: "medium" },
+ textColor: colors.title,
+ maxLines: 1,
+ },
+ {
+ type: "stack",
+ direction: "row",
+ alignItems: "center",
+ gap: 3,
+ children: [
+ {
+ type: "text",
+ text: String(value),
+ font: { size: "title2", weight: "semibold" },
+ textColor: colors.value,
+ },
+ {
+ type: "text",
+ text: unit,
+ font: { size: "caption2", weight: "regular" },
+ textColor: colors.title,
+ },
+ ],
+ },
+ ],
+ };
+ }
+
+ const capsules = isSmall ? [
+ wrapCenter(makeSmallCapsule(feeTitle, data.fee.value, data.fee.unit)),
+ wrapCenter(makeSmallCapsule(voiceTitle, data.voice.value, data.voice.unit)),
+ wrapCenter(makeSmallCapsule(flowTitle, data.flow.value, data.flow.unit)),
+ ] : [
+ makeMediumCapsule(data.fee.title, data.fee.value, data.fee.unit),
+ makeMediumCapsule(data.voice.title, data.voice.value, data.voice.unit),
+ makeMediumCapsule(data.flow.title, data.flow.value, data.flow.unit),
+ ];
+
+ return {
+ type: "widget",
+ backgroundColor: colors.bg,
+ padding: isSmall ? [10, 12, 10, 12] : [10, 14, 10, 14],
+ gap: isSmall ? 6 : 12,
+ refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+ children: [
+ {
+ type: "stack",
+ direction: "row",
+ alignItems: "center",
+ children: [
+ {
+ type: "stack",
+ direction: "row",
+ alignItems: "center",
+ gap: isSmall ? 5 : 7,
+ children: [
+ { type: "image", src: "sf-symbol:simcard.fill", color: colors.accent, width: isSmall ? 14 : 18, height: isSmall ? 14 : 18 },
+ { type: "text", text: "中国联通", font: { size: isSmall ? "subheadline" : "headline", weight: "semibold" }, textColor: colors.value },
+ ],
+ },
+ { type: "spacer" },
+ {
+ type: "stack",
+ direction: "row",
+ alignItems: "center",
+ gap: 5,
+ children: [
+ { type: "image", src: "sf-symbol:arrow.clockwise", color: colors.time, width: 12, height: 12 },
+ { type: "text", text: data.updateTime, font: { size: "caption2" }, textColor: colors.time },
+ ],
+ },
+ ],
+ },
+
+ {
+ type: "stack",
+ direction: isSmall ? "column" : "row",
+ alignItems: "center",
+ gap: isSmall ? 6 : 9,
+ children: capsules,
+ },
+
+ {
+ type: "stack",
+ direction: "row",
+ alignItems: "center",
+ children: [
+ { type: "spacer" },
+ {
+ type: "stack",
+ width: 48,
+ height: 4,
+ borderRadius: 2,
+ backgroundColor: colors.border,
+ },
+ { type: "spacer" },
+ ],
+ },
+ ],
+ };
 }
-
