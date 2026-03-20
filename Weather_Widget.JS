@@ -361,7 +361,7 @@ function renderMedium(now, air, city) {
         gap: 12,
         children: [
           createInfoItem('drop.fill',   '湿度',   `${now.humidity}%`,   '#007AFF'),
-          createInfoItem('wind',        '风力',   `${now.windDir} ${now.windScale}级`, '#5856D6'),
+          createInfoItem('wind',        '',   `${now.windDir} ${now.windScale}级`, '#5856D6'),
           createInfoItem('gauge.medium','风速',   `${now.windSpeed}km/h`,'#FF9500')
         ]
       }
