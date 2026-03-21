@@ -1,24 +1,51 @@
 /**
+ * ============================================================================
  * 聚合热搜榜单 - Egern Widget
+ * ============================================================================
  * 
- * 【环境变量配置说明】
- * 在 Egern 小组件配置中添加以下环境变量（可选）：
+ * 【功能说明】
+ * 显示各大平台热搜榜单，支持自动适配小/中/大尺寸小组件
  * 
- * PLATFORM    →  热搜平台（不填则随机显示）
- *               可选值：微博 | 百度 | 抖音 | B站 | 贴吧 | 少数派 | 历史
- *               示例：微博
+ * 【环境变量配置】
+ * 在 Egern 小组件编辑页面添加以下环境变量（可选）：
  * 
- * TITLE       →  自定义标题（不填则使用平台默认名）
- *               示例：🔥 今日热点
+ * 变量名      说明                  可选值
+ * ─────────────────────────────────────────────────────────────
+ * PLATFORM   热搜平台             微博 | 百度 | 抖音 | B站 | 贴吧 | 少数派 | 历史
+ *            （不填则随机显示）    或 weibo | baidu | douyin | bilihot | tieba | sspai | history
+ * 
+ * TITLE      自定义标题           任意文本，例如：今日热点
+ *            （不填则用平台名）
+ * 
+ * 【配置示例】
+ * PLATFORM=微博
+ * TITLE=全网热搜
  * 
  * 【使用方法】
- * 1. 在 Egern 中创建此脚本
- * 2. 创建小组件时，点击"编辑"添加环境变量
- * 3. 不填 PLATFORM 会每次随机显示不同平台的热搜
+ * 1. 复制本脚本到 Egern → 工具 → 脚本 → 新建（类型选 通用）
+ * 2. 分析 → 小组件画廊 → 新建 → 选择本脚本
+ * 3. 点击"编辑"添加环境变量（可选）
+ * 4. 长按桌面 → + → Egern → 选择尺寸添加
+ * 
+ * 【尺寸说明】
+ * - 小尺寸：显示 8 条
+ * - 中尺寸：显示 8 条
+ * - 大尺寸：显示 15 条
+ * 
+ * 【支持平台】
+ * 微博     - 微博热搜
+ * 百度     - 百度热搜
+ * 抖音     - 抖音热搜
+ * B站      - Bilibili热搜
+ * 贴吧     - 贴吧热议榜
+ * 少数派   - 少数派热搜
+ * 历史     - 历史上的今天
+ * 
+ * ============================================================================
  */
 
 export default async function(ctx) {
-  // 平台简称映射
+  // 平台简称映射（支持中文和英文）
   const platformMap = {
     '微博': 'weibo',
     'weibo': 'weibo',
@@ -78,6 +105,12 @@ export default async function(ctx) {
     
     const title = CUSTOM_TITLE || data?.title || platformNames[PLATFORM] || '🔥 热搜榜单';
     
+    // 获取当前时间 HH:MM
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const currentTime = `${hours}:${minutes}`;
+    
     const displayCount = Math.min(count, hotList.length);
     const items = [];
     
@@ -129,11 +162,27 @@ export default async function(ctx) {
       gap: 4,
       backgroundColor: { light: '#FFFFFF', dark: '#2C2C2E' },
       children: [
+        // 标题栏 - 标题在左，刷新时间和图标在右
         {
-          type: 'text',
-          text: title,
-          font: { size: 'subheadline', weight: 'bold' },
-          textColor: { light: '#1C1C1E', dark: '#FFFFFF' }
+          type: 'stack',
+          direction: 'row',
+          alignItems: 'center',
+          gap: 6,
+          children: [
+            {
+              type: 'text',
+              text: title,
+              font: { size: 'subheadline', weight: 'bold' },
+              textColor: { light: '#1C1C1E', dark: '#FFFFFF' },
+              flex: 1
+            },
+            {
+              type: 'text',
+              text: `↻ ${currentTime}`,
+              font: { size: 'caption1' },
+              textColor: { light: '#8E8E93', dark: '#636366' }
+            }
+          ]
         },
         {
           type: 'stack',
