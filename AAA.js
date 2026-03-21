@@ -1,23 +1,9 @@
 /**
- * 📱 TestFlight 监控（Egern 参数版）
+ * 🚀 TestFlight 极限监控版
+ * ⚠️ 有名额就一直弹通知（不会停止）
  */
 
-const args = getArgs($argument);
-
-const TF_APP_ID = args.TF_APP_ID || "";
-const NOTIFY = args.Notify || "开启通知";
-
-const CACHE_KEY = "TF_CACHE";
-
-const UA_LIST = [
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 Chrome/140 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/537.36 Chrome/140 Safari/537.36"
-];
-
-function getUA() {
-  return UA_LIST[Math.floor(Math.random() * UA_LIST.length)];
-}
-
+// ========= 参数 =========
 function getArgs(str) {
   let obj = {};
   if (!str) return obj;
@@ -28,36 +14,47 @@ function getArgs(str) {
   return obj;
 }
 
+const args = getArgs(typeof $argument !== "undefined" ? $argument : "");
+
+const TF_APP_ID =
+  args.TF_APP_ID ||
+  $persistentStore.read("TF_APP_ID") ||
+  "";
+
+const NOTIFY =
+  args.Notify ||
+  $persistentStore.read("TF_NOTIFY") ||
+  "开启通知";
+
+// ========= UA =========
+const UA_LIST = [
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) Chrome/140",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) Chrome/140"
+];
+
+function getUA() {
+  return UA_LIST[Math.floor(Math.random() * UA_LIST.length)];
+}
+
+// ========= HTTP =========
 function httpGet(options) {
   return new Promise(resolve => {
     $httpClient.get(options, (err, resp, body) => {
-      resolve({ err, resp, body });
+      resolve({ resp, body });
     });
   });
 }
 
-function getCache() {
-  try {
-    return JSON.parse($persistentStore.read(CACHE_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function setCache(data) {
-  $persistentStore.write(JSON.stringify(data), CACHE_KEY);
-}
-
+// ========= 主逻辑 =========
 (async () => {
 
   if (!TF_APP_ID) {
-    console.log("❌ 未填写 TF_APP_ID");
+    $notification.post("❌ TF监控", "", "未设置 TF_APP_ID");
     $done();
     return;
   }
 
   const list = TF_APP_ID.split(/[\n,]/).map(i => i.trim()).filter(Boolean);
-  const cache = getCache();
 
   for (let item of list) {
 
@@ -76,39 +73,26 @@ function setCache(data) {
       headers: { "User-Agent": getUA() }
     });
 
-    if (!resp) continue;
+    if (!resp || resp.status !== 200) continue;
 
-    if (resp.status !== 200) continue;
-
-    let status = "open";
-
+    // ========= 状态判断 =========
     if (/已满|This beta is full/.test(body)) {
-      status = "full";
-    } else if (/不接受|isn't accepting/.test(body)) {
-      status = "closed";
+      console.log(`[${name}] 已满`);
     }
-
-    console.log(`[${name}] 状态: ${status}`);
-
-    if (status === "open") {
-
-      if (cache[appId] === "open") continue;
-
-      cache[appId] = "open";
-      setCache(cache);
+    else if (/不接受|isn't accepting/.test(body)) {
+      console.log(`[${name}] 未开放`);
+    }
+    else {
+      console.log(`[${name}] 🚀 有名额！！！`);
 
       if (NOTIFY !== "关闭通知") {
         $notification.post(
-          "🎉 TestFlight 有名额！",
+          "🚀 TF有位置！！！",
           name,
-          "点击加入",
+          "狂点进入抢名额！！！",
           { url }
         );
       }
-
-    } else {
-      cache[appId] = status;
-      setCache(cache);
     }
   }
 
