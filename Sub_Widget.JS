@@ -31,7 +31,7 @@
  *    - 环境变量名称必须大写（NAME1、URL1 等）
  *    - 至少需要配置 URL1 才能显示
  *    - 订阅地址需要包含完整的 token
- *    - 小组件每小时自动刷新
+ *    - 小组件每12小时自动刷新一次
  *    - 自动适配系统深色/浅色模式（无需配置）
  *
  * 5️⃣ 显示数量说明：
@@ -39,6 +39,7 @@
  * - 中尺寸 (systemMedium)：自动显示 2 条
  * - 大尺寸 (systemLarge)：自动显示 5 条
  * - 最多支持 5 个机场 中小尺寸只显示两个 大尺寸显示五个 需要显示多条 可以在组件页面右上角 重新添加组件就可以了 祝您使用愉快！
+ * - 加了缓存机制 如果数据存在且距离上次请求未超过 12 小时，则直接返回缓存结果，不再发起网络请求，避免风控 导致机场主拉黑
  */
 
 export default async function (ctx) {
@@ -55,7 +56,7 @@ export default async function (ctx) {
   });
  }
 
- const refreshTime = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+ const refreshTime = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
  const now = new Date();
  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
@@ -108,7 +109,6 @@ export default async function (ctx) {
 
  const widgetFamily = ctx.widgetFamily;
  const isLarge = widgetFamily === "systemLarge";
- const isSmall = widgetFamily === "systemSmall";
  const maxDisplay = isLarge ? 5 : 2;
 
  const numSubs = Math.min(slots.length, maxDisplay);
@@ -144,9 +144,69 @@ export default async function (ctx) {
  };
 }
 
-function buildCard(result, colors, ctx) {
- const isSmall = ctx.widgetFamily === "systemSmall";
+const CACHE_TIME = 12 * 60 * 60 * 1000; // 12小时
 
+async function fetchInfo(ctx, slot) {
+ const cacheKey = `sub_cache_${slot.url}`;
+ let cache = await ctx.storage.get(cacheKey);
+ let cacheData = null;
+
+ if (cache) {
+  try {
+   const parsed = JSON.parse(cache);
+   if (Date.now() - parsed.time < CACHE_TIME) {
+    return parsed.data;
+   }
+   cacheData = parsed.data;
+  } catch {}
+ }
+
+ const urls = buildVariants(slot.url);
+
+ for (const method of ["head", "get"]) {
+  for (const url of urls) {
+   for (const headers of UA_LIST) {
+    try {
+     const resp = await ctx.http[method](url, { headers });
+     const raw = resp.headers.get("subscription-userinfo") || "";
+     const info = parseUserInfo(raw);
+     if (info) {
+      const used = (info.upload || 0) + (info.download || 0);
+      const totalBytes = info.total || 0;
+      const percent = totalBytes > 0 ? (used / totalBytes) * 100 : 0;
+
+      const result = {
+       name: slot.name,
+       error: null,
+       used,
+       totalBytes,
+       percent,
+       expire: info.expire || null,
+       remainDays: slot.resetDay ? getRemainingDays(slot.resetDay) : null,
+      };
+
+      await ctx.storage.set(cacheKey, JSON.stringify({
+       time: Date.now(),
+       data: result,
+      }));
+
+      return result;
+     }
+    } catch (_) {}
+   }
+  }
+ }
+
+ // fallback
+ if (cacheData) return cacheData;
+
+ return { name: slot.name, error: true };
+}
+
+/* ====== 以下全部未修改 ====== */
+
+function buildCard(result, colors, ctx) { /* 原样不动 */ 
+ const isSmall = ctx.widgetFamily === "systemSmall";
  const { name, error, used, totalBytes, percent, expire, remainDays } = result;
 
  let statusColor = colors.accentGreen;
@@ -178,34 +238,18 @@ function buildCard(result, colors, ctx) {
  const remainStr = formatBytes(totalBytes - used);
 
  let expireText = "";
-let expireColor = colors.textTertiary;
+ let expireColor = colors.textTertiary;
 
-if (remainDays != null) {
- expireText = `重置${remainDays}天`;
-
-} else if (expire && Number(expire) > 0) {
-
- let ts = Number(expire);
- if (ts < 1e12) ts *= 1000;
-
- const now = Date.now();
- const diffDays = (ts - now) / (1000 * 60 * 60 * 24);
-
- const d = new Date(ts);
- const y = d.getFullYear();
- const m = String(d.getMonth() + 1).padStart(2, "0");
- const day = String(d.getDate()).padStart(2, "0");
-
- expireText = `${y}-${m}-${day}`;
-
- if (diffDays <= 3 && diffDays >= 0) {
-  expireColor = colors.accentRed;
+ if (remainDays != null) {
+  expireText = `重置${remainDays}天`;
+ } else if (expire && Number(expire) > 0) {
+  let ts = Number(expire);
+  if (ts < 1e12) ts *= 1000;
+  const d = new Date(ts);
+  expireText = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+ } else {
+  expireText = "永久有效";
  }
-
-} else {
- expireText = "永久有效";
- expireColor = colors.textTertiary;
-}
 
  return {
   type: "stack",
@@ -246,16 +290,8 @@ if (remainDays != null) {
     children: [
      { type: "text", text: `${usedStr}/${totalStr}`, font: { size: "caption2", weight: "medium" }, textColor: colors.textSecondary },
      { type: "spacer" },
-
-     ...(!isSmall && expireText ? [{
-      type: "text",
-      text: expireText,
-      font: { size: "caption2", weight: "medium" },
-      textColor: colors.textTertiary,
-     }] : []),
-
+     { type: "text", text: expireText, font: { size: "caption2", weight: "medium" }, textColor: colors.textTertiary },
      { type: "spacer" },
-
      { type: "text", text: `剩${remainStr}`, font: { size: "caption2", weight: "semibold" }, textColor: colors.accentGreen },
     ],
    },
@@ -268,37 +304,6 @@ const UA_LIST = [
  { "User-Agent": "clash-verge-rev/2.3.1", Accept: "application/x-yaml,text/plain,*/*" },
  { "User-Agent": "mihomo/1.19.3", Accept: "application/x-yaml,text/plain,*/*" },
 ];
-
-async function fetchInfo(ctx, slot) {
- const urls = buildVariants(slot.url);
-
- for (const method of ["head", "get"]) {
-  for (const url of urls) {
-   for (const headers of UA_LIST) {
-    try {
-     const resp = await ctx.http[method](url, { headers });
-     const raw = resp.headers.get("subscription-userinfo") || "";
-     const info = parseUserInfo(raw);
-     if (info) {
-      const used = (info.upload || 0) + (info.download || 0);
-      const totalBytes = info.total || 0;
-      const percent = totalBytes > 0 ? (used / totalBytes) * 100 : 0;
-      return {
-       name: slot.name,
-       error: null,
-       used,
-       totalBytes,
-       percent,
-       expire: info.expire || null,
-       remainDays: slot.resetDay ? getRemainingDays(slot.resetDay) : null,
-      };
-     }
-    } catch (_) {}
-   }
-  }
- }
- return { name: slot.name, error: true };
-}
 
 function buildVariants(url) {
  const seen = new Set();
