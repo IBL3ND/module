@@ -1,34 +1,31 @@
 /**
- * 🚀 TF监控（终极兼容版）
+ * 🚀 TF监控（Egern稳定版）
+ * ✅ 不用 ctx
+ * ✅ 直接读取 persistentStore
+ * ✅ cron 100%执行
  */
 
-export default async function(ctx) {
+const TF_APP_ID = $persistentStore.read("TF_APP_ID") || "";
 
-  // ========= 多方式读取 =========
-  let TF_APP_ID =
-    (ctx?.env?.TF_APP_ID) ||
-    $persistentStore.read("TF_APP_ID") ||
-    ($argument && $argument.match(/TF_APP_ID=([^&]+)/)?.[1]) ||
-    "";
+console.log("读取到TF_APP_ID:", TF_APP_ID);
 
-  TF_APP_ID = TF_APP_ID.trim();
+if (!TF_APP_ID) {
+  $notification.post("❌ TF监控", "", "未设置 TF_APP_ID");
+  $done();
+  return;
+}
 
-  console.log("最终TF_APP_ID:", TF_APP_ID);
+const list = TF_APP_ID.split(/[\n,]/).map(i => i.trim()).filter(Boolean);
 
-  if (!TF_APP_ID) {
-    $notification.post("❌ TF监控", "", "未设置 TF_APP_ID");
-    return;
-  }
-
-  const list = TF_APP_ID.split(/[\n,]/).map(i => i.trim()).filter(Boolean);
-
-  function httpGet(options) {
-    return new Promise(resolve => {
-      $httpClient.get(options, (err, resp, body) => {
-        resolve({ resp, body });
-      });
+function httpGet(options) {
+  return new Promise(resolve => {
+    $httpClient.get(options, (err, resp, body) => {
+      resolve({ resp, body });
     });
-  }
+  });
+}
+
+(async () => {
 
   for (let item of list) {
 
@@ -56,11 +53,14 @@ export default async function(ctx) {
       console.log(`[${name}] 🚀 有位置！！！`);
 
       $notification.post(
-        "🚀 TF有名额！！！",
+        "🚀 TestFlight 有名额！！！",
         name,
-        "点我立刻加入",
+        "点击立刻加入",
         { url }
       );
     }
   }
-}
+
+  $done();
+
+})();
