@@ -6,7 +6,7 @@
  * 
  *    格式：名称（大写）= 值
  * 
- *    NAME1 = 翻墙                    # 机场名称（自定义）
+ *    NAME1 = 翻墙                     # 机场名称（自定义）
  *    URL1 = https://xxx.com/sub...   # 订阅地址（必填）
  *    RESET1 = 1                      # 重置日（可选，每月1日重置）
  * 
@@ -31,7 +31,7 @@
  *    - 环境变量名称必须大写（NAME1、URL1 等）
  *    - 至少需要配置 URL1 才能显示
  *    - 订阅地址需要包含完整的 token
- *    - 小组件每12小时自动刷新一次
+ *    - 小组件每1小时自动刷新一次
  *    - 自动适配系统深色/浅色模式（无需配置）
  *
  * 5️⃣ 显示数量说明：
@@ -39,7 +39,7 @@
  * - 中尺寸 (systemMedium)：自动显示 2 条
  * - 大尺寸 (systemLarge)：自动显示 5 条
  * - 最多支持 5 个机场 中小尺寸只显示两个 大尺寸显示五个 需要显示多条 可以在组件页面右上角 重新添加组件就可以了 祝您使用愉快！
- * - 加了缓存机制 如果数据存在且距离上次请求未超过 12 小时，则直接返回缓存结果，不再发起网络请求，避免风控 导致机场主拉黑
+ * - 加了缓存机制 如果数据存在且距离上次请求未超过 1 小时，则直接返回缓存结果，不再发起网络请求，避免风控 导致机场主拉黑
  */
 
 export default async function (ctx) {
@@ -56,7 +56,7 @@ export default async function (ctx) {
   });
  }
 
- const refreshTime = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+ const refreshTime = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString();
  const now = new Date();
  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
@@ -144,7 +144,7 @@ export default async function (ctx) {
  };
 }
 
-const CACHE_TIME = 12 * 60 * 60 * 1000; // 12小时
+const CACHE_TIME = 1 * 60 * 60 * 1000;
 
 async function fetchInfo(ctx, slot) {
  const cacheKey = `sub_cache_${slot.url}`;
@@ -155,8 +155,11 @@ async function fetchInfo(ctx, slot) {
   try {
    const parsed = JSON.parse(cache);
    if (Date.now() - parsed.time < CACHE_TIME) {
-    return parsed.data;
-   }
+ return {
+  ...parsed.data,
+  name: slot.name
+ };
+}
    cacheData = parsed.data;
   } catch {}
  }
@@ -176,21 +179,23 @@ async function fetchInfo(ctx, slot) {
       const percent = totalBytes > 0 ? (used / totalBytes) * 100 : 0;
 
       const result = {
-       name: slot.name,
-       error: null,
-       used,
-       totalBytes,
-       percent,
-       expire: info.expire || null,
-       remainDays: slot.resetDay ? getRemainingDays(slot.resetDay) : null,
-      };
+ error: null,
+ used,
+ totalBytes,
+ percent,
+ expire: info.expire || null,
+ remainDays: slot.resetDay ? getRemainingDays(slot.resetDay) : null,
+};
 
       await ctx.storage.set(cacheKey, JSON.stringify({
        time: Date.now(),
        data: result,
       }));
 
-      return result;
+      return {
+ ...result,
+ name: slot.name
+};
      }
     } catch (_) {}
    }
@@ -198,14 +203,17 @@ async function fetchInfo(ctx, slot) {
  }
 
  // fallback
- if (cacheData) return cacheData;
+ if (cacheData) {
+ return {
+  ...cacheData,
+  name: slot.name
+ };
+}
 
  return { name: slot.name, error: true };
 }
 
-/* ====== 以下全部未修改 ====== */
-
-function buildCard(result, colors, ctx) { /* 原样不动 */ 
+function buildCard(result, colors, ctx) { 
  const isSmall = ctx.widgetFamily === "systemSmall";
  const { name, error, used, totalBytes, percent, expire, remainDays } = result;
 
@@ -283,18 +291,22 @@ function buildCard(result, colors, ctx) { /* 原样不动 */
     ],
    },
    {
-    type: "stack",
-    direction: "row",
-    alignItems: "center",
-    gap: 5,
-    children: [
-     { type: "text", text: `${usedStr}/${totalStr}`, font: { size: "caption2", weight: "medium" }, textColor: colors.textSecondary },
-     { type: "spacer" },
-     { type: "text", text: expireText, font: { size: "caption2", weight: "medium" }, textColor: colors.textTertiary },
-     { type: "spacer" },
-     { type: "text", text: `剩${remainStr}`, font: { size: "caption2", weight: "semibold" }, textColor: colors.accentGreen },
-    ],
-   },
+ type: "stack",
+ direction: "row",
+ alignItems: "center",
+ gap: 5,
+ children: [
+  { type: "text", text: `${usedStr}/${totalStr}`, font: { size: "caption2", weight: "medium" }, textColor: colors.textSecondary },
+  { type: "spacer" },
+
+  ...(ctx.widgetFamily === "systemSmall" ? [] : [
+    { type: "text", text: expireText, font: { size: "caption2", weight: "medium" }, textColor: colors.textTertiary },
+    { type: "spacer" },
+  ]),
+
+  { type: "text", text: `剩${remainStr}`, font: { size: "caption2", weight: "semibold" }, textColor: colors.accentGreen },
+ ],
+},
   ],
  };
 }
