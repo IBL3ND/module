@@ -17,7 +17,7 @@
  * 2️⃣ 参数说明：
  *    - NAME1-5：机场名称，显示在卡片上（必填，否则显示"机场订阅"）
  *    - URL1-5：订阅地址，从机场后台复制（必填）
- *    - RESET1-5：流量重置日，1-28 的数字（可选）
+ *    - RESET1-5：流量重置日，1-31 的数字（可选）
  * 
  * 3️⃣ 示例：
  *    NAME1 = 机场订阅
@@ -49,10 +49,21 @@ export default async function (ctx) {
  for (let i = 1; i <= MAX; i++) {
   const url = (ctx.env[`URL${i}`] || "").trim();
   if (!url) continue;
+
+  const rawReset = (ctx.env[`RESET${i}`] || "").trim();
+  let resetDay = null;
+
+  if (/^\d+$/.test(rawReset)) {
+    const num = Number(rawReset);
+    if (num >= 1 && num <= 31) {
+      resetDay = num;
+    }
+  }
+
   slots.push({
-   name: (ctx.env[`NAME${i}`] || "").trim() || "机场订阅",
-   url,
-   resetDay: parseInt(ctx.env[`RESET${i}`] || "", 10) || null,
+    name: (ctx.env[`NAME${i}`] || "").trim() || "机场订阅",
+    url,
+    resetDay,
   });
  }
 
@@ -155,10 +166,11 @@ async function fetchInfo(ctx, slot) {
   try {
    const parsed = JSON.parse(cache);
    if (Date.now() - parsed.time < CACHE_TIME) {
- return {
-  ...parsed.data,
-  name: slot.name
- };
+  return {
+    ...parsed.data,
+    name: slot.name,
+    remainDays: slot.resetDay ? getRemainingDays(slot.resetDay) : null,
+  };
 }
    cacheData = parsed.data;
   } catch {}
@@ -173,48 +185,41 @@ async function fetchInfo(ctx, slot) {
      const resp = await ctx.http[method](url, { headers });
      const raw = resp.headers.get("subscription-userinfo") || "";
      const info = parseUserInfo(raw);
+
      if (info) {
       const used = (info.upload || 0) + (info.download || 0);
       const totalBytes = info.total || 0;
       const percent = totalBytes > 0 ? (used / totalBytes) * 100 : 0;
 
       const result = {
- error: null,
- used,
- totalBytes,
- percent,
- expire: info.expire || null,
- remainDays: slot.resetDay ? getRemainingDays(slot.resetDay) : null,
-};
+        error: null,
+        used,
+        totalBytes,
+        percent,
+        expire: info.expire || null,
+        remainDays: slot.resetDay ? getRemainingDays(slot.resetDay) : null,
+      };
 
       await ctx.storage.set(cacheKey, JSON.stringify({
-       time: Date.now(),
-       data: result,
+        time: Date.now(),
+        data: result,
       }));
 
-      return {
- ...result,
- name: slot.name
-};
+      return { ...result, name: slot.name };
      }
     } catch (_) {}
    }
   }
  }
 
- // fallback
  if (cacheData) {
- return {
-  ...cacheData,
-  name: slot.name
- };
-}
+  return { ...cacheData, name: slot.name };
+ }
 
  return { name: slot.name, error: true };
 }
 
-function buildCard(result, colors, ctx) { 
- const isSmall = ctx.widgetFamily === "systemSmall";
+function buildCard(result, colors, ctx) {
  const { name, error, used, totalBytes, percent, expire, remainDays } = result;
 
  let statusColor = colors.accentGreen;
@@ -246,10 +251,9 @@ function buildCard(result, colors, ctx) {
  const remainStr = formatBytes(totalBytes - used);
 
  let expireText = "";
- let expireColor = colors.textTertiary;
 
  if (remainDays != null) {
-  expireText = `重置${remainDays}天`;
+  expireText = `流量重置时间${remainDays}天后`;
  } else if (expire && Number(expire) > 0) {
   let ts = Number(expire);
   if (ts < 1e12) ts *= 1000;
@@ -291,22 +295,20 @@ function buildCard(result, colors, ctx) {
     ],
    },
    {
- type: "stack",
- direction: "row",
- alignItems: "center",
- gap: 5,
- children: [
-  { type: "text", text: `${usedStr}/${totalStr}`, font: { size: "caption2", weight: "medium" }, textColor: colors.textSecondary },
-  { type: "spacer" },
-
-  ...(ctx.widgetFamily === "systemSmall" ? [] : [
-    { type: "text", text: expireText, font: { size: "caption2", weight: "medium" }, textColor: colors.textTertiary },
-    { type: "spacer" },
-  ]),
-
-  { type: "text", text: `剩${remainStr}`, font: { size: "caption2", weight: "semibold" }, textColor: colors.accentGreen },
- ],
-},
+    type: "stack",
+    direction: "row",
+    alignItems: "center",
+    gap: 5,
+    children: [
+     { type: "text", text: `${usedStr}/${totalStr}`, font: { size: "caption2", weight: "medium" }, textColor: colors.textSecondary },
+     { type: "spacer" },
+     ...(ctx.widgetFamily === "systemSmall" ? [] : [
+       { type: "text", text: expireText, font: { size: "caption2", weight: "medium" }, textColor: colors.textTertiary },
+       { type: "spacer" },
+     ]),
+     { type: "text", text: `剩${remainStr}`, font: { size: "caption2", weight: "semibold" }, textColor: colors.accentGreen },
+    ],
+   },
   ],
  };
 }
@@ -351,8 +353,17 @@ function formatBytes(bytes) {
 
 function getRemainingDays(resetDay) {
  const now = new Date();
- const day = now.getDate();
- let next = new Date(now.getFullYear(), now.getMonth(), resetDay);
- if (day >= resetDay) next = new Date(now.getFullYear(), now.getMonth() + 1, resetDay);
+
+ const maxDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+ const safeDay = Math.min(resetDay, maxDay);
+
+ let next = new Date(now.getFullYear(), now.getMonth(), safeDay);
+
+ if (now.getDate() >= safeDay) {
+  const nextMonthMax = new Date(now.getFullYear(), now.getMonth() + 2, 0).getDate();
+  const nextSafeDay = Math.min(resetDay, nextMonthMax);
+  next = new Date(now.getFullYear(), now.getMonth() + 1, nextSafeDay);
+ }
+
  return Math.max(0, Math.ceil((next - now) / 86400000));
 }
