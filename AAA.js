@@ -1,206 +1,219 @@
-// Egern TestFlight 实测可用性检测（独立脚本版）
-// 依赖：$notification, $httpClient 或 $task 或 fetch
-// 配合模块使用，环境变量通过 ctx.env 传递
+/**
+ * 中国移动话费流量小组件（Egern可用版）
+ */
 
-const CONFIG = {
-  enableNotification: true,
-  notifyWhenUnavailable: false,
-  perRequestTimeout: 8000,
-  apps: [],
-  ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
-};
+export default async function(ctx) {
 
-// ============ 环境变量解析 ============
-function parseEnvConfig() {
-  const env = typeof ctx !== "undefined" && ctx.env ? ctx.env : {};
-  
-  // 1. 解析通知开关
-  if (env.TF_NOTIFY !== undefined) {
-    CONFIG.enableNotification = String(env.TF_NOTIFY).toLowerCase() === "true";
+ const colors = {
+  bg: { light: "#FFFFFF", dark: "#2C2C2E" },
+  border: { light: "#E5E5EA", dark: "#3A3A3C" },
+  title: { light: "#666666", dark: "#8E8E93" },
+  value: { light: "#1C1C1E", dark: "#FFFFFF" },
+  time: { light: "#999999", dark: "#666666" },
+  error: { light: "#FF3B30", dark: "#FF453A" },
+  capsuleBg: { light: "#F5F5F7", dark: "#3A3A3C" },
+  accent: { light: "#007AFF", dark: "#0A84FF" },
+ };
+
+ const url = "https://api.example.com/10086/query"
+
+ let data = {
+  fee: { title: "剩余话费", value: "--", unit: "元" },
+  voice: { title: "剩余语音", value: "--", unit: "分钟" },
+  flow: { title: "剩余流量", value: "--", unit: "MB" },
+  updateTime: "--:--",
+  error: null,
+ }
+
+ function now() {
+  return new Date().toLocaleTimeString("zh-CN", {
+   hour: "2-digit",
+   minute: "2-digit",
+   timeZone: "Asia/Shanghai"
+  })
+ }
+
+ // =========================
+ // 📡 请求
+ // =========================
+ try {
+  const resp = await ctx.http.post(url, {
+   timeout: 8000,
+   headers: { "Content-Type": "application/json" },
+   body: "{}"
+  })
+
+  const res = await resp.json()
+
+  if (res?.fee) {
+
+   data.fee.value = res.fee.curFee ?? "0"
+
+   let total = 0
+   let used = 0
+
+   const list = res?.plan?.planRemianFlowListRes?.planRemianFlowRes || []
+
+   for (const item of list) {
+    total += Number(item.flowSumNum || 0)
+    used += Number(item.flowUsdNum || 0)
+   }
+
+   const remain = total - used
+
+   data.flow.value = (remain / 1024).toFixed(2)
+   data.flow.unit = "GB"
+
+   const voice = res?.plan?.planRemianVoiceListRes?.planRemianVoiceInfoRes?.[0]
+
+   if (voice) {
+    data.voice.value = Math.floor(voice.voiceRemainNum || 0)
+   }
+
+   data.updateTime = now()
+
+  } else {
+   data.error = "返回异常"
   }
-  if (env.TF_NOTIFY_UNAVAILABLE !== undefined) {
-    CONFIG.notifyWhenUnavailable = String(env.TF_NOTIFY_UNAVAILABLE).toLowerCase() === "true";
-  }
-  // 2. 解析超时时间
-  if (env.TF_TIMEOUT && !isNaN(parseInt(env.TF_TIMEOUT))) {
-    CONFIG.perRequestTimeout = parseInt(env.TF_TIMEOUT);
-  }
-  // 3. 解析 User-Agent
-  if (env.TF_USER_AGENT) {
-    CONFIG.ua = String(env.TF_USER_AGENT);
-  }
-  
-  // 4. 解析 App 列表（核心）
-  if (env.TF_APP_IDS) {
-    const val = String(env.TF_APP_IDS).trim();
-    try {
-      // 尝试按 JSON 数组解析（支持自定义 name）
-      const parsed = JSON.parse(val);
-      if (Array.isArray(parsed)) {
-        CONFIG.apps = parsed.filter(app => app && app.id).map(app => ({
-          name: app.name || `App-${app.id.slice(0,6)}`,
-          id: String(app.id).trim()
-        }));
-      }
-    } catch (e) {
-      // 降级：按逗号分隔的纯 ID 列表解析
-      const ids = val.split(",").map(s => s.trim()).filter(s => s.length > 0);
-      CONFIG.apps = ids.map(id => ({
-        name: `App-${id.slice(0,6)}`,
-        id: id
-      }));
-    }
-  }
-  
-  console.log(`[TF Monitor] 配置加载：${CONFIG.apps.length} 个应用，通知=${CONFIG.enableNotification}, 超时=${CONFIG.perRequestTimeout}ms`);
+
+ } catch (e) {
+  data.error = "请求失败"
+ }
+
+ // =========================
+ // UI 构建（完全按你模板）
+ // =========================
+ const isSmall = ctx.widgetFamily === "systemSmall"
+
+ const feeTitle = isSmall ? "话费" : data.fee.title
+ const voiceTitle = isSmall ? "语音" : data.voice.title
+ const flowTitle = isSmall ? "流量" : data.flow.title
+
+ function capsule(title, value, unit) {
+  return isSmall
+   ? {
+    type: "stack",
+    direction: "row",
+    alignItems: "center",
+    padding: [6, 14],
+    backgroundColor: colors.capsuleBg,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    children: [
+     {
+      type: "text",
+      text: `${title} ${value} ${unit}`,
+      font: { size: "body", weight: "medium" },
+      textColor: colors.title,
+      textAlign: "center",
+     }
+    ]
+   }
+   : {
+    type: "stack",
+    direction: "column",
+    alignItems: "center",
+    flex: 1,
+    padding: [8, 10],
+    backgroundColor: colors.capsuleBg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    children: [
+     {
+      type: "text",
+      text: title,
+      font: { size: "caption2", weight: "medium" },
+      textColor: colors.title,
+     },
+     {
+      type: "stack",
+      direction: "row",
+      alignItems: "center",
+      children: [
+       {
+        type: "text",
+        text: String(value),
+        font: { size: "title2", weight: "semibold" },
+        textColor: colors.value,
+       },
+       {
+        type: "text",
+        text: unit,
+        font: { size: "caption2" },
+        textColor: colors.title,
+       }
+      ]
+     }
+    ]
+   }
+ }
+
+ const capsules = isSmall
+  ? [
+    capsule(feeTitle, data.fee.value, data.fee.unit),
+    capsule(voiceTitle, data.voice.value, data.voice.unit),
+    capsule(flowTitle, data.flow.value, data.flow.unit),
+   ]
+  : [
+    capsule(data.fee.title, data.fee.value, data.fee.unit),
+    capsule(data.voice.title, data.voice.value, data.voice.unit),
+    capsule(data.flow.title, data.flow.value, data.flow.unit),
+   ]
+
+ return {
+  type: "widget",
+  backgroundColor: colors.bg,
+  padding: isSmall ? [10, 12] : [10, 14],
+  gap: isSmall ? 6 : 12,
+  refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+  children: [
+
+   // 标题栏
+   {
+    type: "stack",
+    direction: "row",
+    alignItems: "center",
+    children: [
+     {
+      type: "stack",
+      direction: "row",
+      alignItems: "center",
+      gap: 6,
+      children: [
+       { type: "image", src: "sf-symbol:antenna.radiowaves.left.and.right", color: colors.accent, width: 16, height: 16 },
+       { type: "text", text: "中国移动", font: { size: "headline", weight: "semibold" }, textColor: colors.value },
+      ],
+     },
+     { type: "spacer" },
+     {
+      type: "text",
+      text: data.updateTime,
+      font: { size: "caption2" },
+      textColor: colors.time,
+     },
+    ],
+   },
+
+   // 数据区
+   {
+    type: "stack",
+    direction: isSmall ? "column" : "row",
+    gap: isSmall ? 6 : 10,
+    children: capsules,
+   },
+
+   // 错误提示
+   data.error
+    ? {
+      type: "text",
+      text: data.error,
+      textColor: colors.error,
+      font: { size: "caption2" },
+     }
+    : null,
+
+  ].filter(Boolean),
+ }
 }
-
-// ============ 通知函数 ============
-function sendNotification(title, subtitle, message, url) {
-  if (!CONFIG.enableNotification || typeof $notification === "undefined") return;
-  try {
-    $notification.post(title, subtitle, message, { url });
-  } catch (e) {
-    console.log("通知发送失败：" + e);
-  }
-}
-
-// ============ 通用 GET 请求（带超时保护） ============
-function httpGet(url, cb) {
-  let finished = false;
-  const timer = setTimeout(() => {
-    if (finished) return;
-    finished = true;
-    cb(new Error("request timeout"));
-  }, CONFIG.perRequestTimeout);
-
-  const opts = { url: url, headers: { "User-Agent": CONFIG.ua, Accept: "text/html" } };
-
-  if (typeof $httpClient !== "undefined") {
-    try {
-      $httpClient.get(opts, function (err, resp, body) {
-        if (finished) return;
-        clearTimeout(timer);
-        finished = true;
-        cb(err, resp || {}, typeof body === "string" ? body : (body && body.toString ? body.toString() : ""));
-      });
-      return;
-    } catch (e) { /* fallthrough */ }
-  }
-
-  if (typeof $task !== "undefined") {
-    $task.fetch(opts).then(function (resp) {
-      if (finished) return;
-      clearTimeout(timer);
-      finished = true;
-      cb(null, { statusCode: resp.statusCode, headers: resp.headers }, resp.body || "");
-    }).catch(function (err) {
-      if (finished) return;
-      clearTimeout(timer);
-      finished = true;
-      cb(err);
-    });
-    return;
-  }
-
-  if (typeof fetch !== "undefined") {
-    fetch(url, { headers: { "User-Agent": CONFIG.ua } }).then(function (res) {
-      res.text().then(function (txt) {
-        if (finished) return;
-        clearTimeout(timer);
-        finished = true;
-        cb(null, { statusCode: res.status }, txt);
-      }).catch(function (err) {
-        if (finished) return;
-        clearTimeout(timer);
-        finished = true;
-        cb(err);
-      });
-    }).catch(function (err) {
-      if (finished) return;
-      clearTimeout(timer);
-      finished = true;
-      cb(err);
-    });
-    return;
-  }
-
-  clearTimeout(timer);
-  cb(new Error("no http client available"));
-}
-
-// ============ 检查单个 App ============
-function checkApp(app, done) {
-  const url = `https://testflight.apple.com/join/${app.id}`;
-  console.log(`[TF Monitor] 检查 ${app.name} -> ${url}`);
-
-  httpGet(url, function (err, resp, body) {
-    if (err) {
-      console.log(`[TF Monitor] 请求失败：${err}`);
-      if (CONFIG.notifyWhenUnavailable) sendNotification("TestFlight 监控", app.name, `请求失败：${err}`, url);
-      return done();
-    }
-
-    const text = (body || "").toLowerCase();
-
-    // 可加入 & 已满 的关键字
-    const availableKeywords = ["itms-beta://", "open in testflight", "join the beta", "start testing", "accept invite", "加入测试", "开始测试", "在 testflight 中打开", "open the testflight"];
-    const fullKeywords = ["this beta is full", "beta is full", "测试人员已满", "测试已满", "本次测试已满", "名额已满", "无可用名额", "full"];
-
-    let isAvailable = false;
-    let isFull = false;
-
-    for (const k of availableKeywords) if (text.indexOf(k) !== -1) { isAvailable = true; break; }
-    for (const k of fullKeywords) if (text.indexOf(k) !== -1) { isFull = true; break; }
-
-    // 双重保底：itms-beta 协议基本可判为可加入
-    if (text.indexOf("itms-beta://") !== -1) isAvailable = true;
-
-    if (isAvailable && !isFull) {
-      console.log(`[TF Monitor] ✅ ${app.name} 似乎有名额，发送通知`);
-      sendNotification("🎉 TestFlight 可加入", app.name, "点击打开 TestFlight 加入测试", url);
-    } else {
-      console.log(`[TF Monitor] ⏳ ${app.name} 暂无名额 (available=${isAvailable}, full=${isFull})`);
-      if (CONFIG.notifyWhenUnavailable) {
-        sendNotification("TestFlight 监控", app.name, "当前无名额或无法确认", url);
-      }
-    }
-
-    // 调试：无法判断时输出页面片段
-    if (!isAvailable && !isFull) {
-      console.log("[TF Monitor] ⚠️ 无法明确判断，页面片段：\n" + (text.substr(0, 600)));
-    }
-
-    done();
-  });
-}
-
-// ============ 主入口 ============
-(function main() {
-  // 1. 解析环境变量配置
-  parseEnvConfig();
-  
-  // 2. 校验配置
-  if (CONFIG.apps.length === 0) {
-    console.log("[TF Monitor] ❌ 未配置任何 App ID，请在模块设置中填写 TF_APP_IDS");
-    if (CONFIG.enableNotification && typeof $notification !== "undefined") {
-      $notification.post("TestFlight 监控", "配置错误", "请在模块设置中填写 TF_APP_IDS 环境变量", "");
-    }
-    return;
-  }
-  
-  console.log(`[TF Monitor] 🚀 启动，共检查 ${CONFIG.apps.length} 个应用`);
-  
-  // 3. 顺序执行检查（避免并发超时）
-  let idx = 0;
-  function next() {
-    if (idx >= CONFIG.apps.length) {
-      console.log("[TF Monitor] ✨ 全部检查完成");
-      return;
-    }
-    const app = CONFIG.apps[idx++];
-    checkApp(app, next);
-  }
-  next();
-})();
-
