@@ -63,7 +63,7 @@ function renderMedium(now, air, city) {
     type: 'widget',
     padding: 16,
     gap: 12,
-    backgroundColor: { light: '#FFFFFF', dark: '#1C1C1E' },
+    backgroundColor: { light: '#FFFFFF', dark: '#2C2C2E' },
     children: [
       {
         type: 'stack',
