@@ -1,0 +1,27 @@
+name: "Telegram 跳转"
+description: "将 https://t.me/... 重定向到你选择的 Telegram 客户端"
+author: "panda𝕏"
+
+env_schema:
+  CLIENT:
+    name: "Telegram 客户端"
+    description: "选择要跳转到的 Telegram 客户端"
+    default_value: "Telegram"
+    options:
+      - Telegram
+      - Swiftgram
+      - Turrit
+      - iMe
+      - Nicegram
+      - Lingogram
+
+scriptings:
+  - http_request:
+      name: "Telegram 链接重定向"
+      match: "^https?://t\\.me/.+"
+      script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/TgRedirect.js
+      timeout: 10
+
+mitm:
+  hostnames:
+    - "t.me"
