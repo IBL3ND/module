@@ -106,6 +106,8 @@ export default async function(ctx) {
  textColor: colors.title,
  textAlign: "center",
  numberOfLines: 1,
+ minScale: 0.7, 
+ maxLines: 1,   
  },
  ],
  };
@@ -141,6 +143,7 @@ export default async function(ctx) {
  font: { size: "caption2", weight: "medium" },
  textColor: colors.title,
  maxLines: 1,
+ minScale: 0.8, 
  },
  {
  type: "stack",
@@ -153,12 +156,16 @@ export default async function(ctx) {
  text: String(value),
  font: { size: "title2", weight: "semibold" },
  textColor: colors.value,
+ minScale: 0.5,  
+ maxLines: 1,    
  },
  {
  type: "text",
  text: unit,
  font: { size: "caption2", weight: "regular" },
  textColor: colors.title,
+ minScale: 0.7,  
+ maxLines: 1,
  },
  ],
  },
@@ -195,7 +202,7 @@ export default async function(ctx) {
  gap: isSmall ? 5 : 7,
  children: [
  { type: "image", src: "sf-symbol:simcard.fill", color: colors.accent, width: isSmall ? 14 : 18, height: isSmall ? 14 : 18 },
- { type: "text", text: "中国联通", font: { size: isSmall ? "subheadline" : "headline", weight: "semibold" }, textColor: colors.value },
+ { type: "text", text: "中国联通", font: { size: isSmall ? "subheadline" : "headline", weight: "semibold" }, textColor: colors.value, maxLines: 1, minScale: 0.8 },
  ],
  },
  { type: "spacer" },
@@ -206,7 +213,7 @@ export default async function(ctx) {
  gap: 5,
  children: [
  { type: "image", src: "sf-symbol:arrow.clockwise", color: colors.time, width: 12, height: 12 },
- { type: "text", text: data.updateTime, font: { size: "caption2" }, textColor: colors.time },
+ { type: "text", text: data.updateTime, font: { size: "caption2" }, textColor: colors.time, maxLines: 1 },
  ],
  },
  ],
@@ -239,3 +246,4 @@ export default async function(ctx) {
  ],
  };
 }
+
