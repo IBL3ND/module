@@ -1,21 +1,23 @@
 name: 插件模块跳转
-description: 色鸡 莉插件中心跳Egern
-author: 只跳转不经过Script转换
+description: |
 
+  色鸡 可莉插件中心跳 Egern 只跳转不经过Script转换
+  可莉插件网址：https://hub.kelee.one
+  色鸡模块网址：https://surge.qingr.moe
+homepage: https://hub.kelee.one
 body_rewrites:
-- response_regex:
-    match: https://(pluginhub|hub)\.kelee\.one/
-    find: loon://import\?plugin=
-    replace: egern:///modules/new?url=
-
-- response_regex:
-    match: https://surge\.qingr\.moe/
-    find: surge:///install-module\?url=
-    replace: egern:///modules/new?url=
-
+  - response_regex:
+      match: https://(pluginhub|hub)\.kelee\.one/
+      find: loon://import\?plugin=
+      replace: egern:///modules/new?url=
+  - response_regex:
+      match: https://surge\.qingr\.moe/
+      find: surge:///install-module\?url=
+      replace: egern:///modules/new?url=
 mitm:
   hostnames:
     includes:
       - pluginhub.kelee.one
       - hub.kelee.one
       - surge.qingr.moe
+
