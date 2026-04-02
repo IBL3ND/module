@@ -1,0 +1,20 @@
+name: GitHub 429 HK US
+description: 使用随机 UA 绕过 GitHub 限流
+author: iBL3ND
+
+dns: {}
+
+scriptings:
+- http_request:
+    name: GitHub UA iBL3ND
+    match: ^https?://(github\.com|api\.github\.com|raw\.githubusercontent\.com|codeload\.github\.com)/.+
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/User-Agent.js
+    timeout: 10
+    binary: true
+
+mitm:
+  hostnames:
+  - github.com
+  - api.github.com
+  - raw.githubusercontent.com
+  - codeload.github.com
