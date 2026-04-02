@@ -1,6 +1,6 @@
 /**
  * 全国彩票开奖结果 - Egern 小组件
- * 环境变量：名称填 彩票类型 名称里填种类名称 双色球
+ * 环境变量：名称填 彩票类型 值里填种类名称 双色球
  */
 export default async function(ctx) {
   const LOTTERY_CONFIG = {
