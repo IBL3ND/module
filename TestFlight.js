@@ -1,5 +1,5 @@
 /**
- * TestFlight 监控 (全速高精度版)
+ * TestFlight 监控 (极速疯狗版)
  * 自动监控 TestFlight 名额
  * 只要检测到有名额就一直通知
  * 支持多 ID 监控与随机 UA 伪装
