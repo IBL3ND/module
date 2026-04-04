@@ -1,37 +1,49 @@
 /**
- * Egern 响应体重写脚本 - 过滤广告位
+ * Egern 脚本
  */
 
 let body = $response.body;
-if (!body) $done({});
 
-try {
-    let obj = JSON.parse(body);
+if (body) {
+    try {
+        let obj = JSON.parse(body);
 
-    if (obj.widgetPositions && Array.isArray(obj.widgetPositions)) {
-        // 关键过滤逻辑：移除包含特定广告关键词的组件
-        const adKeywords = [
-            "postitial",    // 插屏
-            "native",       // 原生广告
-            "preroll",      // 视频前贴片
-            "underrelated", // 相关视频下方广告
-            "undervideo",   // 视频下方广告
-            "playerpause"   // 暂停时的广告
-        ];
+        // 1. 彻底删除插屏弹窗对象 (解决倒计时弹窗的关键)
+        if (obj.postitial) {
+            delete obj.postitial;
+        }
 
-        obj.widgetPositions = obj.widgetPositions.filter(item => {
-            if (!item.name) return true;
-            const nameLower = item.name.toLowerCase();
-            // 如果组件名包含上述任何一个关键词，则过滤掉
-            return !adKeywords.some(keyword => nameLower.includes(keyword));
-        });
-        
-        // 可选：清空模型列表以减少数据量（如果这些模型只是推荐广告）
-        // obj.models = [];
+        // 2. 清空模型数组 (弹窗里的女主播/视频列表通常存在这里)
+        if (obj.models) {
+            obj.models = [];
+        }
+
+        // 3. 过滤组件位 (防止页面留下广告占位符)
+        if (obj.widgetPositions && Array.isArray(obj.widgetPositions)) {
+            const adKeywords = [
+                "postitial", 
+                "native", 
+                "preroll", 
+                "playerpause", 
+                "underrelated", 
+                "undervideo",
+                "contentbottom"
+            ];
+            
+            obj.widgetPositions = obj.widgetPositions.filter(item => {
+                if (!item.name) return true;
+                const nameLower = item.name.toLowerCase();
+                // 剔除匹配关键词的组件
+                return !adKeywords.some(keyword => nameLower.includes(keyword));
+            });
+        }
+
+        // 4. 重建响应体并完成
+        $done({ body: JSON.stringify(obj) });
+    } catch (e) {
+        console.log("xHamster 脚本执行出错: " + e);
+        $done({});
     }
-
-    $done({ body: JSON.stringify(obj) });
-} catch (e) {
-    console.log("解析 JSON 失败: " + e);
+} else {
     $done({});
 }
