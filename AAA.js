@@ -295,7 +295,7 @@ const list = {
   'vpn': { tp: 'timea', hx: 'hxpda', id: "yearautorenew" },  //VPN-unlimited
   'TT': { tp: 'timea', hx: 'hxpda', id: "com.55panda.hicalculator.year_sub" },  //TT_私密相册管家
   'Focos': { tp: 'timea', hx: 'hxpda', id: "com.focos.1w_t4_1w" },  //Focos
-  'ProKnockOut': { tp: 'timeb', hx: 'hxpda', id: "com.knockout.AISVIP.yearly.upgrade" },  //ProKnockOut
+  'ProKnockOut': { tp: 'timeb', hx: 'hxpda', id: "com.knockout.SVIP.50off" },  //ProKnockOut
   'com.teadoku.flashnote': { tp: 'timea', hx: 'hxpda', id: "pro_ios_ipad_mac" }  //AnkiNote
 };
 
@@ -391,7 +391,7 @@ function build(product_id, purchaseTime, expireTime, type, strict, forceNull) {
     "purchase_date": format(purchaseTime),
     "purchase_date_ms": String(purchaseTime.getTime()),
     "purchase_date_pst": formatPST(purchaseTime),
-    "product_id":com.knockout.AISVIP.yearly.upgrade,
+    "product_id": product_id,
     "is_trial_period": "false",
     "is_in_intro_offer_period": "false",
     "in_app_ownership_type": "PURCHASED",
