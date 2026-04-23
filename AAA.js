@@ -391,7 +391,7 @@ function build(product_id, purchaseTime, expireTime, type, strict, forceNull) {
     "purchase_date": format(purchaseTime),
     "purchase_date_ms": String(purchaseTime.getTime()),
     "purchase_date_pst": formatPST(purchaseTime),
-    "product_id": product_id,
+    "product_id":com.knockout.AISVIP.yearly.upgrade,
     "is_trial_period": "false",
     "is_in_intro_offer_period": "false",
     "in_app_ownership_type": "PURCHASED",
