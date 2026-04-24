@@ -1,5 +1,6 @@
 #!name=iTunes
 #!desc=iTunes
+#!author=@ddm1023
 
 [Script]
 iTunes = type=http-response, pattern=^https?:\/\/buy\.itunes\.apple\.com\/verifyReceipt$, script-path=https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/iTunes.js, requires-body=true, max-size=-1, timeout=60
