@@ -1,6 +1,7 @@
 #!name=iTunes
-#!desc=iTunes
+#!desc=iBL3ND备份
 #!author=@ddm1023
+#!homepage=https://t.me/ddm1023
 
 [Script]
 iTunes = type=http-response, pattern=^https?:\/\/buy\.itunes\.apple\.com\/verifyReceipt$, script-path=https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/iTunes.js, requires-body=true, max-size=-1, timeout=60
