@@ -1,12 +1,13 @@
 #!name=机场流量信息
 #!desc=直接复制机场订阅地址进去就行
 #!category=iBL3ND
-# Source: https://github.com/z-jinke/Panel
-#!arguments=A名称:订阅A名称,A地址:订阅A地址,A重置:重置日,B名称:订阅B名称,B地址:订阅B地址,B重置:重置日,C名称:订阅C名称,C地址:订阅C地址,C重置:重置日,D名称:订阅D名称,D地址:订阅D地址,D重置:重置日,E名称:订阅E名称,E地址:订阅E地址,E重置:重置日
-#!arguments-desc=【参数设置说明】\n① 可同时显示5个订阅流量信息\n② 本模块不需要编码订阅地址可直接使用\n③ ABCDE代表不同订阅的地址和备注名称以及流量重置日期
+
+#!arguments=A_name:订阅A名称,A_url:订阅A地址,A_reset:重置日,B_name:订阅B名称,B_url:订阅B地址,B_reset:重置日,C_name:订阅C名称,C_url:订阅C地址,C_reset:重置日,D_name:订阅D名称,D_url:订阅D地址,D_reset:重置日,E_name:订阅E名称,E_url:订阅E地址,E_reset:重置日
+
+#!arguments-desc=【参数设置说明】\n① A~E分别对应不同订阅\n② 可同时显示5个订阅流量信息\n③ 直接填订阅地址即可使用-无需编码
 
 [Panel]
-订阅面板 = script-name=订阅面板, update-interval=3600
+订阅流量 = script-name=订阅面板, update-interval=3600
 
 [Script]
-订阅面板 = type=generic, timeout=20, script-path=https://raw.githubusercontent.com/IBL3ND/MK/refs/heads/main/subscription-info.js, argument=title1={{{A名称}}}&url1={{{A地址}}}&resetDay1={{{A重置}}}&title2={{{B名称}}}&url2={{{B地址}}}&resetDay2={{{B重置}}}&title3={{{C名称}}}&url3={{{C地址}}}&resetDay3={{{C重置}}}&title4={{{D名称}}}&url4={{{D地址}}}&resetDay4={{{D重置}}}&title5={{{E名称}}}&url5={{{E地址}}}&resetDay5={{{E重置}}}
+订阅面板 = type=generic, timeout=20, script-path=https://raw.githubusercontent.com/IBL3ND/MK/refs/heads/main/subscription-info.js, argument=title1={{{A_name}}}&url1={{{A_url}}}&resetDay1={{{A_reset}}}&title2={{{B_name}}}&url2={{{B_url}}}&resetDay2={{{B_reset}}}&title3={{{C_name}}}&url3={{{C_url}}}&resetDay3={{{C_reset}}}&title4={{{D_name}}}&url4={{{D_url}}}&resetDay4={{{D_reset}}}&title5={{{E_name}}}&url5={{{E_url}}}&resetDay5={{{E_reset}}}
