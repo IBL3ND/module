@@ -1,0 +1,6 @@
+#!name=苹果推送服务
+#!desc=去打开代理工具的包含APNS
+
+[Rule]
+DOMAIN-SUFFIX,push.apple.com,PROXY
+IP-CIDR,17.0.0.0/8,PROXY,no-resolve
