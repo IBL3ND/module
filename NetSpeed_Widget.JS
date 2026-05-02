@@ -52,11 +52,13 @@ export default async function(ctx) {
 
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  
+  const isSmall = ctx.widgetFamily === 'systemSmall';
 
   return {
     type: 'widget',
-    padding: 16,
-    gap: 12,
+    padding: isSmall ? 12 : 16,
+    gap: isSmall ? 8 : 12,
 
     backgroundColor: { 
       light: '#FFFFFF', 
@@ -73,14 +75,14 @@ export default async function(ctx) {
           {
             type: 'image',
             src: `sf-symbol:${icon}`,
-            width: 16,
-            height: 16,
+            width: isSmall ? 14 : 16,
+            height: isSmall ? 14 : 16,
             color: color
           },
           {
             type: 'text',
             text: ' NetSpeed',
-            font: { size: 'caption1', weight: 'semibold' },
+            font: { size: isSmall ? 'caption2' : 'caption1', weight: 'semibold' },
             textColor: color
           },
           { type: 'spacer' },
@@ -102,7 +104,7 @@ export default async function(ctx) {
           {
             type: 'text',
             text: `${speedData.mbps} Mbps`,
-            font: { size: 44, weight: 'bold' },
+            font: { size: isSmall ? 32 : 44, weight: 'bold' },
             textColor: color
           },
           { type: 'spacer' }
@@ -132,14 +134,14 @@ export default async function(ctx) {
           {
             type: 'text',
             text: `${speedData.mBs} MB/s`,
-            font: { size: 'caption1' },
+            font: { size: isSmall ? 'caption2' : 'caption1' },
             textColor: { light: '#6B6B6B', dark: '#A1A1A6' }
           },
           { type: 'spacer' },
           {
             type: 'text',
             text: `${speedData.duration}s`,
-            font: { size: 'caption1' },
+            font: { size: isSmall ? 'caption2' : 'caption1' },
             textColor: { light: '#6B6B6B', dark: '#A1A1A6' }
           }
         ]
@@ -147,3 +149,4 @@ export default async function(ctx) {
     ]
   };
 }
+
