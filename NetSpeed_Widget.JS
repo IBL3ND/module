@@ -103,7 +103,8 @@ export default async function(ctx) {
           { type: 'spacer' },
           {
             type: 'text',
-            text: `${speedData.mbps} Mbps`,
+            text: isSmall ? `${speedData.mbps}\nMbps` : `${speedData.mbps} Mbps`,
+            textAlign: 'center', 
             font: { size: isSmall ? 32 : 44, weight: 'bold' },
             textColor: color
           },
