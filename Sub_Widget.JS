@@ -202,7 +202,7 @@ async function fetchInfo(ctx, slot) {
 
       await ctx.storage.set(cacheKey, JSON.stringify({
         time: Date.now(),
-         result,
+        data: result,
       }));
 
       return { ...result, name: slot.name };
@@ -221,7 +221,6 @@ async function fetchInfo(ctx, slot) {
 
 function buildCard(result, colors, ctx) {
  const { name, error, used, totalBytes, percent, expire, remainDays } = result;
- const isSmall = ctx.widgetFamily === "systemSmall";
 
  let statusColor = colors.accentGreen;
  if (error) statusColor = colors.accentRed;
@@ -267,7 +266,7 @@ function buildCard(result, colors, ctx) {
  return {
   type: "stack",
   direction: "column",
-  gap: isSmall ? 3 : 5,
+  gap: 5,
   padding: [8, 10],
   backgroundColor: { light: "#FFFFFF", dark: "#2B2B2D" },
   borderRadius: 8,
@@ -288,26 +287,26 @@ function buildCard(result, colors, ctx) {
    {
     type: "stack",
     direction: "row",
-    height: isSmall ? 4 : 5,
+    height: 5,
     borderRadius: 3,
     children: [
-     { type: "stack", flex: Math.max(progressPercent, 1), height: isSmall ? 4 : 5, backgroundColor: statusColor, borderRadius: 3 },
-     { type: "stack", flex: Math.max(100 - progressPercent, 1), height: isSmall ? 4 : 5, backgroundColor: { light: "#E8E8EA", dark: "#48484A" }, borderRadius: 3 },
+     { type: "stack", flex: Math.max(progressPercent, 1), height: 5, backgroundColor: statusColor, borderRadius: 3 },
+     { type: "stack", flex: Math.max(100 - progressPercent, 1), height: 5, backgroundColor: { light: "#E8E8EA", dark: "#48484A" }, borderRadius: 3 },
     ],
    },
    {
     type: "stack",
     direction: "row",
     alignItems: "center",
-    gap: isSmall ? 3 : 5,
+    gap: 5,
     children: [
-     { type: "text", text: `${usedStr}/${totalStr}`, font: { size: isSmall ? 9 : "caption2", weight: "semibold" }, textColor: colors.textSecondary },
+     { type: "text", text: `${usedStr}/${totalStr}`, font: { size: "caption2", weight: "medium" }, textColor: colors.textSecondary },
      { type: "spacer" },
-     ...(isSmall ? [] : [
+     ...(ctx.widgetFamily === "systemSmall" ? [] : [
        { type: "text", text: expireText, font: { size: "caption2", weight: "medium" }, textColor: colors.textTertiary },
        { type: "spacer" },
      ]),
-     { type: "text", text: `剩${remainStr}`, font: { size: isSmall ? 9 : "caption2", weight: "semibold" }, textColor: colors.accentGreen },
+     { type: "text", text: `剩${remainStr}`, font: { size: "caption2", weight: "semibold" }, textColor: colors.accentGreen },
     ],
    },
   ],
@@ -368,4 +367,3 @@ function getRemainingDays(resetDay) {
 
  return Math.max(0, Math.ceil((next - now) / 86400000));
 }
-
