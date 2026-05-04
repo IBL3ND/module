@@ -199,9 +199,9 @@ export default async function(ctx) {
     const getCapsuleColor = (days) => {
       if (days === 0) {
         return {
-          bg: { light: "#34C75915", dark: "#30D15820" },
-          border: { light: "#34C75950", dark: "#30D15860" },
-          text: { light: "#2E8B57", dark: "#4CD964" }
+          bg: { light: "#FF858515", dark: "#FF858525" },
+          border: { light: "#FF858550", dark: "#FF858570" },
+          text: { light: "#D44444", dark: "#FFB3B3" }
         };
       }
       if (days <= CONFIG.urgentDays) {
