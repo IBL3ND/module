@@ -1,9 +1,7 @@
 name: 插件模块跳转
-description: |
-
-  色鸡 可莉插件中心跳转到 Egern
-  可莉插件网址：https://hub.kelee.one
-  色鸡模块网址：https://surge.qingr.moe
+description:
+ 色鸡 可莉插件中心跳转到 Egern
+icon: https://iili.io/BZhfJwX.png
 homepage: https://hub.kelee.one
 body_rewrites:
   - response_regex:
