@@ -1,7 +1,7 @@
 name: "Telegram 跳转"
 description: "将 https://t.me/... 重定向到你选择的 Telegram 客户端"
 author: "panda𝕏"
-
+icon: https://iili.io/KQX347S.png
 env_schema:
   CLIENT:
     name: "Telegram 客户端"
