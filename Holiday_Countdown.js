@@ -24,18 +24,56 @@ const LUNAR_HOLIDAYS = {
   '8-15': '中秋节', '9-9': '重阳节', '12-8': '腊八节', '12-30': '除夕'
 };
 
-const SOLAR_TERMS = {
-  '01-05': '小寒', '01-20': '大寒', '02-03': '立春', '02-18': '雨水',
-  '03-05': '惊', '03-20': '春分', '04-04': '清明', '04-19': '谷雨',
-  '05-05': '立夏', '05-20': '小满', '06-05': '芒种', '06-21': '夏至',
-  '07-07': '小暑', '07-22': '大暑', '08-07': '立秋', '08-22': '处暑',
-  '09-07': '白露', '09-22': '秋分', '10-08': '寒露', '10-23': '霜降',
-  '11-07': '立冬', '11-22': '小雪', '12-07': '大雪', '12-21': '冬至'
-};
 const FLOATING_HOLIDAYS = {
   'mother': { name: '母亲节', calc: (y) => getNthWeekday(y, 5, 0, 2) },
   'father': { name: '父亲节', calc: (y) => getNthWeekday(y, 6, 0, 3) },
 };
+
+const SOLAR_TERM_NAMES = [
+  '小寒','大寒','立春','雨水','惊蛰','春分',
+  '清明','谷雨','立夏','小满','芒种','夏至',
+  '小暑','大暑','立秋','处暑','白露','秋分',
+  '寒露','霜降','立冬','小雪','大雪','冬至'
+];
+
+const SOLAR_TERM_MONTHS = [1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12];
+
+const C_2000 = [
+  5.4055, 20.12,   3.87,  18.73,  3.695, 18.367,
+  4.241,  20.888,  5.5133,21.208,  6.285, 21.732,
+  7.214,  23.085,  7.9013,23.839,  8.784, 23.969,
+  9.767,  24.475, 10.84,  26.613, 11.303, 27.185
+];
+
+const C_1900 = [
+  6.3811, 20.84,   4.6295,19.51,   4.1867,18.944,
+  5.4159, 20.888,  6.3811,21.923,  7.214, 22.555,
+  7.9013, 23.085,  8.784, 23.486,  9.767, 24.124,
+  10.423, 24.646, 11.303, 27.03,  11.303, 27.185
+];
+
+const TERM_CORRECTIONS = {
+  0:  { 2019: -1 },
+  2:  { 2084: +1 },
+  4:  { 1911: +1 },
+  6:  { 1925: +1, 2032: -1 },
+  8:  { 1911: +1 },
+  9:  { 2008: +1 },
+  10: { 2016: +1 },
+  18: { 2089: +1 },
+  22: { 1954: +1 },
+};
+
+function getSolarTermDate(year, termIndex) {
+  const C = year >= 2000 ? C_2000 : C_1900;
+  const Y = year % 100;
+  let date = Math.floor(Y * 0.2422 + C[termIndex]) - Math.floor((Y - 1) / 4);
+  if (TERM_CORRECTIONS[termIndex]?.[year]) {
+    date += TERM_CORRECTIONS[termIndex][year];
+  }
+  return date;
+}
+
 const Lunar = (function() {
   const lunarInfo = [
     0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
@@ -115,20 +153,22 @@ const Lunar = (function() {
     solarToLunar
   };
 })();
+
 function getNthWeekday(year, month, weekday, n) {
   const first = new Date(year, month - 1, 1);
   const diff = (weekday - first.getDay() + 7) % 7;
   return new Date(year, month - 1, 1 + diff + (n - 1) * 7);
 }
+
 function daysDiff(from, to) {
   const f = new Date(from.getFullYear(), from.getMonth(), from.getDate());
   const t = new Date(to.getFullYear(), to.getMonth(), to.getDate());
   return Math.floor((t - f) / 86400000);
 }
+
 function findSolarDateByLunar(targetLunarMonth, targetLunarDay, year) {
   const start = new Date(year, 0, 1);
   const end = new Date(year + 1, 2, 10);
-  
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const lunar = Lunar.solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
     if (lunar.month === targetLunarMonth && lunar.day === targetLunarDay && !lunar.isLeap) {
@@ -137,41 +177,51 @@ function findSolarDateByLunar(targetLunarMonth, targetLunarDay, year) {
   }
   return null;
 }
+
 function getCountdowns() {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const year = today.getFullYear();
   const results = [];
+
   for (const [k, v] of Object.entries(HOLIDAYS)) {
     const [m, d] = k.split('-').map(Number);
     let t = new Date(year, m - 1, d);
     if (t < today) t = new Date(year + 1, m - 1, d);
     results.push({ name: v.name, days: daysDiff(today, t), type: v.type });
   }
+
   for (const v of Object.values(FLOATING_HOLIDAYS)) {
     let t = v.calc(year);
     if (t < today) t = v.calc(year + 1);
     results.push({ name: v.name, days: daysDiff(today, t), type: 'floating' });
   }
-  for (const [k, name] of Object.entries(SOLAR_TERMS)) {
-    const [m, d] = k.split('-').map(Number);
+
+  for (let i = 0; i < 24; i++) {
+    const m = SOLAR_TERM_MONTHS[i];
+    const d = getSolarTermDate(year, i);
     let t = new Date(year, m - 1, d);
-    if (t < today) t = new Date(year + 1, m - 1, d);
-    results.push({ name, days: daysDiff(today, t), type: 'term' });
+    if (t < today) {
+      const d2 = getSolarTermDate(year + 1, i);
+      t = new Date(year + 1, m - 1, d2);
+    }
+    results.push({ name: SOLAR_TERM_NAMES[i], days: daysDiff(today, t), type: 'term' });
   }
+
+  // 农历节日
   try {
     for (const [k, name] of Object.entries(LUNAR_HOLIDAYS)) {
       const [lm, ld] = k.split('-').map(Number);
       const isChuxi = k === '12-30';
-      
+
       let t = findSolarDateByLunar(lm, ld, year);
       if (isChuxi && !t) t = findSolarDateByLunar(12, 29, year);
-      
+
       if (!t || t < today) {
         t = findSolarDateByLunar(lm, ld, year + 1);
         if (isChuxi && !t) t = findSolarDateByLunar(12, 29, year + 1);
       }
-      
+
       if (t) results.push({ name, days: daysDiff(today, t), type: 'lunar' });
     }
   } catch (e) {
@@ -187,7 +237,7 @@ export default async function(ctx) {
   try {
     const env = ctx.env || {};
     const widgetFamily = ctx.widgetFamily || 'systemMedium';
-    
+
     const CONFIG = {
       padding: 8, itemGap: 6, maxRows: 6,
       fontSize: { small: 9, medium: 10, large: 11 },
@@ -240,14 +290,14 @@ export default async function(ctx) {
               type: 'stack', direction: 'row', alignItems: 'center', justifyContent: 'center', flex: 1,
               padding: [5, 8, 5, 8], backgroundColor: getCapsuleColor(c.days).bg, borderRadius: 10,
               borderWidth: 1, borderColor: getCapsuleColor(c.days).border,
-              children: [{ 
-                type: 'text', 
-                text: `${truncateName(c.name)} ${dayText}`, 
-                font: { size: fontSize, weight: 'medium' }, 
-                textColor: getCapsuleColor(c.days).text, 
-                textAlign: 'center', 
-                maxLines: 1, 
-                minScale: 0.7 
+              children: [{
+                type: 'text',
+                text: `${truncateName(c.name)} ${dayText}`,
+                font: { size: fontSize, weight: 'medium' },
+                textColor: getCapsuleColor(c.days).text,
+                textAlign: 'center',
+                maxLines: 1,
+                minScale: 0.7
               }]
             };
           })
@@ -285,7 +335,7 @@ export default async function(ctx) {
       if (!showH) filtered = filtered.filter(c => c.type !== 'holiday');
       if (!showT) filtered = filtered.filter(c => c.type !== 'term');
       if (!showL) filtered = filtered.filter(c => c.type !== 'lunar' && c.type !== 'floating');
-      
+
       return { type: 'widget', padding: CONFIG.padding, children: renderGrid(filtered, size.cols, size.font) };
     };
 
@@ -301,4 +351,3 @@ export default async function(ctx) {
     ]}] };
   }
 }
-
