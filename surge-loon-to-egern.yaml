@@ -1,6 +1,6 @@
 name: 插件模块跳转
 description:
- 色鸡 可莉插件中心跳转到 Egern
+ 色鸡 可莉插件中心跳转到 Egern  如不生效 清理浏览器缓存即可
 icon: https://iili.io/BDPVJ1I.png
 homepage: https://hub.kelee.one
 body_rewrites:
