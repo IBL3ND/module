@@ -92,11 +92,13 @@ export default async function (ctx) {
 
   if (!matches.length) return renderError('赛程同步中...');
 
+  // 用北京时间字符串做日期比较，避免时区偏差
   const bjStr = d => d.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '');
   const todayBJ    = bjStr(now);
   const yesterdayBJ = bjStr(new Date(now.getTime() - 86400000));
   const tomorrowBJ  = bjStr(new Date(now.getTime() + 86400000));
 
+  // 用北京时间计算昨明天的月日显示
   const fmtDay = s => `${parseInt(s.slice(4,6))}-${parseInt(s.slice(6,8))}`;
 
   const sections = [
@@ -239,6 +241,12 @@ function renderLarge(sections, now) {
   const cardBg = { light: '#F2F2F7', dark: '#3A3A3C' };
   const timeStr = `${now.getMonth()+1}-${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
+  const limits = [
+    Math.min(sections[0].list.length, 4),
+    Math.min(sections[1].list.length, 4),
+    Math.min(sections[2].list.length, 4),
+  ];
+
   const children = [
     {
       type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
@@ -251,7 +259,10 @@ function renderLarge(sections, now) {
     }
   ];
 
-  sections.forEach(sec => {
+  sections.forEach((sec, idx) => {
+    const limit = limits[idx];
+    const list = sec.list.slice(0, limit);
+
     children.push({
       type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
       children: [
@@ -266,11 +277,21 @@ function renderLarge(sections, now) {
         children: [{ type: 'text', text: '暂无赛事', font: { size: 11 }, textColor: { light: '#8E8E93', dark: '#636366' } }]
       });
     } else {
-      sec.list.forEach(m => children.push(matchCard(m, cardBg)));
+      list.forEach(m => children.push(matchCard(m, cardBg)));
+      if (sec.list.length > limit) {
+        children.push({
+          type: 'stack', direction: 'row', padding: [2, 10, 2, 10],
+          children: [
+            { type: 'spacer' },
+            { type: 'text', text: `另有 ${sec.list.length - limit} 场未显示`, font: { size: 10 }, textColor: { light: '#8E8E93', dark: '#636366' } },
+            { type: 'spacer' }
+          ]
+        });
+      }
     }
   });
 
-  return { type: 'widget', backgroundColor: bg, padding: 14, gap: 8, children };
+  return { type: 'widget', backgroundColor: bg, padding: 14, gap: 6, children };
 }
 
 function matchCard(m, cardBg) {
