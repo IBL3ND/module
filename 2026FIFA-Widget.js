@@ -91,12 +91,10 @@ export default async function (ctx) {
   }
 
   if (!matches.length) return renderError('赛程同步中...');
-
   const bjStr = d => d.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '');
   const todayBJ    = bjStr(now);
   const yesterdayBJ = bjStr(new Date(now.getTime() - 86400000));
   const tomorrowBJ  = bjStr(new Date(now.getTime() + 86400000));
-
   const fmtDay = s => `${parseInt(s.slice(4,6))}-${parseInt(s.slice(6,8))}`;
 
   const sections = [
@@ -240,9 +238,9 @@ function renderLarge(sections, now) {
   const timeStr = `${now.getMonth()+1}-${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
   const limits = [
-    Math.min(sections[0].list.length, 4),
-    Math.min(sections[1].list.length, 4),
-    Math.min(sections[2].list.length, 4),
+    sections[0].list.length,
+    sections[1].list.length,
+    sections[2].list.length,
   ];
 
   const children = [
@@ -276,16 +274,7 @@ function renderLarge(sections, now) {
       });
     } else {
       list.forEach(m => children.push(matchCard(m, cardBg)));
-      if (sec.list.length > limit) {
-        children.push({
-          type: 'stack', direction: 'row', padding: [2, 10, 2, 10],
-          children: [
-            { type: 'spacer' },
-            { type: 'text', text: `另有 ${sec.list.length - limit} 场未显示`, font: { size: 10 }, textColor: { light: '#8E8E93', dark: '#636366' } },
-            { type: 'spacer' }
-          ]
-        });
-      }
+
     }
   });
 
@@ -362,7 +351,7 @@ function capsule(text, textColor, bgColor) {
 }
 
 function selectMediumMatches(list) {
-  return list.slice(0, 4);
+  return list;
 }
 
 function renderError(msg) {
