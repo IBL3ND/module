@@ -122,7 +122,6 @@ export default async function (ctx) {
     const state = stateComp ? 'post' : stateRaw;
     const detail = match.status?.type?.shortDetail || '';
 
-    // 点球数据
     const homePen = home.shootoutScore ?? home.penalties ?? null;
     const awayPen = away.shootoutScore ?? away.penalties ?? null;
 
