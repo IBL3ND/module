@@ -1,5 +1,5 @@
 /**
- * 2026 世界杯 Egern 小组件
+ * 2026 世界杯 - Egern 小组件
  * 数据来源：ESPN
  */
 
@@ -122,12 +122,18 @@ export default async function (ctx) {
     const state = stateComp ? 'post' : stateRaw;
     const detail = match.status?.type?.shortDetail || '';
 
+    // 点球数据
+    const homePen = home.shootoutScore ?? home.penalties ?? null;
+    const awayPen = away.shootoutScore ?? away.penalties ?? null;
+
     sec.list.push({
       time: utc.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Shanghai' }),
       home: getTeamInfo(home.team?.name || home.team?.shortDisplayName),
       away: getTeamInfo(away.team?.name || away.team?.shortDisplayName),
       homeScore: home.score ?? '-',
       awayScore: away.score ?? '-',
+      homePen: homePen !== null ? String(homePen) : null,
+      awayPen: awayPen !== null ? String(awayPen) : null,
       state,
       detail
     });
@@ -331,6 +337,7 @@ function matchCard(m, cardBg) {
         type: 'stack', direction: 'row', alignItems: 'center', flex: 1, gap: 3,
         children: [
           { type: 'spacer' },
+          ...(m.homePen !== null ? [{ type: 'text', text: '(' + m.homePen + ')', font: { size: 11 }, textColor: { light: '#FF9500', dark: '#FFB340' } }] : []),
           { type: 'text', text: m.home.name, font: { size: 12, weight: 'semibold' }, textColor: { light: '#1C1C1E', dark: '#F2F2F7' }, maxLines: 1, textAlign: 'right' },
           { type: 'text', text: m.home.flag, font: { size: 15 } }
         ]
@@ -341,6 +348,7 @@ function matchCard(m, cardBg) {
         children: [
           { type: 'text', text: m.away.flag, font: { size: 15 } },
           { type: 'text', text: m.away.name, font: { size: 12, weight: 'semibold' }, textColor: { light: '#1C1C1E', dark: '#F2F2F7' }, maxLines: 1 },
+          ...(m.awayPen !== null ? [{ type: 'text', text: '(' + m.awayPen + ')', font: { size: 11 }, textColor: { light: '#FF9500', dark: '#FFB340' } }] : []),
           { type: 'spacer' }
         ]
       }
