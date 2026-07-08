@@ -1,7 +1,7 @@
 name: GitHub 429 HK US
 description: 使用随机 UA 绕过 GitHub 限流
 author: iBL3ND
-
+icon: https://iili.io/ClzzBat.png
 dns: {}
 
 scriptings:
