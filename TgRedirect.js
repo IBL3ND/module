@@ -8,6 +8,7 @@
 
 const SCHEME = {
   Telegram: "tg",
+  Nagram: "tg",
   Swiftgram: "sg",
   Turrit: "turrit",
   iMe: "ime",
@@ -48,10 +49,14 @@ function deeplink(s, path, qs) {
 
 export default async function (ctx) {
   const url = ctx.request.url;
-  const m = url.match(/^https?:\/\/t\.me\/(.+)$/i);
+  const m = url.match(/^https?:\/\/(?:t\.me|telegram\.me)\/(.+)$/i);
   if (!m) return;
 
   const client = (ctx.env?.CLIENT || "Telegram").trim();
+
+  // 选官方 Telegram 直接放行，不重定向
+  if (client === "Telegram") return;
+
   const scheme = SCHEME[client] || "tg";
 
   let tail = m[1];
