@@ -29,131 +29,131 @@ const FLOATING_HOLIDAYS = {
   'father': { name: '父亲节', calc: (y) => getNthWeekday(y, 6, 0, 3) },
 };
 
-const SOLAR_TERM_NAMES = [
-  '小寒','大寒','立春','雨水','惊蛰','春分',
-  '清明','谷雨','立夏','小满','芒种','夏至',
-  '小暑','大暑','立秋','处暑','白露','秋分',
-  '寒露','霜降','立冬','小雪','大雪','冬至'
+/* ===================== 农历核心算法(修正版) ===================== */
+const LUNAR_INFO = [
+  0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
+  0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255, 0x0b540, 0x0d6a0, 0x0ada2, 0x095b0, 0x14977,
+  0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40, 0x1ab54, 0x02b60, 0x09570, 0x052f2, 0x04970,
+  0x06566, 0x0d4a0, 0x0ea50, 0x06e95, 0x05ad0, 0x02b60, 0x186e3, 0x092e0, 0x1c8d7, 0x0c950,
+  0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4, 0x025d0, 0x092d0, 0x0d2b2, 0x0a950, 0x0b557,
+  0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5b0, 0x14573, 0x052b0, 0x0a9a8, 0x0e950, 0x06aa0,
+  0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570, 0x05260, 0x0f263, 0x0d950, 0x05b57, 0x056a0,
+  0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4, 0x0d250, 0x0d558, 0x0b540, 0x0b6a0, 0x195a6,
+  0x095b0, 0x049b0, 0x0a974, 0x0a4b0, 0x0b27a, 0x06a50, 0x06d40, 0x0af46, 0x0ab60, 0x09570,
+  0x04af5, 0x04970, 0x064b0, 0x074a3, 0x0ea50, 0x06b58, 0x055c0, 0x0ab60, 0x096d5, 0x092e0,
+  0x0c960, 0x0d954, 0x0d4a0, 0x0da50, 0x07552, 0x056a0, 0x0abb7, 0x025d0, 0x092d0, 0x0cab5,
+  0x0a950, 0x0b4a0, 0x0baa4, 0x0ad50, 0x055d9, 0x04ba0, 0x0a5b0, 0x15176, 0x052b0, 0x0a930,
+  0x07954, 0x06aa0, 0x0ad50, 0x05b52, 0x04b60, 0x0a6e6, 0x0a4e0, 0x0d260, 0x0ea65, 0x0d530,
+  0x05aa0, 0x076a3, 0x096d0, 0x04afb, 0x04ad0, 0x0a4d0, 0x1d0b6, 0x0d250, 0x0d520, 0x0dd45,
+  0x0b5a0, 0x056d0, 0x055b2, 0x049b0, 0x0a577, 0x0a4b0, 0x0aa50, 0x1b255, 0x06d20, 0x0ada0,
+  0x14aa6, 0x02b60, 0x09570, 0x04976, 0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40, 0x1ab54,
+  0x02b60, 0x09570, 0x052f2, 0x04970, 0x06566, 0x0d4a0, 0x0ea50, 0x16ea5, 0x05ad0, 0x02b60,
+  0x186e3, 0x092e0, 0x1c8d7, 0x0c950, 0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4, 0x025d0,
+  0x092d0, 0x0d2b2, 0x0a950, 0x0b557, 0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5d0, 0x145ad,
+  0x052b0, 0x0a9a8, 0x0e950, 0x06aa0, 0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570, 0x05260,
+  0x0f263, 0x0d950, 0x05b57, 0x056a0, 0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4, 0x0d250
 ];
 
-const SOLAR_TERM_MONTHS = [1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12];
-
-const C_2000 = [
-  5.4055, 20.12,   3.87,  18.73,  3.695, 18.367,
-  4.241,  20.888,  5.5133,21.208,  6.285, 21.732,
-  7.214,  23.085,  7.9013,23.839,  8.784, 23.969,
-  9.767,  24.475, 10.84,  26.613, 11.303, 27.185
+const GAN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+const ZHI = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+const ANIMALS = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
+const LUNAR_MONTH_NAMES = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '腊'];
+const LUNAR_DAY_NAMES = [
+  '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+  '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+  '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'
 ];
 
-const C_1900 = [
-  6.3811, 20.84,   4.6295,19.51,   4.1867,18.944,
-  5.4159, 20.888,  6.3811,21.923,  7.214, 22.555,
-  7.9013, 23.085,  8.784, 23.486,  9.767, 24.124,
-  10.423, 24.646, 11.303, 27.03,  11.303, 27.185
-];
+const LUNAR_MIN_YEAR = 1900;
+const LUNAR_MAX_YEAR = 2100;
 
-const TERM_CORRECTIONS = {
-  0:  { 2019: -1 },
-  2:  { 2084: +1 },
-  4:  { 1911: +1 },
-  6:  { 1925: +1, 2032: -1 },
-  8:  { 1911: +1 },
-  9:  { 2008: +1 },
-  10: { 2016: +1 },
-  18: { 2089: +1 },
-  22: { 1954: +1 },
-};
-
-function getSolarTermDate(year, termIndex) {
-  const C = year >= 2000 ? C_2000 : C_1900;
-  const Y = year % 100;
-  let date = Math.floor(Y * 0.2422 + C[termIndex]) - Math.floor((Y - 1) / 4);
-  if (TERM_CORRECTIONS[termIndex]?.[year]) {
-    date += TERM_CORRECTIONS[termIndex][year];
-  }
-  return date;
+function lunarYearDays(y) {
+  let sum = 348;
+  for (let i = 0x8000; i > 0x8; i >>= 1) sum += (LUNAR_INFO[y - LUNAR_MIN_YEAR] & i) ? 1 : 0;
+  return sum + lunarLeapDays(y);
+}
+function lunarLeapMonth(y) { return LUNAR_INFO[y - LUNAR_MIN_YEAR] & 0xf; }
+function lunarLeapDays(y) {
+  return lunarLeapMonth(y) ? ((LUNAR_INFO[y - LUNAR_MIN_YEAR] & 0x10000) ? 30 : 29) : 0;
+}
+function lunarMonthDays(y, m) {
+  return (LUNAR_INFO[y - LUNAR_MIN_YEAR] & (0x10000 >> m)) ? 30 : 29;
 }
 
-const Lunar = (function() {
-  const lunarInfo = [
-    0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
-    0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255, 0x0b540, 0x0d6a0, 0x0ada2, 0x095b0, 0x14977,
-    0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40, 0x1ab54, 0x02b60, 0x09570, 0x052f2, 0x04970,
-    0x06566, 0x0d4a0, 0x0ea50, 0x06e95, 0x05ad0, 0x02b60, 0x186e3, 0x092e0, 0x1c8d7, 0x0c950,
-    0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4, 0x025d0, 0x092d0, 0x0d2b2, 0x0a950, 0x0b557,
-    0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5b0, 0x14573, 0x052b0, 0x0a9a8, 0x0e950, 0x06aa0,
-    0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570, 0x05260, 0x0f263, 0x0d950, 0x05b57, 0x056a0,
-    0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4, 0x0d250, 0x0d558, 0x0b540, 0x0b6a0, 0x195a6,
-    0x095b0, 0x049b0, 0x0a974, 0x0a4b0, 0x0b27a, 0x06a50, 0x06d40, 0x0af46, 0x0ab60, 0x09570,
-    0x04af5, 0x04970, 0x064b0, 0x074a3, 0x0ea50, 0x06b58, 0x055c0, 0x0ab60, 0x096d5, 0x092e0,
-    0x0c960, 0x0d954, 0x0d4a0, 0x0da50, 0x07552, 0x056a0, 0x0abb7, 0x025d0, 0x092d0, 0x0cab5,
-    0x0a950, 0x0b4a0, 0x0baa4, 0x0ad50, 0x055d9, 0x04ba0, 0x0a5b0, 0x15176, 0x052b0, 0x0a930,
-    0x07954, 0x06aa0, 0x0ad50, 0x05b52, 0x04b60, 0x0a6e6, 0x0a4e0, 0x0d260, 0x0ea65, 0x0d530,
-    0x05aa0, 0x076a3, 0x096d0, 0x04afb, 0x04ad0, 0x0a4d0, 0x1d0b6, 0x0d250, 0x0d520, 0x0dd45,
-    0x0b5a0, 0x056d0, 0x055b2, 0x049b0, 0x0a577, 0x0a4b0, 0x0aa50, 0x1b255, 0x06d20, 0x0ada0,
-    0x14aa6, 0x02b60, 0x09570, 0x04976, 0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40, 0x1ab54,
-    0x02b60, 0x09570, 0x052f2, 0x04970, 0x06566, 0x0d4a0, 0x0ea50, 0x16ea5, 0x05ad0, 0x02b60,
-    0x186e3, 0x092e0, 0x1c8d7, 0x0c950, 0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4, 0x025d0,
-    0x092d0, 0x0d2b2, 0x0a950, 0x0b557, 0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5d0, 0x145ad,
-    0x052b0, 0x0a9a8, 0x0e950, 0x06aa0, 0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570, 0x05260,
-    0x0f263, 0x0d950, 0x05b57, 0x056a0, 0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4, 0x0d250
-  ];
-  const Gan = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
-  const Zhi = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-  const Animals = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
-  const lunarMonths = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '腊'];
+function solarToLunar(yy, mm, dd) {
+  const baseDate = new Date(Date.UTC(1900, 0, 31));
+  const objDate = new Date(Date.UTC(yy, mm - 1, dd));
+  let offset = Math.round((objDate - baseDate) / 86400000);
 
-  function lYearDays(y) {
-    let i, sum = 348;
-    for (i = 0x8000; i > 0x8; i >>= 1) sum += (lunarInfo[y - 1900] & i) ? 1 : 0;
-    return sum + leapDays(y);
+  let i, temp = 0;
+  for (i = LUNAR_MIN_YEAR; i < LUNAR_MAX_YEAR && offset > 0; i++) {
+    temp = lunarYearDays(i);
+    offset -= temp;
   }
-  function leapDays(y) {
-    if (leapMonth(y)) return (lunarInfo[y - 1900] & 0x10000) ? 30 : 29;
-    return 0;
-  }
-  function leapMonth(y) { return lunarInfo[y - 1900] & 0xf; }
-  function monthDays(y, m) { return (lunarInfo[y - 1900] & (0x10000 >> m)) ? 30 : 29; }
+  if (offset < 0) { offset += temp; i--; }
+  const year = i;
 
-  function solarToLunar(yy, mm, dd) {
-    let baseDate = new Date(1900, 0, 31);
-    let objDate = new Date(yy, mm - 1, dd);
-    let offset = Math.floor((objDate - baseDate) / 86400000);
-    let i, year = 1900, temp = 0;
-    for (i = 1900; i < 2100 && offset > 0; i++) {
-      temp = lYearDays(i); offset -= temp; year = i;
+  const leap = lunarLeapMonth(year);
+  let isLeap = false;
+  for (i = 1; i < 13 && offset > 0; i++) {
+    if (leap > 0 && i === leap + 1 && !isLeap) {
+      --i;
+      isLeap = true;
+      temp = lunarLeapDays(year);
+    } else {
+      temp = lunarMonthDays(year, i);
     }
-    if (offset < 0) { offset += temp; year--; }
-    let leap = leapMonth(year), isLeap = false;
-    for (i = 1; i < 13 && offset > 0; i++) {
-      if (leap > 0 && i === (leap + 1) && !isLeap) { --i; isLeap = true; temp = leapDays(year); }
-      else { temp = monthDays(year, i); }
-      if (isLeap && i === (leap + 1)) isLeap = false;
-      offset -= temp;
-      if (offset < 0) { offset += temp; i++; break; }
-    }
-    const actualMonth = i - 1;
-    let ganIndex = (year - 4) % 10, zhiIndex = (year - 4) % 12;
-    return {
-      year, month: actualMonth, day: offset + 1, isLeap,
-      ganZhi: Gan[ganIndex] + Zhi[zhiIndex],
-      animal: Animals[zhiIndex],
-      monthStr: lunarMonths[actualMonth - 1],
-      dayStr: getDayString(offset + 1)
-    };
+    if (isLeap && i === leap + 1) isLeap = false;
+    offset -= temp;
   }
-  function getDayString(day) {
-    const strs = ['初一','初二','初三','初四','初五','初六','初七','初八','初九','初十',
-      '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十',
-      '廿一','廿二','廿三','廿四','廿五','廿六','廿七','廿八','廿九','三十'];
-    return strs[day - 1] || '';
+  if (offset === 0 && leap > 0 && i === leap + 1) {
+    if (isLeap) { isLeap = false; }
+    else { isLeap = true; --i; }
   }
+  if (offset < 0) { offset += temp; i--; }
+
+  const month = i;
+  const day = offset + 1;
+  const ganIndex = (year - 4) % 10;
+  const zhiIndex = (year - 4) % 12;
+
   return {
-    getLunarDate: (d) => solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate()),
-    solarToLunar
+    year, month, day, isLeap,
+    ganZhi: GAN[(ganIndex + 10) % 10] + ZHI[(zhiIndex + 12) % 12],
+    animal: ANIMALS[(zhiIndex + 12) % 12],
+    monthStr: (isLeap ? '闰' : '') + LUNAR_MONTH_NAMES[month - 1],
+    dayStr: LUNAR_DAY_NAMES[day - 1] || ''
   };
-})();
+}
 
+const Lunar = {
+  getLunarDate: (d) => solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate()),
+  solarToLunar
+};
+
+/* ===================== 24节气(修正版) ===================== */
+const SOLAR_TERM_NAMES = [
+  '小寒', '大寒', '立春', '雨水', '惊蛰', '春分',
+  '清明', '谷雨', '立夏', '小满', '芒种', '夏至',
+  '小暑', '大暑', '立秋', '处暑', '白露', '秋分',
+  '寒露', '霜降', '立冬', '小雪', '大雪', '冬至'
+];
+
+const SOLAR_TERM_OFFSETS_MIN = [
+  0, 21208, 42467, 63836, 85337, 107014, 128867, 150921, 173149, 195551, 218072, 240693,
+  263343, 285989, 308563, 331033, 353350, 375494, 397447, 419210, 440795, 462224, 483532, 504758
+];
+
+const TROPICAL_YEAR_MS = 365.24219878 * 86400000;
+const SOLAR_TERM_BASE = Date.UTC(1900, 0, 6, 2, 5, 0);
+
+function getSolarTermDate(year, termIndex) {
+  const ms = SOLAR_TERM_BASE + TROPICAL_YEAR_MS * (year - 1900) + SOLAR_TERM_OFFSETS_MIN[termIndex] * 60000;
+  const d = new Date(ms);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+}
+
+/* ===================== 通用日期工具 ===================== */
 function getNthWeekday(year, month, weekday, n) {
   const first = new Date(year, month - 1, 1);
   const diff = (weekday - first.getDay() + 7) % 7;
@@ -166,11 +166,12 @@ function daysDiff(from, to) {
   return Math.floor((t - f) / 86400000);
 }
 
+// 在给定公历年份 ~ 次年3月10日范围内，找到对应"农历 targetLunarMonth月targetLunarDay日"(非闰月)的公历日期
 function findSolarDateByLunar(targetLunarMonth, targetLunarDay, year) {
   const start = new Date(year, 0, 1);
   const end = new Date(year + 1, 2, 10);
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const lunar = Lunar.solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    const lunar = solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
     if (lunar.month === targetLunarMonth && lunar.day === targetLunarDay && !lunar.isLeap) {
       return new Date(d.getFullYear(), d.getMonth(), d.getDate());
     }
@@ -178,8 +179,9 @@ function findSolarDateByLunar(targetLunarMonth, targetLunarDay, year) {
   return null;
 }
 
-function getCountdowns() {
-  const now = new Date();
+/* ===================== 汇总所有倒计时 ===================== */
+function getCountdowns(customToday) {
+  const now = customToday || new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const year = today.getFullYear();
   const results = [];
@@ -198,17 +200,15 @@ function getCountdowns() {
   }
 
   for (let i = 0; i < 24; i++) {
-    const m = SOLAR_TERM_MONTHS[i];
-    const d = getSolarTermDate(year, i);
-    let t = new Date(year, m - 1, d);
+    const term = getSolarTermDate(year, i);
+    let t = new Date(term.year, term.month - 1, term.day);
     if (t < today) {
-      const d2 = getSolarTermDate(year + 1, i);
-      t = new Date(year + 1, m - 1, d2);
+      const term2 = getSolarTermDate(year + 1, i);
+      t = new Date(term2.year, term2.month - 1, term2.day);
     }
     results.push({ name: SOLAR_TERM_NAMES[i], days: daysDiff(today, t), type: 'term' });
   }
 
-  // 农历节日
   try {
     for (const [k, name] of Object.entries(LUNAR_HOLIDAYS)) {
       const [lm, ld] = k.split('-').map(Number);
@@ -233,6 +233,7 @@ function getCountdowns() {
   return results.filter(r => !seen.has(r.name) && seen.add(r.name));
 }
 
+/* ===================== 组件渲染 ===================== */
 export default async function(ctx) {
   try {
     const env = ctx.env || {};
