@@ -2,13 +2,13 @@ name: YouTube 增强
 description: 去除油管 广告 支持后台播放 画中画
 compat_arguments:
   blockUpload: 'true'
-  blockShorts: 'false'
+  blockShorts: 'true'
   autoHd: 'true'
   blockGames: 'true'
-  blockVerticalLive: 'false'
+  blockVerticalLive: 'true'
   jumpAhead: 'true'
   blockStore: 'true'
-  nativeDownload: 'false'
+  nativeDownload: 'true'
 compat_arguments_schema:
   blockUpload:
     name: 隐藏「上传」入口
@@ -20,7 +20,7 @@ compat_arguments_schema:
   blockShorts:
     name: 隐藏「Shorts」入口
     description: 隐藏导航栏中的「Shorts」入口
-    default_value: 'false'
+    default_value: 'true'
     options:
     - 'true'
     - 'false'
@@ -41,7 +41,7 @@ compat_arguments_schema:
   blockVerticalLive:
     name: 隐藏竖屏直播推荐
     description: 隐藏各界面中的竖屏直播推荐
-    default_value: 'false'
+    default_value: 'true'
     options:
     - 'true'
     - 'false'
@@ -62,7 +62,7 @@ compat_arguments_schema:
   nativeDownload:
     name: 原生下载（实验性）
     description: 实验性原生下载功能；未设置画质时使用 720p，服务器限制可能仍然生效
-    default_value: 'false'
+    default_value: 'true'
     options:
     - 'true'
     - 'false'
