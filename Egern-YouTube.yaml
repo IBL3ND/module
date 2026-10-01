@@ -1,0 +1,152 @@
+name: YouTube 增强
+description: 去除油管 广告 支持后台播放 画中画
+compat_arguments:
+  blockUpload: 'true'
+  blockShorts: 'false'
+  autoHd: 'true'
+  blockGames: 'true'
+  blockVerticalLive: 'false'
+  jumpAhead: 'true'
+  blockStore: 'true'
+  nativeDownload: 'false'
+compat_arguments_schema:
+  blockUpload:
+    name: 隐藏「上传」入口
+    description: 隐藏导航栏中的「上传」入口
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  blockShorts:
+    name: 隐藏「Shorts」入口
+    description: 隐藏导航栏中的「Shorts」入口
+    default_value: 'false'
+    options:
+    - 'true'
+    - 'false'
+  autoHd:
+    name: 自动最高画质
+    description: 优先使用最高可用画质，并阻止自动降低画质
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  blockGames:
+    name: 隐藏小游戏推荐
+    description: 隐藏 YouTube Playables（小游戏）推荐
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  blockVerticalLive:
+    name: 隐藏竖屏直播推荐
+    description: 隐藏各界面中的竖屏直播推荐
+    default_value: 'false'
+    options:
+    - 'true'
+    - 'false'
+  jumpAhead:
+    name: 启用 Jump Ahead
+    description: 启用原生「Jump Ahead」跳转按钮，并去除其推广提示
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  blockStore:
+    name: 隐藏商店和购物板块
+    description: 隐藏视频下方和频道主页中的创作者商店、购物板块
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  nativeDownload:
+    name: 原生下载（实验性）
+    description: 实验性原生下载功能；未设置画质时使用 720p，服务器限制可能仍然生效
+    default_value: 'false'
+    options:
+    - 'true'
+    - 'false'
+author: gholts
+homepage: https://github.com/gholts/surge/tree/main/modules
+icon: https://iili.io/KQ67Yxa.png
+dns: {}
+rewrites:
+- match: ^https:\/\/www\.youtube\.com\/(pagead|pcs)\/
+  actions:
+  - respond:
+      status: 404
+- match: ^https:\/\/s\.youtube\.com\/api\/stats\/ads
+  actions:
+  - respond:
+      status: 404
+scriptings:
+- http_request:
+    name: youtube.enhance.ad-break
+    match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/player\/ad_break(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/youtube-request.js
+- http_response:
+    name: youtube.enhance.download
+    match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/offline\/get_download_action(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/youtube-response.js
+    env:
+      _compat.$argument: '{"nativeDownload":{{{nativeDownload}}}}'
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_request:
+    name: youtube.enhance.download-player
+    match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/player(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/youtube-request.js
+    env:
+      _compat.$argument: '{"nativeDownload":{{{nativeDownload}}}}'
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_response:
+    name: youtube.enhance.response
+    match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/(?:navigation\/resolve_url|browse|next|player|search|reel\/reel_watch_sequence|guide|account\/get_setting|get_watch|log_event|config)(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/youtube-response.js
+    env:
+      _compat.$argument: '{"blockUpload":{{{blockUpload}}},"blockShorts":{{{blockShorts}}},"blockGames":{{{blockGames}}},"blockVerticalLive":{{{blockVerticalLive}}},"jumpAhead":{{{jumpAhead}}},"autoHd":{{{autoHd}}},"blockStore":{{{blockStore}}}}'
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_response:
+    name: youtube.enhance.ump
+    match: ^https?:\/\/[\w-]+\.googlevideo\.com\/initplayback(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/youtube-response.js
+    env:
+      _compat.$argument: '{"blockGames":{{{blockGames}}},"blockVerticalLive":{{{blockVerticalLive}}},"jumpAhead":{{{jumpAhead}}},"autoHd":{{{autoHd}}},"blockStore":{{{blockStore}}}}'
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_request:
+    name: youtube.enhance.init
+    match: ^https?:\/\/[\w-]+\.googlevideo\.com\/initplayback(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/youtube-request.js
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_request:
+    name: youtube.enhance.auto-hd
+    match: ^https?:\/\/[\w-]+\.googlevideo\.com\/videoplayback
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/youtube-request.js
+    env:
+      _compat.$argument: '{"autoHd":{{{autoHd}}}}'
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_request:
+    name: youtube.enhance.log-event
+    match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/log_event
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/youtube-request.js
+    max_size: 0
+    body_required: true
+    binary_body: true
+mitm:
+  hostnames:
+    includes:
+    - '*.googlevideo.com'
+    - youtubei.googleapis.com
+    - www.youtube.com
+    - s.youtube.com
