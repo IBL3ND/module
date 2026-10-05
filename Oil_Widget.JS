@@ -121,16 +121,11 @@ export default async function (ctx) {
     }
     
     const html = await resp.text();
-
-    // 🔹 从网页标题解析地区名（清理多余词汇）
     const titleMatch = html.match(/<title>([^_]+)_/);
     if (titleMatch && titleMatch[1]) {
       let rawName = titleMatch[1].trim();
-      // 移除所有与"油价"相关的词
       regionName = rawName.replace(/(油价|实时|今日|最新|查询|价格)/g, '').trim();
     }
-
-    // 解析油价
     const regPrice = /<dl>[\s\S]+?<dt>(.*油)<\/dt>[\s\S]+?<dd>(.*)\(元\)<\/dd>/gm;
     const priceList = [];
     let m = null;
@@ -159,8 +154,6 @@ export default async function (ctx) {
           }
         }
       });
-
-      // 🔹 解析调价趋势（完整信息）
       if (SHOW_TREND) {
         const regTrend = /<div class="tishi">[\s\S]*?<span>([^<]+)<\/span>[\s\S]*?<br\/>([\s\S]+?)<br\/>/;
         const trendMatch = html.match(regTrend);
@@ -168,28 +161,19 @@ export default async function (ctx) {
         if (trendMatch && trendMatch.length >= 3) {
           const datePart = trendMatch[1].split('价')[1]?.slice(0, -2) || "";
           const valuePart = trendMatch[2];
-          
-          // 判断涨跌方向
           const trend = (valuePart.includes('下调') || valuePart.includes('下跌')) ? '↓' : '↑';
-          
-          // 🔹 提取完整的调价金额（优化正则）
           let amount = "";
-          
-          // 🔸 尝试多种格式匹配
-          // 格式1：提取所有数字+单位 "0.55元/升" 和 "0.67元/升"
           const allPrices = valuePart.match(/([\d\.]+)\s*元\/升/g);
           if (allPrices && allPrices.length >= 2) {
             const nums = allPrices.map(p => p.match(/([\d\.]+)/)[1]);
             amount = `${nums[0]}-${nums[1]}`;
           }
-          // 格式2：每吨调整 "200元" 和 "195元"
           else {
             const allTons = valuePart.match(/([\d]+)\s*元(?:\/吨)?/g);
             if (allTons && allTons.length >= 2) {
               const nums = allTons.map(p => p.match(/([\d]+)/)[1]);
               amount = `${nums[0]}-${nums[1]}元/吨`;
             }
-            // 格式3：单个数值
             else {
               const singleMatch = valuePart.match(/([\d\.]+)\s*元\/升/);
               if (singleMatch) {
@@ -198,7 +182,6 @@ export default async function (ctx) {
             }
           }
           
-          // 🔹 完整显示调价信息
           trendInfo = `${datePart}调整 ${trend} ${amount}`.trim();
         }
       }
@@ -279,6 +262,136 @@ export default async function (ctx) {
       ]
     }
   }
+  if (ctx.widgetFamily === "systemSmall") {
+    const smallCard = (row) => ({
+      type:"stack",
+      direction:"column",
+      alignItems:"center",
+      justifyContent:"center",
+      flex:1,
+      gap:1,
+      padding:[3,2,3,2],
+      backgroundColor: COLORS.card,
+      borderRadius:10,
+      borderWidth:0.5,
+      borderColor: COLORS.cardBorder,
+      children:[
+        {
+          type:"stack",
+          direction:"row",
+          alignItems:"center",
+          justifyContent:"center",
+          width:44,
+          height:22,
+          backgroundColor: {
+            light: row.color.light + "28",
+            dark: row.color.dark + "28"
+          },
+          borderRadius:6,
+          borderWidth:0.5,
+          borderColor: {
+            light: row.color.light + "55",
+            dark: row.color.dark + "55"
+          },
+          children:[{
+            type:"text",
+            text:row.label,
+            font:{size:"caption2",weight:"bold"},
+            textColor: row.color,
+            textAlign:"center"
+          }]
+        },
+        {
+          type:"text",
+          text:row.price.toFixed(2),
+          font:{size:"callout",weight:"semibold"},
+          textColor: COLORS.primary,
+          textAlign:"center",
+          lineLimit:1,
+          minScale:0.7
+        }
+      ]
+    });
+    const pairs = [];
+    for (let i = 0; i < rows.length; i += 2) pairs.push(rows.slice(i, i + 2));
+    let dateText = "";
+    const dm = trendInfo.match(/(\d{1,2})月(\d{1,2})日/);
+    if (SHOW_TREND && dm) {
+      dateText = `${dm[1].padStart(2,"0")}-${dm[2].padStart(2,"0")}`;
+    }
+    const infoText = fetchError ? errorMsg : "";
+    const infoColor = COLORS.p98;
+
+    return {
+      type:"widget",
+      padding:[8,8,8,8],
+      gap:4,
+      backgroundColor: backgroundColor,
+      refreshAfter:refreshTime,
+      children:[
+        {
+          type:"stack",
+          direction:"row",
+          alignItems:"center",
+          gap:4,
+          children:[
+            {type:"image",src:"sf-symbol:fuelpump.fill",width:12,height:12,color:COLORS.p92},
+            {type:"text",text:regionName || "油价",font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary,lineLimit:1,minScale:0.7},
+            {type:"spacer"},
+            ...(dateText ? [{
+              type:"text",
+              text:dateText,
+              font:{size:"caption2"},
+              textColor:COLORS.secondary,
+              lineLimit:1
+            }] : [])
+          ]
+        },
+        ...(infoText ? [{
+          type:"text",
+          text:infoText,
+          font:{size:"caption2"},
+          textColor:infoColor,
+          lineLimit:1,
+          minScale:0.6
+        }] : []),
+        rows.length > 0 ? {
+          type:"stack",
+          direction:"column",
+          flex:1,
+          gap:4,
+          children: pairs.map(pair => ({
+            type:"stack",
+            direction:"row",
+            flex:1,
+            gap:4,
+            children: pair.map(smallCard)
+          }))
+        } : {
+          type:"stack",
+          direction:"column",
+          alignItems:"center",
+          justifyContent:"center",
+          flex:1,
+          gap:4,
+          children:[
+            {type:"image",src:"sf-symbol:exclamationmark.triangle.fill",width:20,height:20,color:COLORS.p98},
+            {type:"text",text:fetchError?"数据获取失败":"暂无数据",font:{size:"caption2"},textColor:COLORS.secondary}
+          ]
+        },
+        {
+          type:"stack",
+          direction:"row",
+          alignItems:"center",
+          children:[
+            {type:"text",text:`${timeStr} 更新`,font:{size:"caption2"},textColor:COLORS.tertiary},
+            {type:"spacer"},
+            {type:"text",text:"元/升",font:{size:"caption2"},textColor:COLORS.tertiary}
+          ]
+        }
+      ]
+    };
+  }
 
   return {
     type:"widget",
@@ -297,7 +410,6 @@ export default async function (ctx) {
           {type:"image",src:"sf-symbol:fuelpump.fill",width:13,height:13,color:COLORS.p92},
           {type:"text",text:titleText,font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary},
           {type:"spacer"},
-          // 🔹 右上角调价信息
           ...(SHOW_TREND && trendInfo ? [{
             type:"text",
             text: trendInfo,
@@ -307,7 +419,6 @@ export default async function (ctx) {
             lineLimit:1,
             minScale: 0.8
           }] : []),
-          // 错误信息
           ...(fetchError ? [{
             type:"text",text:errorMsg,font:{size:"caption2"},textColor:COLORS.p98
           }] : [])
