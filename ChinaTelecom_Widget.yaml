@@ -9,8 +9,9 @@
 # 推荐你把 CT_Widget.JS 在脚本那边添加
 
 name: "中国电信"
-description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；在 Safari 打开 https://e.dlife.cn 短信登录一次，之后全自动更新"
+description: "显示电信剩余话费 流量 语音"
 author: "小秘书"
+icon: https://iili.io/nEFTBUv.md.png
 mitm:
   hostnames:
     includes:
