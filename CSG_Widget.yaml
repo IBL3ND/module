@@ -1,0 +1,29 @@
+name: 南方电网
+description: 南方电网用电小组件
+author: iBL3ND
+icon: https://iili.io/nEG5oxt.png
+compat_arguments:
+  csgCapture: 'true'
+compat_arguments_schema:
+  csgCapture:
+    name: 南方电网 Token 抓取
+    description: 打开南方电网 App 或小程序，进入「我的用电」页面即可自动获取（抓到后可以关闭）
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+dns: {}
+scriptings:
+- generic:
+    name: csg-power
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CSG_Widget.JS
+- http_request:
+    name: 南方电网自动捕获
+    match: '^https://95598\.c[^{{{csgCapture}}}]g\.cn/'
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CSG_Widget.JS
+mitm:
+  hostnames:
+    includes:
+    - 95598.csg.cn
+widgets:
+- name: csg-power
