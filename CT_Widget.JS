@@ -1,17 +1,9 @@
 /*
- * 中国电信小组件（Egern 版，单文件双模式）
- * 移植自 Scriptable 版 ChinaTelecom_2024（作者 2Ya&脑瓜）
+ * 中国电信小组件
  *
  * 同一个文件，两种用法：
  *   1. generic 类型 → iOS 小组件
  *   2. request 类型 → 登录捕获
- *
- * UI：
- *   - 纯色背景
- *   - 中国电信标题
- *   - 更新时间
- *   - 剩余话费 / 剩余语音 / 剩余流量
- *   - 三个圆角数据胶囊
  *
  * 环境变量：
  *   CT_LOGIN_URL
@@ -107,9 +99,11 @@ function formatFlow(flow) {
   };
 }
 
+
 function pad2(n) {
   return n < 10 ? `0${n}` : `${n}`;
 }
+
 
 function fmtTime(ts) {
   const d = new Date(ts);
@@ -204,6 +198,7 @@ function parseTelecom(detail, balance, opts) {
   let isUnlimitedFlow = false;
 
   for (const data of detail?.items || []) {
+
     if (data.offerType === 19) {
       continue;
     }
@@ -287,16 +282,19 @@ function parseTelecom(detail, balance, opts) {
     }
   }
 
+
   if (
     detail.voiceAmount &&
     detail.voiceBalance
   ) {
+
     totalVoiceAmount =
       detail.voiceAmount;
 
     totalBalanceVoiceAmount =
       detail.voiceBalance;
   }
+
 
   const balanceFlow =
     formatFlow(
@@ -314,7 +312,9 @@ function parseTelecom(detail, balance, opts) {
    * ------------------------- */
 
   const flow = {
-    title: '剩余流量',
+
+    title:
+      '剩余流量',
 
     number:
       balanceFlow.amount,
@@ -605,17 +605,8 @@ async function loadData(ctx) {
 
 
 /* =========================================================
- * 新版 UI
+ * Widget UI
  * ========================================================= */
-
-/*
- * 三个圆角胶囊
- *
- * ┌────────────┐
- * │  剩余话费   │
- * │  12.34 元  │
- * └────────────┘
- */
 
 function makeCapsule(
   title,
@@ -654,8 +645,6 @@ function makeCapsule(
 
     children: [
 
-      /* 标题 */
-
       {
         type: 'text',
 
@@ -678,9 +667,6 @@ function makeCapsule(
         minScale:
           0.7,
       },
-
-
-      /* 数值 + 单位 */
 
       {
         type: 'stack',
@@ -768,8 +754,6 @@ function headerRow(
 
     children: [
 
-      /* 左侧 */
-
       {
         type: 'stack',
 
@@ -817,15 +801,9 @@ function headerRow(
         ],
       },
 
-
-      /* 中间撑开 */
-
       {
         type: 'spacer',
       },
-
-
-      /* 更新时间 */
 
       {
         type: 'stack',
@@ -875,7 +853,10 @@ function headerRow(
 
 
 /* =========================================================
- * 主组件
+ * 中号 / 大号组件
+ *
+ * 注意：
+ * 这部分保持原来的横向布局。
  * ========================================================= */
 
 function buildMainWidget(
@@ -900,9 +881,6 @@ function buildMainWidget(
 
     gap: 12,
 
-    /*
-     * 每小时刷新一次
-     */
     refreshAfter:
       new Date(
         Date.now() +
@@ -911,9 +889,7 @@ function buildMainWidget(
 
     children: [
 
-      /* -------------------------
-       * 顶部
-       * ------------------------- */
+      /* 顶部 */
 
       headerRow(
         title,
@@ -922,9 +898,7 @@ function buildMainWidget(
       ),
 
 
-      /* -------------------------
-       * 三个数据胶囊
-       * ------------------------- */
+      /* 三个数据胶囊 */
 
       {
         type: 'stack',
@@ -958,9 +932,7 @@ function buildMainWidget(
       },
 
 
-      /* -------------------------
-       * 底部短横线
-       * ------------------------- */
+      /* 底部短横线 */
 
       {
         type: 'stack',
@@ -999,7 +971,252 @@ function buildMainWidget(
 
 
 /* =========================================================
+ * 小尺寸专用 UI
+ *
+ * 只针对 systemSmall。
+ *
+ * 布局：
+ *
+ *   上：标题 + 时间
+ *   中：话费
+ *   下：语音 + 流量
+ *   底：短横线
+ * ========================================================= */
+
+function buildSmall(
+  title,
+  ds,
+  fromCache
+) {
+
+  return {
+
+    type: 'widget',
+
+    backgroundColor:
+      COLORS.bg,
+
+    padding: [
+      10,
+      12,
+      10,
+      12,
+    ],
+
+    gap: 8,
+
+    refreshAfter:
+      new Date(
+        Date.now() +
+        60 * 60 * 1000
+      ).toISOString(),
+
+    children: [
+
+      /* =================================================
+       * 上
+       * 标题 + 更新时间
+       * ================================================= */
+
+      headerRow(
+        title,
+        ds,
+        fromCache
+      ),
+
+
+      /* =================================================
+       * 中
+       * 剩余话费
+       * ================================================= */
+
+      {
+        type: 'stack',
+
+        direction: 'column',
+
+        alignItems: 'center',
+
+        justifyContent: 'center',
+
+        padding: [
+          7,
+          8,
+          7,
+          8,
+        ],
+
+        backgroundColor:
+          COLORS.capsuleBg,
+
+        borderRadius: 14,
+
+        borderWidth: 1,
+
+        borderColor:
+          COLORS.border,
+
+        children: [
+
+          /* 话费标题 */
+
+          {
+            type: 'text',
+
+            text:
+              ds.fee.title,
+
+            font: {
+              size: 'caption2',
+              weight: 'medium',
+            },
+
+            textColor:
+              COLORS.title,
+
+            textAlign:
+              'center',
+
+            maxLines: 1,
+          },
+
+          /* 话费数值 */
+
+          {
+            type: 'stack',
+
+            direction: 'row',
+
+            alignItems: 'center',
+
+            justifyContent:
+              'center',
+
+            gap: 3,
+
+            children: [
+
+              {
+                type: 'text',
+
+                text:
+                  String(
+                    ds.fee.number
+                  ),
+
+                font: {
+                  size: 'title2',
+                  weight: 'semibold',
+                },
+
+                textColor:
+                  COLORS.value,
+
+                textAlign:
+                  'center',
+
+                maxLines: 1,
+
+                minScale:
+                  0.7,
+              },
+
+              {
+                type: 'text',
+
+                text:
+                  ds.fee.unit,
+
+                font: {
+                  size: 'caption2',
+                },
+
+                textColor:
+                  COLORS.title,
+
+                maxLines: 1,
+              },
+            ],
+          },
+        ],
+      },
+
+
+      /* =================================================
+       * 下
+       * 剩余语音 + 剩余流量
+       * ================================================= */
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        gap: 7,
+
+        children: [
+
+          makeCapsule(
+            ds.voice.title,
+            ds.voice.number,
+            ds.voice.unit
+          ),
+
+          makeCapsule(
+            ds.flow.title,
+            ds.flow.number,
+            ds.flow.unit
+          ),
+        ],
+      },
+
+
+      /* =================================================
+       * 底部短横线
+       * ================================================= */
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        children: [
+
+          {
+            type: 'spacer',
+          },
+
+          {
+            type: 'stack',
+
+            width: 42,
+
+            height: 3,
+
+            borderRadius: 2,
+
+            backgroundColor:
+              COLORS.border,
+          },
+
+          {
+            type: 'spacer',
+          },
+        ],
+      },
+    ],
+  };
+}
+
+
+/* =========================================================
  * 锁屏小组件
+ *
+ * 保持不变
  * ========================================================= */
 
 function buildLockScreen(
@@ -1107,8 +1324,6 @@ function buildError(
 
     children: [
 
-      /* 标题 */
-
       {
         type: 'stack',
 
@@ -1153,9 +1368,6 @@ function buildError(
         ],
       },
 
-
-      /* 错误说明 */
-
       {
         type: 'text',
 
@@ -1171,9 +1383,6 @@ function buildError(
 
         maxLines: 3,
       },
-
-
-      /* 底部提示 */
 
       {
         type: 'stack',
@@ -1251,16 +1460,9 @@ function buildError(
 
 /* =========================================================
  * 登录捕获
- * ========================================================= */
-
-/*
- * 从请求头里取 Cookie
  *
- * 兼容：
- *   - plain object
- *   - Headers
- *   - Cookie / cookie
- */
+ * 完整保留原逻辑
+ * ========================================================= */
 
 function getReqCookie(headers) {
 
@@ -1318,7 +1520,7 @@ async function handleCapture(ctx) {
 
 
   /* -------------------------
-   * 1. 登录握手地址
+   * 登录握手地址
    * ------------------------- */
 
   if (
@@ -1360,7 +1562,7 @@ async function handleCapture(ctx) {
 
 
   /* -------------------------
-   * 2. 抓取 Cookie
+   * 抓取 Cookie
    * ------------------------- */
 
   const cookie =
@@ -1388,7 +1590,7 @@ async function handleCapture(ctx) {
 
 
   /* -------------------------
-   * 3. 刚登录成功 → 通知
+   * 刚登录成功 → 通知
    * ------------------------- */
 
   const ts =
@@ -1417,15 +1619,11 @@ async function handleCapture(ctx) {
       body:
         '登录成功，小组件将自动更新',
 
-      /*
-       * 兜底：
-       * 如果小组件没有自动读到，
-       * 可以从通知动作中复制 Cookie。
-       */
-
       action: {
         type: 'clipboard',
-        text: cookie,
+
+        text:
+          cookie,
       },
     });
   }
@@ -1481,20 +1679,16 @@ async function handleWidget(ctx) {
   }
 
 
-  /* -------------------------
-   * Widget 尺寸
-   * ------------------------- */
-
   const family =
     ctx.widgetFamily ||
     'systemSmall';
 
 
-  /* -------------------------
-   * 中号 / 大号
+  /* =====================================================
+   * 中号 / 大号 / 超大号
    *
-   * 使用统一的新 UI
-   * ------------------------- */
+   * 保持原来的 buildMainWidget
+   * ===================================================== */
 
   if (
     family ===
@@ -1513,9 +1707,11 @@ async function handleWidget(ctx) {
   }
 
 
-  /* -------------------------
+  /* =====================================================
    * 锁屏
-   * ------------------------- */
+   *
+   * 保持原来的 buildLockScreen
+   * ===================================================== */
 
   if (
     family.startsWith(
@@ -1531,11 +1727,13 @@ async function handleWidget(ctx) {
   }
 
 
-  /* -------------------------
+  /* =====================================================
    * Small
-   * ------------------------- */
+   *
+   * ★ 这次唯一改变的尺寸
+   * ===================================================== */
 
-  return buildMainWidget(
+  return buildSmall(
     title,
     ds,
     fromCache
