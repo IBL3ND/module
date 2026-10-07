@@ -1,16 +1,12 @@
 export default async function (ctx) {
   const data = await ctx.response.json();
-  let changed = false;
+  let n = 0;
   if (data && Array.isArray(data.data)) {
     for (const item of data.data) {
-      if (item.cokey === "PARAV2_SPLASHADS_CONFIG") {
-        item.covalue = "";
-        changed = true;
-      }
+      if (item.cokey === "PARAV2_SPLASHADS_CONFIG") { item.covalue = ""; n++; }
+      if (item.cokey === "adconfig") { item.covalue = "[]"; n++; }
     }
   }
-  if (changed) {
-    ctx.notify({ title: "山丘阅读", body: "已清空开屏广告配置" });
-  }
+  ctx.notify({ title: "山丘阅读", body: `已修改 ${n} 项` });
   return { body: data };
 }
