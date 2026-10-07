@@ -1,0 +1,30 @@
+# 捕获登录请求需要解密 e.dlife.cn 的 HTTPS 流量（需信任 Egern 证书）
+# 在 Safari 打开 https://e.dlife.cn 短信登录一次，之后全自动更新
+# 登录捕获（http_request 类型，与小组件是同一个文件，脚本内部按 ctx.request 自动分支）
+# Safari 里登录 e.dlife.cn 成功后，直接从登录后的真实请求里抓 Cookie 存入存储，
+# 小组件优先用抓到的 Cookie，全程无需手动操作
+# 与同名 generic 脚本自动关联；登录地址由捕获脚本自动存入存储，无需手动配置 Env
+# 与同名 generic 脚本自动关联；登录地址由捕获脚本自动存入存储，无需手动配置 Env
+# 高级选项（一般不用动)
+# 推荐你把 CT_Widget.JS 在脚本那边添加
+
+name: "中国电信"
+description: "显示电信剩余话费 / 剩余（或已用）流量 / 剩余语音；在 Safari 打开 https://e.dlife.cn 短信登录一次，之后全自动更新"
+author: "小秘书"
+mitm:
+  hostnames:
+    includes:
+      - e.dlife.cn
+scriptings:
+  - generic:
+      name: "china-telecom"
+      script_url: "https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CT_Widget.JS"
+      timeout: 20
+  - http_request:
+      name: "中国电信登录捕获"
+      match: '^https://e\.dlife\.cn/'
+      script_url: "https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/ChinaTelecom.js"
+      timeout: 10
+
+widgets:
+  - name: "china-telecom"
