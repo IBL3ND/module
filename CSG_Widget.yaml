@@ -7,7 +7,7 @@ compat_arguments:
 compat_arguments_schema:
   csgCapture:
     name: 南方电网 Token 抓取
-    description: 打开南方电网 App 或小程序，进入「我的用电」页面即可自动获取（抓到后可以关闭）
+    description: 打开南网在线 App 或小程序，进入「我的用电」页面即可自动获取（抓到后可以关闭）
     default_value: 'true'
     options:
     - 'true'
