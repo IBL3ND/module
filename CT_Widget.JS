@@ -1,11 +1,11 @@
 /*
  * 中国电信小组件
- *
+ * 用这个链接去登录 https://e.dlife.cn
  * 同一个文件，两种用法：
  *   1. generic 类型 → iOS 小组件
  *   2. request 类型 → 登录捕获
  *
- * 环境变量：
+ * 环境变量： 不需要手动填 添加模块后登录即可
  *   CT_LOGIN_URL
  *   CT_COOKIE
  *   CT_SHOW_USED_FLOW
@@ -24,17 +24,9 @@ const URLS = {
 };
 
 
-/* =========================================================
- * 数据颜色
- * ========================================================= */
-
 const FLOW_COLOR = '#FF6620';
 const VOICE_COLOR = '#78C100';
 
-
-/* =========================================================
- * Widget UI 颜色
- * ========================================================= */
 
 const COLORS = {
   bg: {
@@ -79,10 +71,6 @@ const COLORS = {
 };
 
 
-/* =========================================================
- * 工具函数
- * ========================================================= */
-
 function formatFlow(flow) {
   const remain = flow / 1024;
 
@@ -111,10 +99,6 @@ function fmtTime(ts) {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-
-/* =========================================================
- * 数据层
- * ========================================================= */
 
 async function refreshCookie(ctx) {
   const loginUrl =
@@ -178,10 +162,6 @@ async function fetchJson(ctx, url, cookie) {
 }
 
 
-/* =========================================================
- * 电信数据解析
- * ========================================================= */
-
 function parseTelecom(detail, balance, opts) {
   const {
     showUsedFlow,
@@ -205,9 +185,6 @@ function parseTelecom(detail, balance, opts) {
 
     for (const item of data.items || []) {
 
-      /* -------------------------
-       * 流量
-       * ------------------------- */
 
       if (item.unitTypeId == 3) {
 
@@ -258,9 +235,6 @@ function parseTelecom(detail, balance, opts) {
 
       }
 
-      /* -------------------------
-       * 语音
-       * ------------------------- */
 
       else if (
         !detail.voiceBalance &&
@@ -306,10 +280,6 @@ function parseTelecom(detail, balance, opts) {
       totalUsedFlowAmount
     );
 
-
-  /* -------------------------
-   * 流量
-   * ------------------------- */
 
   const flow = {
 
@@ -362,10 +332,6 @@ function parseTelecom(detail, balance, opts) {
   }
 
 
-  /* -------------------------
-   * 语音
-   * ------------------------- */
-
   const voice = {
 
     title:
@@ -390,10 +356,6 @@ function parseTelecom(detail, balance, opts) {
       VOICE_COLOR,
   };
 
-
-  /* -------------------------
-   * 话费
-   * ------------------------- */
 
   const feeNum =
     Number(
@@ -428,10 +390,6 @@ function parseTelecom(detail, balance, opts) {
   };
 }
 
-
-/* =========================================================
- * Cookie 获取数据
- * ========================================================= */
 
 async function tryCookie(
   ctx,
@@ -469,10 +427,6 @@ async function tryCookie(
 }
 
 
-/* =========================================================
- * 加载数据
- * ========================================================= */
-
 async function loadData(ctx) {
 
   const envCookie =
@@ -506,10 +460,6 @@ async function loadData(ctx) {
     );
 
 
-  /* -------------------------
-   * 1. 优先 Cookie
-   * ------------------------- */
-
   const firstCookie =
     envCookie ||
     storedCookie;
@@ -535,14 +485,9 @@ async function loadData(ctx) {
       };
 
     } catch (e) {
-      /* Cookie 失效，继续 */
     }
   }
 
-
-  /* -------------------------
-   * 2. 登录地址刷新 Cookie
-   * ------------------------- */
 
   if (
     !envCookie &&
@@ -577,14 +522,9 @@ async function loadData(ctx) {
       }
 
     } catch (e) {
-      /* 继续使用缓存 */
     }
   }
 
-
-  /* -------------------------
-   * 3. 缓存
-   * ------------------------- */
 
   const cached =
     ctx.storage.getJSON(
@@ -603,10 +543,6 @@ async function loadData(ctx) {
   };
 }
 
-
-/* =========================================================
- * Widget UI
- * ========================================================= */
 
 function makeCapsule(
   title,
@@ -728,10 +664,6 @@ function makeCapsule(
 }
 
 
-/* =========================================================
- * 顶部标题
- * ========================================================= */
-
 function headerRow(
   title,
   ds,
@@ -852,13 +784,6 @@ function headerRow(
 }
 
 
-/* =========================================================
- * 中号 / 大号组件
- *
- * 注意：
- * 这部分保持原来的横向布局。
- * ========================================================= */
-
 function buildMainWidget(
   title,
   ds,
@@ -898,8 +823,6 @@ function buildMainWidget(
       ),
 
 
-      /* 三个数据胶囊 */
-
       {
         type: 'stack',
 
@@ -931,8 +854,6 @@ function buildMainWidget(
         ],
       },
 
-
-      /* 底部短横线 */
 
       {
         type: 'stack',
@@ -969,20 +890,6 @@ function buildMainWidget(
   };
 }
 
-
-/* =========================================================
- * 小尺寸专用 UI
- *
- * 只针对 systemSmall。
- *
- * 布局：
- *
- *   上：标题 + 时间
- *   中：话费
- *   下：语音 + 流量
- *   底：短横线
- * ========================================================= */
-
 function buildSmall(
   title,
   ds,
@@ -1013,86 +920,50 @@ function buildSmall(
 
     children: [
 
-      /* =================================================
-       * 上
-       * 标题 + 更新时间
-       * ================================================= */
-
       headerRow(
         title,
         ds,
         fromCache
       ),
 
-
-      /* =================================================
-       * 中
-       * 剩余话费
-       * ================================================= */
-
       {
         type: 'stack',
 
-        direction: 'column',
+        direction: 'row',
 
         alignItems: 'center',
 
-        justifyContent: 'center',
-
-        padding: [
-          7,
-          8,
-          7,
-          8,
-        ],
-
-        backgroundColor:
-          COLORS.capsuleBg,
-
-        borderRadius: 14,
-
-        borderWidth: 1,
-
-        borderColor:
-          COLORS.border,
-
         children: [
 
-          /* 话费标题 */
-
           {
-            type: 'text',
-
-            text:
-              ds.fee.title,
-
-            font: {
-              size: 'caption2',
-              weight: 'medium',
-            },
-
-            textColor:
-              COLORS.title,
-
-            textAlign:
-              'center',
-
-            maxLines: 1,
+            type: 'spacer',
           },
-
-          /* 话费数值 */
 
           {
             type: 'stack',
 
-            direction: 'row',
+            direction: 'column',
 
             alignItems: 'center',
 
-            justifyContent:
-              'center',
+            justifyContent: 'center',
 
-            gap: 3,
+            padding: [
+              7,
+              20,
+              7,
+              20,
+            ],
+
+            backgroundColor:
+              COLORS.capsuleBg,
+
+            borderRadius: 14,
+
+            borderWidth: 1,
+
+            borderColor:
+              COLORS.border,
 
             children: [
 
@@ -1100,52 +971,86 @@ function buildSmall(
                 type: 'text',
 
                 text:
-                  String(
-                    ds.fee.number
-                  ),
-
-                font: {
-                  size: 'title2',
-                  weight: 'semibold',
-                },
-
-                textColor:
-                  COLORS.value,
-
-                textAlign:
-                  'center',
-
-                maxLines: 1,
-
-                minScale:
-                  0.7,
-              },
-
-              {
-                type: 'text',
-
-                text:
-                  ds.fee.unit,
+                  ds.fee.title,
 
                 font: {
                   size: 'caption2',
+                  weight: 'medium',
                 },
 
                 textColor:
                   COLORS.title,
 
+                textAlign:
+                  'center',
+
                 maxLines: 1,
+              },
+
+              {
+                type: 'stack',
+
+                direction: 'row',
+
+                alignItems: 'center',
+
+                justifyContent:
+                  'center',
+
+                gap: 3,
+
+                children: [
+
+                  {
+                    type: 'text',
+
+                    text:
+                      String(
+                        ds.fee.number
+                      ),
+
+                    font: {
+                      size: 'title2',
+                      weight: 'semibold',
+                    },
+
+                    textColor:
+                      COLORS.value,
+
+                    textAlign:
+                      'center',
+
+                    maxLines: 1,
+
+                    minScale:
+                      0.7,
+                  },
+
+                  {
+                    type: 'text',
+
+                    text:
+                      ds.fee.unit,
+
+                    font: {
+                      size: 'caption2',
+                    },
+
+                    textColor:
+                      COLORS.title,
+
+                    maxLines: 1,
+                  },
+                ],
               },
             ],
           },
+
+          {
+            type: 'spacer',
+          },
         ],
       },
-
-
-      /* =================================================
-       * 下
-       * 剩余语音 + 剩余流量
-       * ================================================= */
 
       {
         type: 'stack',
@@ -1171,11 +1076,6 @@ function buildSmall(
           ),
         ],
       },
-
-
-      /* =================================================
-       * 底部短横线
-       * ================================================= */
 
       {
         type: 'stack',
@@ -1211,13 +1111,6 @@ function buildSmall(
     ],
   };
 }
-
-
-/* =========================================================
- * 锁屏小组件
- *
- * 保持不变
- * ========================================================= */
 
 function buildLockScreen(
   title,
@@ -1256,8 +1149,6 @@ function buildLockScreen(
     };
   }
 
-
-  /* accessoryRectangular */
 
   return {
 
@@ -1300,10 +1191,6 @@ function buildLockScreen(
   };
 }
 
-
-/* =========================================================
- * 错误界面
- * ========================================================= */
 
 function buildError(
   title,
@@ -1458,12 +1345,6 @@ function buildError(
 }
 
 
-/* =========================================================
- * 登录捕获
- *
- * 完整保留原逻辑
- * ========================================================= */
-
 function getReqCookie(headers) {
 
   if (!headers) {
@@ -1507,9 +1388,6 @@ async function handleCapture(ctx) {
   const url =
     req.url || '';
 
-
-  /* 非电信请求直接透传 */
-
   if (
     !url.includes(
       'e.dlife.cn'
@@ -1518,10 +1396,6 @@ async function handleCapture(ctx) {
     return;
   }
 
-
-  /* -------------------------
-   * 登录握手地址
-   * ------------------------- */
 
   if (
     url.includes(
@@ -1561,10 +1435,6 @@ async function handleCapture(ctx) {
   }
 
 
-  /* -------------------------
-   * 抓取 Cookie
-   * ------------------------- */
-
   const cookie =
     String(
       getReqCookie(
@@ -1587,11 +1457,6 @@ async function handleCapture(ctx) {
     'ct_cookie',
     cookie
   );
-
-
-  /* -------------------------
-   * 刚登录成功 → 通知
-   * ------------------------- */
 
   const ts =
     Number(
@@ -1630,10 +1495,6 @@ async function handleCapture(ctx) {
 }
 
 
-/* =========================================================
- * 小组件
- * ========================================================= */
-
 async function handleWidget(ctx) {
 
   const title =
@@ -1651,11 +1512,6 @@ async function handleWidget(ctx) {
   } =
     await loadData(ctx);
 
-
-  /* -------------------------
-   * 未配置
-   * ------------------------- */
-
   if (!configured) {
 
     return buildError(
@@ -1665,10 +1521,6 @@ async function handleWidget(ctx) {
     );
   }
 
-
-  /* -------------------------
-   * 数据失败
-   * ------------------------- */
 
   if (!ds) {
 
@@ -1682,13 +1534,6 @@ async function handleWidget(ctx) {
   const family =
     ctx.widgetFamily ||
     'systemSmall';
-
-
-  /* =====================================================
-   * 中号 / 大号 / 超大号
-   *
-   * 保持原来的 buildMainWidget
-   * ===================================================== */
 
   if (
     family ===
@@ -1706,13 +1551,6 @@ async function handleWidget(ctx) {
     );
   }
 
-
-  /* =====================================================
-   * 锁屏
-   *
-   * 保持原来的 buildLockScreen
-   * ===================================================== */
-
   if (
     family.startsWith(
       'accessory'
@@ -1726,13 +1564,6 @@ async function handleWidget(ctx) {
     );
   }
 
-
-  /* =====================================================
-   * Small
-   *
-   * ★ 这次唯一改变的尺寸
-   * ===================================================== */
-
   return buildSmall(
     title,
     ds,
@@ -1741,16 +1572,8 @@ async function handleWidget(ctx) {
 }
 
 
-/* =========================================================
- * 入口：单文件双模式
- * ========================================================= */
-
 export default async function(ctx) {
 
-  /*
-   * request 脚本：
-   * 自动捕获电信登录 Cookie
-   */
 
   if (
     ctx.request &&
@@ -1760,11 +1583,6 @@ export default async function(ctx) {
     return handleCapture(ctx);
   }
 
-
-  /*
-   * generic 脚本：
-   * 渲染小组件
-   */
 
   return handleWidget(ctx);
 }
