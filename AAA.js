@@ -775,274 +775,93 @@ function buildMainWidget(
 
 
 /* =========================================================
- * 小组件（仅此处做过紧凑化处理）
- *
- * 只对 systemSmall 进行了优化：
- * - 使用更紧凑的 header（headerSmall）
- * - 使用更紧凑的胶囊样式（smallCapsule）
- * - 减小整体内边距、间距与字体最小缩放，移除底部横线以避免截断
- * 其余函数均未改动，确保中/大尺寸不受影响
+ * 【修改部分：小尺寸 systemSmall 垂直布局，完全参照你的第二张截图样式】
+ * 垂直3行：话费 → 流量 → 语音，每行：圆形背景图标 + 右侧文字+数值
  * ========================================================= */
-
-/* 紧凑 header，仅用于小尺寸 */
-function headerSmall(title, data) {
-  const updateTime =
-    data?.updateTime ||
-    '--:--';
-
-  return {
-    type: 'stack',
-    direction: 'row',
-    alignItems: 'center',
-    children: [
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        gap: 6,
-        children: [
-          {
-            type: 'image',
-            src: 'sf-symbol:simcard.fill',
-            color: COLORS.accent,
-            width: 14,
-            height: 14,
-          },
-          {
-            type: 'text',
-            text: title,
-            font: {
-              size: 'caption1',
-              weight: 'semibold',
-            },
-            textColor: COLORS.value,
-            maxLines: 1,
-            minScale: 0.75,
-          },
-        ],
-      },
-      {
-        type: 'spacer',
-      },
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        gap: 4,
-        children: [
-          {
-            type: 'image',
-            src: 'sf-symbol:arrow.clockwise',
-            color: COLORS.time,
-            width: 11,
-            height: 11,
-          },
-          {
-            type: 'text',
-            text: updateTime,
-            font: {
-              size: 'caption2',
-            },
-            textColor: COLORS.time,
-            maxLines: 1,
-            minScale: 0.75,
-          },
-        ],
-      },
-    ],
-  };
-}
-
-/* 紧凑胶囊，仅用于小尺寸底部两项或中间大胶囊（更小的内边距与文字缩放） */
-function smallCapsule(title, value, unit, options = {}) {
-  const padV = options.padV ?? 6;
-  const padH = options.padH ?? 12;
-
-  return {
-    type: 'stack',
-    direction: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    padding: [
-      padV,
-      padH,
-      padV,
-      padH,
-    ],
-    backgroundColor: COLORS.capsuleBg,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    children: [
-      {
-        type: 'text',
-        text: title,
-        font: {
-          size: 'caption2',
-          weight: 'medium',
-        },
-        textColor: COLORS.title,
-        textAlign: 'center',
-        maxLines: 1,
-        minScale: 0.7,
-      },
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 3,
-        children: [
-          {
-            type: 'text',
-            text: String(value),
-            font: {
-              size: 'title3',
-              weight: 'semibold',
-            },
-            textColor: COLORS.value,
-            textAlign: 'center',
-            maxLines: 1,
-            minScale: 0.6,
-          },
-          {
-            type: 'text',
-            text: unit,
-            font: {
-              size: 'caption2',
-            },
-            textColor: COLORS.title,
-            maxLines: 1,
-            minScale: 0.7,
-          },
-        ],
-      },
-    ],
-  };
-}
-
 function buildSmall(
   title,
   data,
   fromCache
 ) {
+  // 单行条目模板（左圆形图标，右文字）
+  function rowItem(sfIcon, iconBgColor, labelText, numText, unitText) {
+    return {
+      type: 'stack',
+      direction: 'row',
+      alignItems: 'center',
+      padding: [6,8,6,8],
+      gap:10,
+      children:[
+        {
+          type:'stack',
+          width:32,
+          height:32,
+          borderRadius:999,
+          backgroundColor:iconBgColor,
+          alignItems:'center',
+          justifyContent:'center',
+          children:[
+            {
+              type:'image',
+              src:`sf-symbol:${sfIcon}`,
+              color:'#ffffff',
+              width:18,
+              height:18
+            }
+          ]
+        },
+        {
+          type:'stack',
+          direction:'column',
+          flex:1,
+          children:[
+            {
+              type:'text',
+              text:labelText,
+              font:{size:'caption2'},
+              textColor:COLORS.title,
+              maxLines:1
+            },
+            {
+              type:'text',
+              text:`${numText} ${unitText}`,
+              font:{size:'headline', weight:'semibold'},
+              textColor:COLORS.value,
+              maxLines:1
+            }
+          ]
+        }
+      ]
+    }
+  }
 
   return {
-
     type: 'widget',
-
-    backgroundColor:
-      COLORS.bg,
-
-    /* 更紧凑的外边距，避免小尺寸内容被裁切 */
-    padding: [
-      6,
-      10,
-      6,
-      10,
-    ],
-
+    backgroundColor: COLORS.bg,
+    padding: [10, 12, 10, 12],
     gap: 6,
-
-    refreshAfter:
-      new Date(
-        Date.now() +
-        60 * 60 * 1000
-      ).toISOString(),
-
+    refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     children: [
-
-      /*
-       * 顶部：紧凑标题 + 更新时间（使用 headerSmall）
-       */
-      headerSmall(
-        title,
-        data
-      ),
-
-
-      /*
-       * 中间：剩余话费
-       *
-       * 左右 spacer 确保胶囊真正居中
-       * 使用更紧凑的中间胶囊样式
-       */
+      headerRow(title, data, fromCache),
+      rowItem("creditcard.fill", "#E60012", data.fee.title, data.fee.value, data.fee.unit),
+      rowItem("wifi", "#0091ff", data.flow.title, data.flow.value, data.flow.unit),
+      rowItem("phone.fill", "#28c740", data.voice.title, data.voice.value, data.voice.unit),
       {
         type: 'stack',
-
         direction: 'row',
-
         alignItems: 'center',
-
         children: [
-
+          { type: 'spacer' },
           {
-            type: 'spacer',
+            type: 'stack',
+            width: 42,
+            height: 3,
+            borderRadius: 2,
+            backgroundColor: COLORS.border,
           },
-
-
-          smallCapsule(
-            data.fee.title,
-            data.fee.value,
-            data.fee.unit,
-            {
-              padV: 6,
-              padH: 14,
-            }
-          ),
-
-
-          {
-            type: 'spacer',
-          },
-
+          { type: 'spacer' },
         ],
       },
-
-
-      /*
-       * 下方：剩余语音 + 剩余流量
-       * 使用紧凑胶囊
-       */
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        gap: 6,
-
-        children: [
-
-          smallCapsule(
-            data.voice.title,
-            data.voice.value,
-            data.voice.unit,
-            {
-              padV: 6,
-              padH: 10,
-            }
-          ),
-
-          smallCapsule(
-            data.flow.title,
-            data.flow.value,
-            data.flow.unit,
-            {
-              padV: 6,
-              padH: 10,
-            }
-          ),
-
-        ],
-      },
-
-      /*
-       * 为避免占用过多垂直空间，小尺寸取消底部短横线（原实现会占用高度）
-       */
-
     ],
   };
 }
@@ -1141,7 +960,7 @@ function buildLockScreen(
           textAlign:
             'center',
 
-          maxLines: 1,
+            maxLines: 1,
         },
 
       ],
