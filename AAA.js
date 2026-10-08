@@ -535,7 +535,7 @@ function headerRow(
 
 
 /* =========================================================
- * 通用数据胶囊
+ * 通用数据胶囊（中/大/超大号 使用）
  * ========================================================= */
 
 function makeCapsule(
@@ -647,6 +647,182 @@ function makeCapsule(
           },
 
         ],
+      },
+
+    ],
+  };
+}
+
+
+/* =========================================================
+ * 小尺寸 —— 横向条目
+ * 
+ * 布局：左侧彩色圆形图标 + 右侧（标题在上，数值在下）
+ * 三条纵向堆叠，完整利用小尺寸高度
+ * ========================================================= */
+
+function makeSmallRow(
+  icon,
+  iconColor,
+  title,
+  value,
+  unit,
+  bgColor
+) {
+
+  return {
+    type: 'stack',
+
+    direction: 'row',
+
+    alignItems: 'center',
+
+    gap: 10,
+
+    padding: [
+      8,
+      10,
+      8,
+      10,
+    ],
+
+    backgroundColor:
+      bgColor,
+
+    borderRadius: 16,
+
+    children: [
+
+      /*
+       * 左侧圆形图标
+       */
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        justifyContent: 'center',
+
+        width: 30,
+
+        height: 30,
+
+        borderRadius: 15,
+
+        backgroundColor:
+          iconColor,
+
+        children: [
+
+          {
+            type: 'image',
+
+            src: icon,
+
+            color: '#FFFFFF',
+
+            width: 16,
+
+            height: 16,
+          },
+
+        ],
+      },
+
+
+      /*
+       * 右侧：标题 + 数值
+       */
+      {
+        type: 'stack',
+
+        direction: 'column',
+
+        alignItems: 'flex-start',
+
+        justifyContent: 'center',
+
+        gap: 1,
+
+        children: [
+
+          {
+            type: 'text',
+
+            text: title,
+
+            font: {
+              size: 'caption2',
+              weight: 'medium',
+            },
+
+            textColor:
+              COLORS.title,
+
+            maxLines: 1,
+
+            minScale: 0.8,
+          },
+
+
+          {
+            type: 'stack',
+
+            direction: 'row',
+
+            alignItems: 'baseline',
+
+            gap: 3,
+
+            children: [
+
+              {
+                type: 'text',
+
+                text: String(value),
+
+                font: {
+                  size: 'title3',
+                  weight: 'semibold',
+                },
+
+                textColor:
+                  iconColor,
+
+                maxLines: 1,
+
+                minScale: 0.6,
+              },
+
+
+              {
+                type: 'text',
+
+                text: unit,
+
+                font: {
+                  size: 'caption2',
+                },
+
+                textColor:
+                  COLORS.title,
+
+                maxLines: 1,
+
+                minScale: 0.8,
+              },
+
+            ],
+          },
+
+        ],
+      },
+
+
+      {
+        type: 'spacer',
       },
 
     ],
@@ -775,8 +951,13 @@ function buildMainWidget(
 
 
 /* =========================================================
- * 小尺寸小组件 - 优化版
- * 采用垂直堆叠布局，每行一个数据项
+ * 小组件（小尺寸）
+ *
+ * 排版参照中国电信小组件：
+ * 三条横向条目纵向堆叠
+ * 每条：左侧彩色圆形图标 + 右侧标题与数值
+ * 
+ * 仅优化小尺寸，其余尺寸逻辑保持不变
  * ========================================================= */
 
 function buildSmall(
@@ -784,6 +965,27 @@ function buildSmall(
   data,
   fromCache
 ) {
+
+  const rowBg = {
+    light: '#F5F5F7',
+    dark: '#3A3A3C',
+  };
+
+  const feeColor = {
+    light: '#FF6B4D',
+    dark: '#FF7A5C',
+  };
+
+  const flowColor = {
+    light: '#2E9BFF',
+    dark: '#3EA6FF',
+  };
+
+  const voiceColor = {
+    light: '#34C759',
+    dark: '#30D158',
+  };
+
 
   return {
 
@@ -799,7 +1001,7 @@ function buildSmall(
       12,
     ],
 
-    gap: 8,
+    gap: 7,
 
     refreshAfter:
       new Date(
@@ -820,141 +1022,52 @@ function buildSmall(
 
 
       /*
-       * 剩余话费
+       * 三条数据纵向堆叠
        */
       {
         type: 'stack',
 
-        direction: 'row',
+        direction: 'column',
 
-        alignItems: 'center',
+        alignItems: 'stretch',
 
-        gap: 8,
-
-        padding: [
-          8,
-          10,
-          8,
-          10,
-        ],
-
-        backgroundColor:
-          COLORS.capsuleBg,
-
-        borderRadius: 12,
-
-        borderWidth: 1,
-
-        borderColor:
-          COLORS.border,
+        gap: 6,
 
         children: [
 
-          {
-            type: 'image',
+          makeSmallRow(
+            'sf-symbol:yen.sign',
+            feeColor,
+            data.fee.title,
+            data.fee.value,
+            data.fee.unit,
+            rowBg
+          ),
 
-            src:
-              'sf-symbol:creditcard.fill',
+          makeSmallRow(
+            'sf-symbol:antenna.radiowaves.left.and.right',
+            flowColor,
+            data.flow.title,
+            data.flow.value,
+            data.flow.unit,
+            rowBg
+          ),
 
-            color:
-              COLORS.accent,
-
-            width: 22,
-
-            height: 22,
-          },
-
-
-          {
-            type: 'stack',
-
-            direction: 'column',
-
-            flex: 1,
-
-            children: [
-
-              {
-                type: 'stack',
-
-                direction: 'row',
-
-                alignItems: 'center',
-
-                justifyContent:
-                  'space-between',
-
-                children: [
-
-                  {
-                    type: 'text',
-
-                    text:
-                      String(
-                        data.fee.value
-                      ),
-
-                    font: {
-                      size: 'title2',
-                      weight: 'bold',
-                    },
-
-                    textColor:
-                      COLORS.value,
-
-                    maxLines: 1,
-
-                    minScale: 0.7,
-                  },
-
-
-                  {
-                    type: 'text',
-
-                    text:
-                      data.fee.unit,
-
-                    font: {
-                      size: 'caption1',
-                      weight: 'medium',
-                    },
-
-                    textColor:
-                      COLORS.title,
-
-                    maxLines: 1,
-                  },
-
-                ],
-              },
-
-
-              {
-                type: 'text',
-
-                text:
-                  data.fee.title,
-
-                font: {
-                  size: 'caption2',
-                  weight: 'medium',
-                },
-
-                textColor:
-                  COLORS.title,
-
-                maxLines: 1,
-              },
-
-            ],
-          },
+          makeSmallRow(
+            'sf-symbol:phone.fill',
+            voiceColor,
+            data.voice.title,
+            data.voice.value,
+            data.voice.unit,
+            rowBg
+          ),
 
         ],
       },
 
 
       /*
-       * 剩余流量
+       * 底部短横线
        */
       {
         type: 'stack',
@@ -963,258 +1076,27 @@ function buildSmall(
 
         alignItems: 'center',
 
-        gap: 8,
-
-        padding: [
-          8,
-          10,
-          8,
-          10,
-        ],
-
-        backgroundColor:
-          COLORS.capsuleBg,
-
-        borderRadius: 12,
-
-        borderWidth: 1,
-
-        borderColor:
-          COLORS.border,
-
         children: [
 
           {
-            type: 'image',
-
-            src:
-              'sf-symbol:antenna.radiowaves.left.and.right',
-
-            color:
-              '#007AFF',
-
-            width: 22,
-
-            height: 22,
+            type: 'spacer',
           },
-
 
           {
             type: 'stack',
 
-            direction: 'column',
+            width: 42,
 
-            flex: 1,
+            height: 3,
 
-            children: [
+            borderRadius: 2,
 
-              {
-                type: 'stack',
-
-                direction: 'row',
-
-                alignItems: 'center',
-
-                justifyContent:
-                  'space-between',
-
-                children: [
-
-                  {
-                    type: 'text',
-
-                    text:
-                      String(
-                        data.flow.value
-                      ),
-
-                    font: {
-                      size: 'title2',
-                      weight: 'bold',
-                    },
-
-                    textColor:
-                      COLORS.value,
-
-                    maxLines: 1,
-
-                    minScale: 0.7,
-                  },
-
-
-                  {
-                    type: 'text',
-
-                    text:
-                      data.flow.unit,
-
-                    font: {
-                      size: 'caption1',
-                      weight: 'medium',
-                    },
-
-                    textColor:
-                      COLORS.title,
-
-                    maxLines: 1,
-                  },
-
-                ],
-              },
-
-
-              {
-                type: 'text',
-
-                text:
-                  data.flow.title,
-
-                font: {
-                  size: 'caption2',
-                  weight: 'medium',
-                },
-
-                textColor:
-                  COLORS.title,
-
-                maxLines: 1,
-              },
-
-            ],
+            backgroundColor:
+              COLORS.border,
           },
 
-        ],
-      },
-
-
-      /*
-       * 剩余语音
-       */
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        gap: 8,
-
-        padding: [
-          8,
-          10,
-          8,
-          10,
-        ],
-
-        backgroundColor:
-          COLORS.capsuleBg,
-
-        borderRadius: 12,
-
-        borderWidth: 1,
-
-        borderColor:
-          COLORS.border,
-
-        children: [
-
           {
-            type: 'image',
-
-            src:
-              'sf-symbol:phone.fill',
-
-            color:
-              '#34C759',
-
-            width: 22,
-
-            height: 22,
-          },
-
-
-          {
-            type: 'stack',
-
-            direction: 'column',
-
-            flex: 1,
-
-            children: [
-
-              {
-                type: 'stack',
-
-                direction: 'row',
-
-                alignItems: 'center',
-
-                justifyContent:
-                  'space-between',
-
-                children: [
-
-                  {
-                    type: 'text',
-
-                    text:
-                      String(
-                        data.voice.value
-                      ),
-
-                    font: {
-                      size: 'title2',
-                      weight: 'bold',
-                    },
-
-                    textColor:
-                      COLORS.value,
-
-                    maxLines: 1,
-
-                    minScale: 0.7,
-                  },
-
-
-                  {
-                    type: 'text',
-
-                    text:
-                      data.voice.unit,
-
-                    font: {
-                      size: 'caption1',
-                      weight: 'medium',
-                    },
-
-                    textColor:
-                      COLORS.title,
-
-                    maxLines: 1,
-                  },
-
-                ],
-              },
-
-
-              {
-                type: 'text',
-
-                text:
-                  data.voice.title,
-
-                font: {
-                  size: 'caption2',
-                  weight: 'medium',
-                },
-
-                textColor:
-                  COLORS.title,
-
-                maxLines: 1,
-              },
-
-            ],
+            type: 'spacer',
           },
 
         ],
