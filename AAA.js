@@ -775,7 +775,8 @@ function buildMainWidget(
 
 
 /* =========================================================
- * 小尺寸小组件 - 优化版 (垂直三行布局)
+ * 小尺寸小组件 - 优化版
+ * 采用垂直堆叠布局，每行一个数据项
  * ========================================================= */
 
 function buildSmall(
@@ -785,204 +786,440 @@ function buildSmall(
 ) {
 
   return {
+
     type: 'widget',
 
-    backgroundColor: COLORS.bg,
+    backgroundColor:
+      COLORS.bg,
 
-    padding: [10, 12, 10, 12],
+    padding: [
+      10,
+      12,
+      10,
+      12,
+    ],
 
     gap: 8,
 
-    refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    refreshAfter:
+      new Date(
+        Date.now() +
+        60 * 60 * 1000
+      ).toISOString(),
 
     children: [
+
       /*
        * 顶部：标题 + 更新时间
        */
-      headerRow(title, data, fromCache),
+      headerRow(
+        title,
+        data,
+        fromCache
+      ),
+
 
       /*
        * 剩余话费
        */
       {
         type: 'stack',
+
         direction: 'row',
+
         alignItems: 'center',
+
         gap: 8,
-        padding: [8, 10, 8, 10],
-        backgroundColor: COLORS.capsuleBg,
+
+        padding: [
+          8,
+          10,
+          8,
+          10,
+        ],
+
+        backgroundColor:
+          COLORS.capsuleBg,
+
         borderRadius: 12,
+
         borderWidth: 1,
-        borderColor: COLORS.border,
+
+        borderColor:
+          COLORS.border,
+
         children: [
+
           {
             type: 'image',
-            src: 'sf-symbol:creditcard.fill',
-            color: COLORS.accent,
-            width: 20,
-            height: 20,
+
+            src:
+              'sf-symbol:creditcard.fill',
+
+            color:
+              COLORS.accent,
+
+            width: 22,
+
+            height: 22,
           },
+
+
           {
             type: 'stack',
+
             direction: 'column',
+
             flex: 1,
+
             children: [
+
               {
                 type: 'stack',
+
                 direction: 'row',
+
                 alignItems: 'center',
-                justifyContent: 'space-between',
+
+                justifyContent:
+                  'space-between',
+
                 children: [
+
                   {
                     type: 'text',
-                    text: String(data.fee.value),
-                    font: { size: 'title2', weight: 'bold' },
-                    textColor: COLORS.value,
+
+                    text:
+                      String(
+                        data.fee.value
+                      ),
+
+                    font: {
+                      size: 'title2',
+                      weight: 'bold',
+                    },
+
+                    textColor:
+                      COLORS.value,
+
                     maxLines: 1,
+
                     minScale: 0.7,
                   },
+
+
                   {
                     type: 'text',
-                    text: data.fee.unit,
-                    font: { size: 'caption1', weight: 'medium' },
-                    textColor: COLORS.title,
+
+                    text:
+                      data.fee.unit,
+
+                    font: {
+                      size: 'caption1',
+                      weight: 'medium',
+                    },
+
+                    textColor:
+                      COLORS.title,
+
                     maxLines: 1,
                   },
+
                 ],
               },
+
+
               {
                 type: 'text',
-                text: data.fee.title,
-                font: { size: 'caption2', weight: 'medium' },
-                textColor: COLORS.title,
+
+                text:
+                  data.fee.title,
+
+                font: {
+                  size: 'caption2',
+                  weight: 'medium',
+                },
+
+                textColor:
+                  COLORS.title,
+
                 maxLines: 1,
               },
+
             ],
           },
+
         ],
       },
+
 
       /*
        * 剩余流量
        */
       {
         type: 'stack',
+
         direction: 'row',
+
         alignItems: 'center',
+
         gap: 8,
-        padding: [8, 10, 8, 10],
-        backgroundColor: COLORS.capsuleBg,
+
+        padding: [
+          8,
+          10,
+          8,
+          10,
+        ],
+
+        backgroundColor:
+          COLORS.capsuleBg,
+
         borderRadius: 12,
+
         borderWidth: 1,
-        borderColor: COLORS.border,
+
+        borderColor:
+          COLORS.border,
+
         children: [
+
           {
             type: 'image',
-            src: 'sf-symbol:antenna.radiowaves.left.and.right',
-            color: '#007AFF',
-            width: 20,
-            height: 20,
+
+            src:
+              'sf-symbol:antenna.radiowaves.left.and.right',
+
+            color:
+              '#007AFF',
+
+            width: 22,
+
+            height: 22,
           },
+
+
           {
             type: 'stack',
+
             direction: 'column',
+
             flex: 1,
+
             children: [
+
               {
                 type: 'stack',
+
                 direction: 'row',
+
                 alignItems: 'center',
-                justifyContent: 'space-between',
+
+                justifyContent:
+                  'space-between',
+
                 children: [
+
                   {
                     type: 'text',
-                    text: String(data.flow.value),
-                    font: { size: 'title2', weight: 'bold' },
-                    textColor: COLORS.value,
+
+                    text:
+                      String(
+                        data.flow.value
+                      ),
+
+                    font: {
+                      size: 'title2',
+                      weight: 'bold',
+                    },
+
+                    textColor:
+                      COLORS.value,
+
                     maxLines: 1,
+
                     minScale: 0.7,
                   },
+
+
                   {
                     type: 'text',
-                    text: data.flow.unit,
-                    font: { size: 'caption1', weight: 'medium' },
-                    textColor: COLORS.title,
+
+                    text:
+                      data.flow.unit,
+
+                    font: {
+                      size: 'caption1',
+                      weight: 'medium',
+                    },
+
+                    textColor:
+                      COLORS.title,
+
                     maxLines: 1,
                   },
+
                 ],
               },
+
+
               {
                 type: 'text',
-                text: data.flow.title,
-                font: { size: 'caption2', weight: 'medium' },
-                textColor: COLORS.title,
+
+                text:
+                  data.flow.title,
+
+                font: {
+                  size: 'caption2',
+                  weight: 'medium',
+                },
+
+                textColor:
+                  COLORS.title,
+
                 maxLines: 1,
               },
+
             ],
           },
+
         ],
       },
+
 
       /*
        * 剩余语音
        */
       {
         type: 'stack',
+
         direction: 'row',
+
         alignItems: 'center',
+
         gap: 8,
-        padding: [8, 10, 8, 10],
-        backgroundColor: COLORS.capsuleBg,
+
+        padding: [
+          8,
+          10,
+          8,
+          10,
+        ],
+
+        backgroundColor:
+          COLORS.capsuleBg,
+
         borderRadius: 12,
+
         borderWidth: 1,
-        borderColor: COLORS.border,
+
+        borderColor:
+          COLORS.border,
+
         children: [
+
           {
             type: 'image',
-            src: 'sf-symbol:phone.fill',
-            color: '#34C759',
-            width: 20,
-            height: 20,
+
+            src:
+              'sf-symbol:phone.fill',
+
+            color:
+              '#34C759',
+
+            width: 22,
+
+            height: 22,
           },
+
+
           {
             type: 'stack',
+
             direction: 'column',
+
             flex: 1,
+
             children: [
+
               {
                 type: 'stack',
+
                 direction: 'row',
+
                 alignItems: 'center',
-                justifyContent: 'space-between',
+
+                justifyContent:
+                  'space-between',
+
                 children: [
+
                   {
                     type: 'text',
-                    text: String(data.voice.value),
-                    font: { size: 'title2', weight: 'bold' },
-                    textColor: COLORS.value,
+
+                    text:
+                      String(
+                        data.voice.value
+                      ),
+
+                    font: {
+                      size: 'title2',
+                      weight: 'bold',
+                    },
+
+                    textColor:
+                      COLORS.value,
+
                     maxLines: 1,
+
                     minScale: 0.7,
                   },
+
+
                   {
                     type: 'text',
-                    text: data.voice.unit,
-                    font: { size: 'caption1', weight: 'medium' },
-                    textColor: COLORS.title,
+
+                    text:
+                      data.voice.unit,
+
+                    font: {
+                      size: 'caption1',
+                      weight: 'medium',
+                    },
+
+                    textColor:
+                      COLORS.title,
+
                     maxLines: 1,
                   },
+
                 ],
               },
+
+
               {
                 type: 'text',
-                text: data.voice.title,
-                font: { size: 'caption2', weight: 'medium' },
-                textColor: COLORS.title,
+
+                text:
+                  data.voice.title,
+
+                font: {
+                  size: 'caption2',
+                  weight: 'medium',
+                },
+
+                textColor:
+                  COLORS.title,
+
                 maxLines: 1,
               },
+
             ],
           },
+
         ],
       },
+
     ],
   };
 }
