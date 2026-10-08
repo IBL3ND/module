@@ -777,10 +777,189 @@ function buildMainWidget(
 /* =========================================================
  * 小组件
  *
- * 重点：
- * 剩余话费使用左右 spacer
- * 确保整个胶囊真正位于小组件正中央
+ * 三行横条：圆形图标 + 数值 + 说明
  * ========================================================= */
+
+/* 小尺寸专用：圆形图标 + 数值 + 说明 的横条 */
+function smallRow(
+  color,
+  symbol,
+  glyph,
+  value,
+  unit,
+  label
+) {
+
+  const iconChild =
+    symbol
+      ? {
+          type: 'image',
+
+          src: symbol,
+
+          color: '#FFFFFF',
+
+          width: 16,
+
+          height: 16,
+        }
+      : {
+          type: 'text',
+
+          text: glyph,
+
+          font: {
+            size: 'headline',
+            weight: 'bold',
+          },
+
+          textColor: '#FFFFFF',
+        };
+
+  return {
+
+    type: 'stack',
+
+    direction: 'row',
+
+    alignItems: 'center',
+
+    gap: 8,
+
+    flex: 1,
+
+    padding: [
+      4,
+      8,
+      4,
+      8,
+    ],
+
+    backgroundColor: {
+      light: color + '1F',
+      dark: color + '33',
+    },
+
+    borderRadius: 14,
+
+    children: [
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        justifyContent: 'center',
+
+        width: 30,
+
+        height: 30,
+
+        borderRadius: 15,
+
+        backgroundColor: color,
+
+        children: [
+          iconChild,
+        ],
+      },
+
+      {
+        type: 'stack',
+
+        direction: 'column',
+
+        flex: 1,
+
+        children: [
+
+          {
+            type: 'stack',
+
+            direction: 'row',
+
+            alignItems: 'center',
+
+            gap: 3,
+
+            children: [
+
+              {
+                type: 'text',
+
+                text: String(value),
+
+                font: {
+                  size: 'title3',
+                  weight: 'bold',
+                },
+
+                textColor: color,
+
+                maxLines: 1,
+
+                minScale: 0.5,
+              },
+
+              {
+                type: 'text',
+
+                text: String(unit),
+
+                font: {
+                  size: 'caption1',
+                  weight: 'semibold',
+                },
+
+                textColor: color,
+
+                maxLines: 1,
+              },
+
+              {
+                type: 'spacer',
+              },
+            ],
+          },
+
+          {
+            type: 'stack',
+
+            direction: 'row',
+
+            alignItems: 'center',
+
+            children: [
+
+              {
+                type: 'text',
+
+                text: String(label),
+
+                font: {
+                  size: 'caption2',
+                  weight: 'medium',
+                },
+
+                textColor: color + 'B3',
+
+                maxLines: 1,
+
+                minScale: 0.7,
+              },
+
+              {
+                type: 'spacer',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
 
 function buildSmall(
   title,
@@ -797,12 +976,12 @@ function buildSmall(
 
     padding: [
       10,
-      12,
       10,
-      12,
+      10,
+      10,
     ],
 
-    gap: 8,
+    gap: 6,
 
     refreshAfter:
       new Date(
@@ -812,219 +991,32 @@ function buildSmall(
 
     children: [
 
-      /*
-       * 顶部：标题 + 更新时间
-       */
-      headerRow(
-        title,
-        data,
-        fromCache
+      smallRow(
+        '#E8651F',
+        null,
+        '¥',
+        data.fee.value,
+        data.fee.unit,
+        data.fee.title
       ),
 
-
-      /*
-       * 中间：剩余话费
-       *
-       * 左右 spacer 确保胶囊真正居中
-       */
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        children: [
-
-          {
-            type: 'spacer',
-          },
-
-
-          {
-            type: 'stack',
-
-            direction: 'column',
-
-            alignItems: 'center',
-
-            justifyContent: 'center',
-
-            padding: [
-              7,
-              20,
-              7,
-              20,
-            ],
-
-            backgroundColor:
-              COLORS.capsuleBg,
-
-            borderRadius: 14,
-
-            borderWidth: 1,
-
-            borderColor:
-              COLORS.border,
-
-            children: [
-
-              {
-                type: 'text',
-
-                text:
-                  data.fee.title,
-
-                font: {
-                  size: 'caption2',
-                  weight: 'medium',
-                },
-
-                textColor:
-                  COLORS.title,
-
-                textAlign:
-                  'center',
-
-                maxLines: 1,
-              },
-
-
-              {
-                type: 'stack',
-
-                direction: 'row',
-
-                alignItems: 'center',
-
-                justifyContent:
-                  'center',
-
-                gap: 3,
-
-                children: [
-
-                  {
-                    type: 'text',
-
-                    text:
-                      String(
-                        data.fee.value
-                      ),
-
-                    font: {
-                      size: 'title2',
-                      weight: 'semibold',
-                    },
-
-                    textColor:
-                      COLORS.value,
-
-                    textAlign:
-                      'center',
-
-                    maxLines: 1,
-
-                    minScale: 0.7,
-                  },
-
-
-                  {
-                    type: 'text',
-
-                    text:
-                      data.fee.unit,
-
-                    font: {
-                      size: 'caption2',
-                    },
-
-                    textColor:
-                      COLORS.title,
-
-                    maxLines: 1,
-                  },
-
-                ],
-              },
-
-            ],
-          },
-
-
-          {
-            type: 'spacer',
-          },
-
-        ],
-      },
-
-
-      /*
-       * 下方：剩余语音 + 剩余流量
-       */
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        gap: 7,
-
-        children: [
-
-          makeCapsule(
-            data.voice.title,
-            data.voice.value,
-            data.voice.unit
-          ),
-
-          makeCapsule(
-            data.flow.title,
-            data.flow.value,
-            data.flow.unit
-          ),
-
-        ],
-      },
-
-
-      /*
-       * 底部短横线
-       */
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        children: [
-
-          {
-            type: 'spacer',
-          },
-
-          {
-            type: 'stack',
-
-            width: 42,
-
-            height: 3,
-
-            borderRadius: 2,
-
-            backgroundColor:
-              COLORS.border,
-          },
-
-          {
-            type: 'spacer',
-          },
-
-        ],
-      },
+      smallRow(
+        '#4DA6F0',
+        'sf-symbol:antenna.radiowaves.left.and.right',
+        '',
+        data.flow.value,
+        data.flow.unit,
+        data.flow.title
+      ),
+
+      smallRow(
+        '#55C759',
+        'sf-symbol:phone.and.waveform.fill',
+        '',
+        data.voice.value,
+        data.voice.unit,
+        data.voice.title
+      ),
 
     ],
   };
