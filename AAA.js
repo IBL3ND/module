@@ -146,14 +146,24 @@ async function handleCapture(ctx) {
   const phone = extractPhone(url);
 
 
+  let changed = false;
+
+
   /*
    * 保存 Cookie
    */
   if (cookie) {
-    ctx.storage.set(
-      'unicom_cookie',
-      cookie
-    );
+    const oldCookie =
+      ctx.storage.get('unicom_cookie') || '';
+
+    if (cookie !== oldCookie) {
+      ctx.storage.set(
+        'unicom_cookie',
+        cookie
+      );
+
+      changed = true;
+    }
   }
 
 
@@ -161,17 +171,28 @@ async function handleCapture(ctx) {
    * 保存手机号
    */
   if (phone) {
-    ctx.storage.set(
-      'unicom_phone',
-      phone
-    );
+    const oldPhone =
+      ctx.storage.get('unicom_phone') || '';
+
+    if (phone !== oldPhone) {
+      ctx.storage.set(
+        'unicom_phone',
+        phone
+      );
+
+      changed = true;
+    }
   }
 
 
   /*
-   * 每次成功捕获到 Cookie 都通知
+   * 第一次成功捕获时通知
    */
-  if (cookie) {
+  if (
+    changed &&
+    cookie &&
+    phone
+  ) {
     ctx.notify({
       title: '中国联通',
       body: '已自动获取登录信息，小组件将自动更新',
@@ -754,8 +775,191 @@ function buildMainWidget(
 
 
 /* =========================================================
- * 小组件（小尺寸 - 三行图标样式）
+ * 小组件
+ *
+ * 三行横条：圆形图标 + 数值 + 说明
  * ========================================================= */
+
+/* 小尺寸专用：圆形图标 + 数值 + 说明 的横条 */
+function smallRow(
+  color,
+  symbol,
+  glyph,
+  value,
+  unit,
+  label
+) {
+
+  const iconChild =
+    symbol
+      ? {
+          type: 'image',
+
+          src: symbol,
+
+          color: '#FFFFFF',
+
+          width: 16,
+
+          height: 16,
+        }
+      : {
+          type: 'text',
+
+          text: glyph,
+
+          font: {
+            size: 'headline',
+            weight: 'bold',
+          },
+
+          textColor: '#FFFFFF',
+        };
+
+  return {
+
+    type: 'stack',
+
+    direction: 'row',
+
+    alignItems: 'center',
+
+    gap: 8,
+
+    flex: 1,
+
+    padding: [
+      4,
+      8,
+      4,
+      8,
+    ],
+
+    backgroundColor: {
+      light: color + '1F',
+      dark: color + '33',
+    },
+
+    borderRadius: 14,
+
+    children: [
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        justifyContent: 'center',
+
+        width: 30,
+
+        height: 30,
+
+        borderRadius: 15,
+
+        backgroundColor: color,
+
+        children: [
+          iconChild,
+        ],
+      },
+
+      {
+        type: 'stack',
+
+        direction: 'column',
+
+        flex: 1,
+
+        children: [
+
+          {
+            type: 'stack',
+
+            direction: 'row',
+
+            alignItems: 'center',
+
+            gap: 3,
+
+            children: [
+
+              {
+                type: 'text',
+
+                text: String(value),
+
+                font: {
+                  size: 'title3',
+                  weight: 'bold',
+                },
+
+                textColor: color,
+
+                maxLines: 1,
+
+                minScale: 0.5,
+              },
+
+              {
+                type: 'text',
+
+                text: String(unit),
+
+                font: {
+                  size: 'caption1',
+                  weight: 'semibold',
+                },
+
+                textColor: color,
+
+                maxLines: 1,
+              },
+
+              {
+                type: 'spacer',
+              },
+            ],
+          },
+
+          {
+            type: 'stack',
+
+            direction: 'row',
+
+            alignItems: 'center',
+
+            children: [
+
+              {
+                type: 'text',
+
+                text: String(label),
+
+                font: {
+                  size: 'caption2',
+                  weight: 'medium',
+                },
+
+                textColor: color + 'B3',
+
+                maxLines: 1,
+
+                minScale: 0.7,
+              },
+
+              {
+                type: 'spacer',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
 
 function buildSmall(
   title,
@@ -763,110 +967,57 @@ function buildSmall(
   fromCache
 ) {
 
-  function makeRow(icon, iconColor, bgColor, value, unit, label, valueColor) {
-    return {
-      type: 'stack',
-      direction: 'row',
-      alignItems: 'center',
-      gap: 10,
-      padding: [8, 10, 8, 10],
-      backgroundColor: bgColor,
-      borderRadius: 14,
-      children: [
-        {
-          type: 'stack',
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          backgroundColor: iconColor,
-          alignItems: 'center',
-          justifyContent: 'center',
-          children: [
-            {
-              type: 'image',
-              src: icon,
-              color: { light: '#FFFFFF', dark: '#FFFFFF' },
-              width: 16,
-              height: 16,
-            },
-          ],
-        },
-        {
-          type: 'stack',
-          direction: 'column',
-          alignItems: 'leading',
-          gap: 1,
-          children: [
-            {
-              type: 'stack',
-              direction: 'row',
-              alignItems: 'baseline',
-              gap: 3,
-              children: [
-                {
-                  type: 'text',
-                  text: String(value),
-                  font: { size: 'title3', weight: 'semibold' },
-                  textColor: valueColor,
-                  maxLines: 1,
-                  minScale: 0.7,
-                },
-                {
-                  type: 'text',
-                  text: unit,
-                  font: { size: 'caption1', weight: 'medium' },
-                  textColor: valueColor,
-                  maxLines: 1,
-                },
-              ],
-            },
-            {
-              type: 'text',
-              text: label,
-              font: { size: 'caption2' },
-              textColor: { light: '#999999', dark: '#8E8E93' },
-              maxLines: 1,
-            },
-          ],
-        },
-      ],
-    };
-  }
-
   return {
+
     type: 'widget',
-    backgroundColor: COLORS.bg,
-    padding: [10, 12, 10, 12],
-    gap: 8,
-    refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+
+    backgroundColor:
+      COLORS.bg,
+
+    padding: [
+      10,
+      10,
+      10,
+      10,
+    ],
+
+    gap: 6,
+
+    refreshAfter:
+      new Date(
+        Date.now() +
+        60 * 60 * 1000
+      ).toISOString(),
+
     children: [
-      makeRow(
-        'sf-symbol:circle.grid.cross.fill',
-        { light: '#E60012', dark: '#FF375F' },
-        { light: '#FFF0F0', dark: '#3A2A2A' },
+
+      smallRow(
+        '#E8651F',
+        null,
+        '¥',
         data.fee.value,
         data.fee.unit,
-        data.fee.title || '剩余话费',
-        { light: '#E60012', dark: '#FF6B6B' }
+        data.fee.title
       ),
-      makeRow(
+
+      smallRow(
+        '#4DA6F0',
         'sf-symbol:antenna.radiowaves.left.and.right',
-        { light: '#007AFF', dark: '#0A84FF' },
-        { light: '#EEF5FF', dark: '#1A2A3A' },
+        '',
         data.flow.value,
         data.flow.unit,
-        data.flow.title || '剩余流量',
-        { light: '#007AFF', dark: '#5AC8FA' }
+        data.flow.title
       ),
-      makeRow(
-        'sf-symbol:phone.fill',
-        { light: '#34C759', dark: '#30D158' },
-        { light: '#EEFFF2', dark: '#1A2A1A' },
+
+      smallRow(
+        '#55C759',
+        'sf-symbol:phone.and.waveform.fill',
+        '',
         data.voice.value,
         data.voice.unit,
-        data.voice.title || '剩余语音',
-        { light: '#34C759', dark: '#30D158' }
+        data.voice.title
       ),
+
     ],
   };
 }
