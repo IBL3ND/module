@@ -145,54 +145,17 @@ async function handleCapture(ctx) {
    */
   const phone = extractPhone(url);
 
-
-  let changed = false;
-
-
-  /*
-   * 保存 Cookie
-   */
+  // 保存Cookie
   if (cookie) {
-    const oldCookie =
-      ctx.storage.get('unicom_cookie') || '';
-
-    if (cookie !== oldCookie) {
-      ctx.storage.set(
-        'unicom_cookie',
-        cookie
-      );
-
-      changed = true;
-    }
+    ctx.storage.set('unicom_cookie', cookie);
   }
-
-
-  /*
-   * 保存手机号
-   */
+  // 保存手机号
   if (phone) {
-    const oldPhone =
-      ctx.storage.get('unicom_phone') || '';
-
-    if (phone !== oldPhone) {
-      ctx.storage.set(
-        'unicom_phone',
-        phone
-      );
-
-      changed = true;
-    }
+    ctx.storage.set('unicom_phone', phone);
   }
 
-
-  /*
-   * 第一次成功捕获时通知
-   */
-  if (
-    changed &&
-    cookie &&
-    phone
-  ) {
+  // 【修改点】只要同时抓到cookie和手机号，每次捕获都推送通知，不再判断是否变更
+  if (cookie && phone) {
     ctx.notify({
       title: '中国联通',
       body: '已自动获取登录信息，小组件将自动更新',
@@ -960,7 +923,7 @@ function buildLockScreen(
           textAlign:
             'center',
 
-            maxLines: 1,
+          maxLines: 1,
         },
 
       ],
