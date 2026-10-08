@@ -535,7 +535,7 @@ function headerRow(
 
 
 /* =========================================================
- * 通用数据胶囊（中/大/超大号 使用）
+ * 通用数据胶囊
  * ========================================================= */
 
 function makeCapsule(
@@ -647,182 +647,6 @@ function makeCapsule(
           },
 
         ],
-      },
-
-    ],
-  };
-}
-
-
-/* =========================================================
- * 小尺寸 —— 横向条目
- * 
- * 布局：左侧彩色圆形图标 + 右侧（标题在上，数值在下）
- * 三条纵向堆叠，完整利用小尺寸高度
- * ========================================================= */
-
-function makeSmallRow(
-  icon,
-  iconColor,
-  title,
-  value,
-  unit,
-  bgColor
-) {
-
-  return {
-    type: 'stack',
-
-    direction: 'row',
-
-    alignItems: 'center',
-
-    gap: 10,
-
-    padding: [
-      8,
-      10,
-      8,
-      10,
-    ],
-
-    backgroundColor:
-      bgColor,
-
-    borderRadius: 16,
-
-    children: [
-
-      /*
-       * 左侧圆形图标
-       */
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        justifyContent: 'center',
-
-        width: 30,
-
-        height: 30,
-
-        borderRadius: 15,
-
-        backgroundColor:
-          iconColor,
-
-        children: [
-
-          {
-            type: 'image',
-
-            src: icon,
-
-            color: '#FFFFFF',
-
-            width: 16,
-
-            height: 16,
-          },
-
-        ],
-      },
-
-
-      /*
-       * 右侧：标题 + 数值
-       */
-      {
-        type: 'stack',
-
-        direction: 'column',
-
-        alignItems: 'flex-start',
-
-        justifyContent: 'center',
-
-        gap: 1,
-
-        children: [
-
-          {
-            type: 'text',
-
-            text: title,
-
-            font: {
-              size: 'caption2',
-              weight: 'medium',
-            },
-
-            textColor:
-              COLORS.title,
-
-            maxLines: 1,
-
-            minScale: 0.8,
-          },
-
-
-          {
-            type: 'stack',
-
-            direction: 'row',
-
-            alignItems: 'baseline',
-
-            gap: 3,
-
-            children: [
-
-              {
-                type: 'text',
-
-                text: String(value),
-
-                font: {
-                  size: 'title3',
-                  weight: 'semibold',
-                },
-
-                textColor:
-                  iconColor,
-
-                maxLines: 1,
-
-                minScale: 0.6,
-              },
-
-
-              {
-                type: 'text',
-
-                text: unit,
-
-                font: {
-                  size: 'caption2',
-                },
-
-                textColor:
-                  COLORS.title,
-
-                maxLines: 1,
-
-                minScale: 0.8,
-              },
-
-            ],
-          },
-
-        ],
-      },
-
-
-      {
-        type: 'spacer',
       },
 
     ],
@@ -951,41 +775,158 @@ function buildMainWidget(
 
 
 /* =========================================================
- * 小组件（小尺寸）
+ * 小组件（仅此处做过紧凑化处理）
  *
- * 排版参照中国电信小组件：
- * 三条横向条目纵向堆叠
- * 每条：左侧彩色圆形图标 + 右侧标题与数值
- * 
- * 仅优化小尺寸，其余尺寸逻辑保持不变
+ * 只对 systemSmall 进行了优化：
+ * - 使用更紧凑的 header（headerSmall）
+ * - 使用更紧凑的胶囊样式（smallCapsule）
+ * - 减小整体内边距、间距与字体最小缩放，移除底部横线以避免截断
+ * 其余函数均未改动，确保中/大尺寸不受影响
  * ========================================================= */
+
+/* 紧凑 header，仅用于小尺寸 */
+function headerSmall(title, data) {
+  const updateTime =
+    data?.updateTime ||
+    '--:--';
+
+  return {
+    type: 'stack',
+    direction: 'row',
+    alignItems: 'center',
+    children: [
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 6,
+        children: [
+          {
+            type: 'image',
+            src: 'sf-symbol:simcard.fill',
+            color: COLORS.accent,
+            width: 14,
+            height: 14,
+          },
+          {
+            type: 'text',
+            text: title,
+            font: {
+              size: 'caption1',
+              weight: 'semibold',
+            },
+            textColor: COLORS.value,
+            maxLines: 1,
+            minScale: 0.75,
+          },
+        ],
+      },
+      {
+        type: 'spacer',
+      },
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 4,
+        children: [
+          {
+            type: 'image',
+            src: 'sf-symbol:arrow.clockwise',
+            color: COLORS.time,
+            width: 11,
+            height: 11,
+          },
+          {
+            type: 'text',
+            text: updateTime,
+            font: {
+              size: 'caption2',
+            },
+            textColor: COLORS.time,
+            maxLines: 1,
+            minScale: 0.75,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/* 紧凑胶囊，仅用于小尺寸底部两项或中间大胶囊（更小的内边距与文字缩放） */
+function smallCapsule(title, value, unit, options = {}) {
+  const padV = options.padV ?? 6;
+  const padH = options.padH ?? 12;
+
+  return {
+    type: 'stack',
+    direction: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    padding: [
+      padV,
+      padH,
+      padV,
+      padH,
+    ],
+    backgroundColor: COLORS.capsuleBg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    children: [
+      {
+        type: 'text',
+        text: title,
+        font: {
+          size: 'caption2',
+          weight: 'medium',
+        },
+        textColor: COLORS.title,
+        textAlign: 'center',
+        maxLines: 1,
+        minScale: 0.7,
+      },
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 3,
+        children: [
+          {
+            type: 'text',
+            text: String(value),
+            font: {
+              size: 'title3',
+              weight: 'semibold',
+            },
+            textColor: COLORS.value,
+            textAlign: 'center',
+            maxLines: 1,
+            minScale: 0.6,
+          },
+          {
+            type: 'text',
+            text: unit,
+            font: {
+              size: 'caption2',
+            },
+            textColor: COLORS.title,
+            maxLines: 1,
+            minScale: 0.7,
+          },
+        ],
+      },
+    ],
+  };
+}
 
 function buildSmall(
   title,
   data,
   fromCache
 ) {
-
-  const rowBg = {
-    light: '#F5F5F7',
-    dark: '#3A3A3C',
-  };
-
-  const feeColor = {
-    light: '#FF6B4D',
-    dark: '#FF7A5C',
-  };
-
-  const flowColor = {
-    light: '#2E9BFF',
-    dark: '#3EA6FF',
-  };
-
-  const voiceColor = {
-    light: '#34C759',
-    dark: '#30D158',
-  };
-
 
   return {
 
@@ -994,14 +935,15 @@ function buildSmall(
     backgroundColor:
       COLORS.bg,
 
+    /* 更紧凑的外边距，避免小尺寸内容被裁切 */
     padding: [
+      6,
       10,
-      12,
+      6,
       10,
-      12,
     ],
 
-    gap: 7,
+    gap: 6,
 
     refreshAfter:
       new Date(
@@ -1012,62 +954,19 @@ function buildSmall(
     children: [
 
       /*
-       * 顶部：标题 + 更新时间
+       * 顶部：紧凑标题 + 更新时间（使用 headerSmall）
        */
-      headerRow(
+      headerSmall(
         title,
-        data,
-        fromCache
+        data
       ),
 
 
       /*
-       * 三条数据纵向堆叠
-       */
-      {
-        type: 'stack',
-
-        direction: 'column',
-
-        alignItems: 'stretch',
-
-        gap: 6,
-
-        children: [
-
-          makeSmallRow(
-            'sf-symbol:yen.sign',
-            feeColor,
-            data.fee.title,
-            data.fee.value,
-            data.fee.unit,
-            rowBg
-          ),
-
-          makeSmallRow(
-            'sf-symbol:antenna.radiowaves.left.and.right',
-            flowColor,
-            data.flow.title,
-            data.flow.value,
-            data.flow.unit,
-            rowBg
-          ),
-
-          makeSmallRow(
-            'sf-symbol:phone.fill',
-            voiceColor,
-            data.voice.title,
-            data.voice.value,
-            data.voice.unit,
-            rowBg
-          ),
-
-        ],
-      },
-
-
-      /*
-       * 底部短横线
+       * 中间：剩余话费
+       *
+       * 左右 spacer 确保胶囊真正居中
+       * 使用更紧凑的中间胶囊样式
        */
       {
         type: 'stack',
@@ -1082,18 +981,17 @@ function buildSmall(
             type: 'spacer',
           },
 
-          {
-            type: 'stack',
 
-            width: 42,
+          smallCapsule(
+            data.fee.title,
+            data.fee.value,
+            data.fee.unit,
+            {
+              padV: 6,
+              padH: 14,
+            }
+          ),
 
-            height: 3,
-
-            borderRadius: 2,
-
-            backgroundColor:
-              COLORS.border,
-          },
 
           {
             type: 'spacer',
@@ -1101,6 +999,49 @@ function buildSmall(
 
         ],
       },
+
+
+      /*
+       * 下方：剩余语音 + 剩余流量
+       * 使用紧凑胶囊
+       */
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        gap: 6,
+
+        children: [
+
+          smallCapsule(
+            data.voice.title,
+            data.voice.value,
+            data.voice.unit,
+            {
+              padV: 6,
+              padH: 10,
+            }
+          ),
+
+          smallCapsule(
+            data.flow.title,
+            data.flow.value,
+            data.flow.unit,
+            {
+              padV: 6,
+              padH: 10,
+            }
+          ),
+
+        ],
+      },
+
+      /*
+       * 为避免占用过多垂直空间，小尺寸取消底部短横线（原实现会占用高度）
+       */
 
     ],
   };
