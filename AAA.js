@@ -1,5 +1,5 @@
 /**
- * 中国联通话费流量小组件（支持多号码）
+ * 中国联通话费流量小组件
  *
  * 自动获取方式：
  * 1. 打开中国联通 App
@@ -7,10 +7,6 @@
  * 3. 点击当前余额 / 话费位置，让 App 查询一次
  * 4. Egern 会自动捕获联通 App 请求中的 Cookie 和手机号
  * 5. 小组件自动使用捕获的数据，无需手动填写环境变量
- *
- * 多号码：
- * - 环境变量 ACCOUNT_ID = 1 ~ 5（对应第几个号码）
- * - 环境变量 TITLE      = 自定义标题（可选，模块里设置备注）
  *
  * 自动捕获域名：
  * m.client.10010.com
@@ -21,348 +17,180 @@
 
 
 /* =========================================================
- * 基础配置
- * ========================================================= */
-
-const API_HOST = 'm.client.10010.com';
-
-const API_URL =
-  'https://m.client.10010.com/mobileserviceimportant/home/queryUserInfoSeven';
-
-
-/* =========================================================
- * 颜色
- * ========================================================= */
-
-const COLORS = {
-  bg: {
-    light: '#FFFFFF',
-    dark: '#2C2C2E',
-  },
-
-  border: {
-    light: '#E5E5EA',
-    dark: '#3A3A3C',
-  },
-
-  title: {
-    light: '#666666',
-    dark: '#8E8E93',
-  },
-
-  value: {
-    light: '#1C1C1E',
-    dark: '#FFFFFF',
-  },
-
-  time: {
-    light: '#999999',
-    dark: '#666666',
-  },
-
-  error: {
-    light: '#FF3B30',
-    dark: '#FF453A',
-  },
-
-  capsuleBg: {
-    light: '#F5F5F7',
-    dark: '#3A3A3C',
-  },
-
-  accent: {
-    light: '#E60012',
-    dark: '#FF375F',
-  },
-};
-
-
-/* =========================================================
- * 存储 Key 工具（支持多号码）
- * ========================================================= */
-
-function getAccountId(ctx) {
-  const id = parseInt(String(ctx.env.ACCOUNT_ID || '').trim(), 10);
-  return Number.isFinite(id) && id >= 1 ? id : 0; // 0 = 旧版单号码兼容
-}
-
-function getPhones(ctx) {
-  return ctx.storage.getJSON('unicom_phones') || [];
-}
-
-function savePhones(ctx, phones) {
-  ctx.storage.setJSON('unicom_phones', phones);
-}
-
-function cookieKey(phone) {
-  return phone ? `unicom_cookie_${phone}` : 'unicom_cookie';
-}
-
-function dataKey(phone) {
-  return phone ? `unicom_datasource_${phone}` : 'unicom_datasource';
-}
-
-
-/* =========================================================
- * Cookie / 手机号捕获
+ * Token / Cookie 捕获
  * ========================================================= */
 
 function getRequestHeader(headers, name) {
-  if (!headers) return '';
+  if (!headers) return "";
 
   try {
-    if (typeof headers.get === 'function') {
-      return headers.get(name) || '';
+    if (typeof headers.get === "function") {
+      return headers.get(name) || "";
     }
   } catch (e) {}
 
   try {
     for (const key of Object.keys(headers)) {
       if (String(key).toLowerCase() === name.toLowerCase()) {
-        return headers[key] || '';
+        return headers[key] || "";
       }
     }
   } catch (e) {}
 
-  return '';
+  return "";
 }
-
-
-function extractPhone(url) {
-  if (!url) return '';
-
-  try {
-    const match = url.match(
-      /[?&]desmobiel=([^&]+)/i
-    );
-
-    if (match && match[1]) {
-      return decodeURIComponent(match[1]).trim();
-    }
-  } catch (e) {}
-
-  return '';
-}
-
 
 async function handleCapture(ctx) {
   const req = ctx.request || {};
-  const url = String(req.url || '');
+  const url = String(req.url || "");
 
-  if (!url) return;
+  if (!url.includes("m.client.10010.com")) return;
 
-  if (!url.includes(API_HOST)) {
-    return;
+  const cookie = String(getRequestHeader(req.headers, "Cookie") || "").trim();
+  if (!cookie) return;
+
+  const oldCookie = ctx.storage.get("unicom_cookie") || "";
+  if (cookie === oldCookie) return;
+
+  ctx.storage.set("unicom_cookie", cookie);
+
+  // 尝试从 Cookie 里提取手机号
+  const phoneMatch = cookie.match(/u_account=(\d{11})/);
+  if (phoneMatch) {
+    ctx.storage.set("unicom_phone", phoneMatch[1]);
   }
 
-  const cookie = String(
-    getRequestHeader(req.headers, 'cookie') || ''
-  ).trim();
-
-  const phone = extractPhone(url);
-
-  let changed = false;
-
-  if (cookie && phone) {
-    // 按手机号隔离存储
-    const oldCookie = ctx.storage.get(cookieKey(phone)) || '';
-    if (cookie !== oldCookie) {
-      ctx.storage.set(cookieKey(phone), cookie);
-      changed = true;
-    }
-
-    // 维护已捕获号码列表（按捕获顺序）
-    let phones = getPhones(ctx);
-    if (!phones.includes(phone)) {
-      phones.push(phone);
-      savePhones(ctx, phones);
-      changed = true;
-    }
-
-    // 兼容旧版单号码 key
-    ctx.storage.set('unicom_cookie', cookie);
-    ctx.storage.set('unicom_phone', phone);
-  }
-
-  if (changed && cookie && phone) {
-    const phones = getPhones(ctx);
-    const index = phones.indexOf(phone) + 1;
-    ctx.notify({
-      title: '中国联通',
-      body: `已获取号码 ${phone}（第 ${index} 个），小组件将自动更新`,
-    });
-  }
-}
-
-
-/* =========================================================
- * 数据请求
- * ========================================================= */
-
-async function fetchUnicomData(ctx, cookie, phone) {
-  const url =
-    `${API_URL}?version=iphone_c@10.0100` +
-    `&desmobiel=${encodeURIComponent(phone)}` +
-    `&showType=0`;
-
-  const resp = await ctx.http.get(url, {
-    timeout: 10000,
-    headers: {
-      Host: API_HOST,
-      'User-Agent': 'ChinaUnicom.x CFNetwork iOS/16.3',
-      Cookie: cookie,
-    },
-    credentials: 'omit',
+  ctx.notify({
+    title: "中国联通",
+    body: "已自动获取登录信息，小组件将自动更新",
   });
-
-  if (!resp || resp.status !== 200) {
-    throw new Error(
-      `HTTP ${resp ? resp.status : 'no-response'}`
-    );
-  }
-
-  return await resp.json();
 }
 
 
 /* =========================================================
- * 数据解析
+ * 颜色配置
  * ========================================================= */
 
-function parseUnicomData(res) {
-  if (
-    !res ||
-    res.code !== 'Y' ||
-    !res.feeResource ||
-    !res.voiceResource ||
-    !res.flowResource
-  ) {
-    throw new Error(
-      `API 返回异常：${res?.code || 'unknown'}`
-    );
-  }
+const COLORS = {
+  bg:        { light: "#FFFFFF", dark: "#2C2C2E" },
+  border:    { light: "#E5E5EA", dark: "#3A3A3C" },
+  title:     { light: "#666666", dark: "#8E8E93" },
+  value:     { light: "#1C1C1E", dark: "#FFFFFF" },
+  time:      { light: "#999999", dark: "#666666" },
+  error:     { light: "#FF3B30", dark: "#FF453A" },
+  capsuleBg: { light: "#F5F5F7", dark: "#3A3A3C" },
+  accent:    { light: "#E60012", dark: "#FF3B30" },
+};
 
-  const feeResource = res.feeResource;
-  const voiceResource = res.voiceResource;
-  const flowResource = res.flowResource;
 
-  return {
-    fee: {
-      title: feeResource.dynamicFeeTitle || '剩余话费',
-      value: feeResource.feePersent ?? 0,
-      unit: feeResource.newUnit || '元',
-    },
-    voice: {
-      title: voiceResource.dynamicVoiceTitle || '剩余语音',
-      value: voiceResource.voicePersent ?? 0,
-      unit: voiceResource.newUnit || '分钟',
-    },
-    flow: {
-      title: flowResource.dynamicFlowTitle || '剩余流量',
-      value: flowResource.flowPersent ?? 0,
-      unit: flowResource.newUnit || 'MB',
-    },
-    updateTime: new Date().toLocaleTimeString('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'Asia/Shanghai',
-    }),
-    timestamp: Date.now(),
+/* =========================================================
+ * 数据获取
+ * ========================================================= */
+
+async function fetchData(ctx) {
+  const cookie =
+    (ctx.env.Cookie || "").trim() ||
+    (ctx.storage.get("unicom_cookie") || "").trim();
+
+  const phone =
+    (ctx.env.Phone || "").trim() ||
+    (ctx.storage.get("unicom_phone") || "").trim();
+
+  let data = {
+    fee:   { title: "剩余话费", value: "--", unit: "元" },
+    voice: { title: "剩余语音", value: "--", unit: "分" },
+    flow:  { title: "剩余流量", value: "--", unit: "GB" },
+    updateTime: "--:--",
+    error: null,
   };
-}
 
-
-/* =========================================================
- * 加载数据
- * ========================================================= */
-
-async function loadData(ctx) {
-  const accountId = getAccountId(ctx); // 1~5 或 0（兼容）
-  const phones = getPhones(ctx);
-
-  let phone = '';
-  let cookie = '';
-
-  if (accountId >= 1) {
-    // 多号码模式：按 ACCOUNT_ID 取对应号码
-    phone = phones[accountId - 1] || '';
-    if (phone) {
-      cookie = ctx.storage.get(cookieKey(phone)) || '';
-    }
-  } else {
-    // 旧版单号码兼容
-    phone = ctx.storage.get('unicom_phone') || phones[0] || '';
-    cookie =
-      ctx.storage.get(cookieKey(phone)) ||
-      ctx.storage.get('unicom_cookie') ||
-      '';
-  }
-
-  if (!cookie || !phone) {
-    return {
-      data: null,
-      configured: false,
-      error: null,
-      phone: '',
-    };
+  if (!cookie) {
+    data.error = "配置缺失";
+    return data;
   }
 
   try {
-    const res = await fetchUnicomData(ctx, cookie, phone);
-    const data = parseUnicomData(res);
+    const resp = await ctx.http.get(
+      "https://m.client.10010.com/mobileserviceimportant/home/queryUserInfoSeven?version=iphone&desmobile=" +
+        (phone || "") +
+        "&showType=3",
+      {
+        headers: {
+          Cookie: cookie,
+          "User-Agent":
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 unicom{version:iphone_c@11.0500}",
+        },
+      }
+    );
 
-    ctx.storage.setJSON(dataKey(phone), data);
+    const json = typeof resp.body === "string" ? JSON.parse(resp.body) : resp.body;
 
-    return {
-      data,
-      configured: true,
-      error: null,
-      phone,
-    };
+    if (json && json.code === "0000" && json.data) {
+      const d = json.data;
+
+      // 话费
+      if (d.feeResource && d.feeResource.remain) {
+        data.fee.value = parseFloat(d.feeResource.remain).toFixed(2);
+      }
+
+      // 语音
+      if (d.voiceResource && d.voiceResource.remain) {
+        data.voice.value = Math.floor(parseFloat(d.voiceResource.remain));
+      }
+
+      // 流量
+      if (d.flowResource && d.flowResource.remain) {
+        const remainMB = parseFloat(d.flowResource.remain);
+        data.flow.value = (remainMB / 1024).toFixed(2);
+      }
+
+      data.updateTime = new Date().toLocaleTimeString("zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+    } else {
+      data.error = json?.msg || "数据异常";
+    }
   } catch (e) {
-    const cached = ctx.storage.getJSON(dataKey(phone));
-
-    return {
-      data: cached || null,
-      configured: true,
-      error: e,
-      phone,
-    };
+    data.error = e.message || "请求失败";
   }
+
+  return data;
 }
 
 
 /* =========================================================
- * 顶部标题
+ * 顶部标题行
  * ========================================================= */
 
 function headerRow(title, data, fromCache) {
-  const updateTime = data?.updateTime || '--:--';
+  const updateTime = data?.updateTime || "--:--";
 
   return {
-    type: 'stack',
-    direction: 'row',
-    alignItems: 'center',
+    type: "stack",
+    direction: "row",
+    alignItems: "center",
     children: [
       {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
+        type: "stack",
+        direction: "row",
+        alignItems: "center",
         gap: 6,
         children: [
           {
-            type: 'image',
-            src: 'sf-symbol:simcard.fill',
+            type: "image",
+            src: "sf-symbol:simcard.fill",
             color: COLORS.accent,
             width: 17,
             height: 17,
           },
           {
-            type: 'text',
+            type: "text",
             text: title,
             font: {
-              size: 'headline',
-              weight: 'semibold',
+              size: "headline",
+              weight: "semibold",
             },
             textColor: COLORS.value,
             maxLines: 1,
@@ -370,27 +198,25 @@ function headerRow(title, data, fromCache) {
           },
         ],
       },
+      { type: "spacer" },
       {
-        type: 'spacer',
-      },
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
+        type: "stack",
+        direction: "row",
+        alignItems: "center",
         gap: 5,
         children: [
           {
-            type: 'image',
-            src: 'sf-symbol:arrow.clockwise',
+            type: "image",
+            src: "sf-symbol:arrow.clockwise",
             color: COLORS.time,
             width: 12,
             height: 12,
           },
           {
-            type: 'text',
+            type: "text",
             text: updateTime,
             font: {
-              size: 'caption2',
+              size: "caption2",
             },
             textColor: COLORS.time,
             maxLines: 1,
@@ -403,15 +229,15 @@ function headerRow(title, data, fromCache) {
 
 
 /* =========================================================
- * 通用数据胶囊
+ * 通用数据胶囊（中号/大号用）
  * ========================================================= */
 
 function makeCapsule(title, value, unit) {
   return {
-    type: 'stack',
-    direction: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
+    type: "stack",
+    direction: "column",
+    alignItems: "center",
+    justifyContent: "center",
     flex: 1,
     padding: [7, 8, 7, 8],
     backgroundColor: COLORS.capsuleBg,
@@ -420,41 +246,41 @@ function makeCapsule(title, value, unit) {
     borderColor: COLORS.border,
     children: [
       {
-        type: 'text',
+        type: "text",
         text: title,
         font: {
-          size: 'caption2',
-          weight: 'medium',
+          size: "caption2",
+          weight: "medium",
         },
         textColor: COLORS.title,
-        textAlign: 'center',
+        textAlign: "center",
         maxLines: 1,
         minScale: 0.7,
       },
       {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
+        type: "stack",
+        direction: "row",
+        alignItems: "center",
+        justifyContent: "center",
         gap: 3,
         children: [
           {
-            type: 'text',
+            type: "text",
             text: String(value),
             font: {
-              size: 'title2',
-              weight: 'semibold',
+              size: "title2",
+              weight: "semibold",
             },
             textColor: COLORS.value,
-            textAlign: 'center',
+            textAlign: "center",
             maxLines: 1,
             minScale: 0.55,
           },
           {
-            type: 'text',
+            type: "text",
             text: unit,
             font: {
-              size: 'caption2',
+              size: "caption2",
             },
             textColor: COLORS.title,
             maxLines: 1,
@@ -468,43 +294,86 @@ function makeCapsule(title, value, unit) {
 
 
 /* =========================================================
+ * 小尺寸专用紧凑胶囊
+ * ========================================================= */
+
+function makeSmallCapsule(title, value, unit) {
+  return {
+    type: "stack",
+    direction: "row",
+    alignItems: "center",
+    padding: [6, 14, 6, 14],
+    backgroundColor: COLORS.capsuleBg,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    children: [
+      {
+        type: "text",
+        text: `${title} ${value}${unit ? " " + unit : ""}`,
+        font: { size: "body", weight: "medium" },
+        textColor: COLORS.value,
+        textAlign: "center",
+        maxLines: 1,
+        minScale: 0.7,
+      },
+    ],
+  };
+}
+
+function wrapCenter(child) {
+  return {
+    type: "stack",
+    direction: "row",
+    children: [
+      { type: "spacer" },
+      child,
+      { type: "spacer" },
+    ],
+  };
+}
+
+
+/* =========================================================
  * 中号 / 大号 / 超大号
  * ========================================================= */
 
 function buildMainWidget(title, data, fromCache) {
   return {
-    type: 'widget',
+    type: "widget",
     backgroundColor: COLORS.bg,
     padding: [10, 14, 10, 14],
     gap: 10,
     refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     children: [
       headerRow(title, data, fromCache),
+
       {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        gap: 8,
+        type: "stack",
+        direction: "row",
+        alignItems: "center",
+        gap: 9,
         children: [
           makeCapsule(data.fee.title, data.fee.value, data.fee.unit),
           makeCapsule(data.voice.title, data.voice.value, data.voice.unit),
           makeCapsule(data.flow.title, data.flow.value, data.flow.unit),
         ],
       },
+
       {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
+        type: "stack",
+        direction: "row",
+        alignItems: "center",
         children: [
-          { type: 'spacer' },
+          { type: "spacer" },
           {
-            type: 'stack',
-            width: 42,
-            height: 3,
+            type: "stack",
+            width: 48,
+            height: 4,
             borderRadius: 2,
             backgroundColor: COLORS.border,
           },
-          { type: 'spacer' },
+          { type: "spacer" },
         ],
       },
     ],
@@ -513,105 +382,54 @@ function buildMainWidget(title, data, fromCache) {
 
 
 /* =========================================================
- * 小组件
+ * 小尺寸（已优化）
  * ========================================================= */
 
 function buildSmall(title, data, fromCache) {
   return {
-    type: 'widget',
+    type: "widget",
     backgroundColor: COLORS.bg,
     padding: [10, 12, 10, 12],
-    gap: 8,
+    gap: 6,
     refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     children: [
+      // 顶部标题
       headerRow(title, data, fromCache),
+
+      // 三行紧凑胶囊垂直堆叠
       {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
+        type: "stack",
+        direction: "column",
+        alignItems: "center",
+        gap: 6,
         children: [
-          { type: 'spacer' },
-          {
-            type: 'stack',
-            direction: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: [7, 20, 7, 20],
-            backgroundColor: COLORS.capsuleBg,
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-            children: [
-              {
-                type: 'text',
-                text: data.fee.title,
-                font: {
-                  size: 'caption2',
-                  weight: 'medium',
-                },
-                textColor: COLORS.title,
-                textAlign: 'center',
-                maxLines: 1,
-              },
-              {
-                type: 'stack',
-                direction: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 3,
-                children: [
-                  {
-                    type: 'text',
-                    text: String(data.fee.value),
-                    font: {
-                      size: 'title2',
-                      weight: 'semibold',
-                    },
-                    textColor: COLORS.value,
-                    textAlign: 'center',
-                    maxLines: 1,
-                    minScale: 0.7,
-                  },
-                  {
-                    type: 'text',
-                    text: data.fee.unit,
-                    font: {
-                      size: 'caption2',
-                    },
-                    textColor: COLORS.title,
-                    maxLines: 1,
-                  },
-                ],
-              },
-            ],
-          },
-          { type: 'spacer' },
+          wrapCenter(
+            makeSmallCapsule(data.fee.title, data.fee.value, data.fee.unit)
+          ),
+          wrapCenter(
+            makeSmallCapsule(data.voice.title, data.voice.value, data.voice.unit)
+          ),
+          wrapCenter(
+            makeSmallCapsule(data.flow.title, data.flow.value, data.flow.unit)
+          ),
         ],
       },
+
+      // 底部短横线
       {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        gap: 7,
+        type: "stack",
+        direction: "row",
+        alignItems: "center",
         children: [
-          makeCapsule(data.voice.title, data.voice.value, data.voice.unit),
-          makeCapsule(data.flow.title, data.flow.value, data.flow.unit),
-        ],
-      },
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        children: [
-          { type: 'spacer' },
+          { type: "spacer" },
           {
-            type: 'stack',
+            type: "stack",
             width: 42,
             height: 3,
             borderRadius: 2,
             backgroundColor: COLORS.border,
           },
-          { type: 'spacer' },
+          { type: "spacer" },
         ],
       },
     ],
@@ -624,18 +442,18 @@ function buildSmall(title, data, fromCache) {
  * ========================================================= */
 
 function buildLockScreen(title, data, family) {
-  if (family === 'accessoryInline') {
+  if (family === "accessoryInline") {
     return {
-      type: 'widget',
+      type: "widget",
       children: [
         {
-          type: 'text',
+          type: "text",
           text:
             `${title} ${data.fee.value}${data.fee.unit} · ` +
             `${data.flow.value}${data.flow.unit}`,
           font: {
-            size: 'caption1',
-            weight: 'medium',
+            size: "caption1",
+            weight: "medium",
           },
           textColor: COLORS.value,
           maxLines: 1,
@@ -645,31 +463,31 @@ function buildLockScreen(title, data, family) {
     };
   }
 
-  if (family === 'accessoryCircular') {
+  if (family === "accessoryCircular") {
     return {
-      type: 'widget',
+      type: "widget",
       padding: 4,
       children: [
         {
-          type: 'text',
+          type: "text",
           text: `${data.flow.value}`,
           font: {
-            size: 'title2',
-            weight: 'bold',
+            size: "title2",
+            weight: "bold",
           },
           textColor: COLORS.value,
-          textAlign: 'center',
+          textAlign: "center",
           maxLines: 1,
           minScale: 0.5,
         },
         {
-          type: 'text',
+          type: "text",
           text: data.flow.unit,
           font: {
-            size: 'caption2',
+            size: "caption2",
           },
           textColor: COLORS.title,
-          textAlign: 'center',
+          textAlign: "center",
           maxLines: 1,
         },
       ],
@@ -677,27 +495,27 @@ function buildLockScreen(title, data, family) {
   }
 
   return {
-    type: 'widget',
+    type: "widget",
     padding: 4,
     children: [
       {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
+        type: "stack",
+        direction: "row",
+        alignItems: "center",
         children: [
           {
-            type: 'image',
-            src: 'sf-symbol:simcard.fill',
+            type: "image",
+            src: "sf-symbol:simcard.fill",
             color: COLORS.accent,
             width: 15,
             height: 15,
           },
           {
-            type: 'text',
+            type: "text",
             text: `${data.fee.value}${data.fee.unit}`,
             font: {
-              size: 'headline',
-              weight: 'semibold',
+              size: "headline",
+              weight: "semibold",
             },
             textColor: COLORS.value,
             maxLines: 1,
@@ -706,15 +524,15 @@ function buildLockScreen(title, data, family) {
         ],
       },
       {
-        type: 'text',
+        type: "text",
         text: `${data.flow.value}${data.flow.unit}`,
         font: {
-          size: 'caption1',
-          weight: 'medium',
+          size: "caption1",
+          weight: "medium",
         },
         textColor: COLORS.title,
         maxLines: 1,
-        minScale: 0.5,
+        minScale: 0.7,
       },
     ],
   };
@@ -722,82 +540,27 @@ function buildLockScreen(title, data, family) {
 
 
 /* =========================================================
- * 错误界面
+ * 错误小组件
  * ========================================================= */
 
 function buildError(title, message) {
   return {
-    type: 'widget',
+    type: "widget",
     backgroundColor: COLORS.bg,
-    padding: 12,
+    padding: [12, 14, 12, 14],
     children: [
       {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        gap: 6,
-        children: [
-          {
-            type: 'image',
-            src: 'sf-symbol:exclamationmark.triangle.fill',
-            color: COLORS.error,
-            width: 15,
-            height: 15,
-          },
-          {
-            type: 'text',
-            text: title,
-            font: {
-              size: 'headline',
-              weight: 'semibold',
-            },
-            textColor: COLORS.value,
-            maxLines: 1,
-          },
-        ],
+        type: "text",
+        text: title,
+        font: { size: "headline", weight: "semibold" },
+        textColor: COLORS.value,
       },
-      { type: 'spacer' },
       {
-        type: 'text',
-        text: message,
-        font: {
-          size: 'caption1',
-          weight: 'medium',
-        },
-        textColor: COLORS.title,
-        textAlign: 'center',
+        type: "text",
+        text: message || "数据获取失败",
+        font: { size: "footnote" },
+        textColor: COLORS.error,
         maxLines: 3,
-        minScale: 0.75,
-      },
-      { type: 'spacer' },
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        children: [
-          { type: 'spacer' },
-          {
-            type: 'stack',
-            padding: [5, 12, 5, 12],
-            backgroundColor: COLORS.capsuleBg,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-            children: [
-              {
-                type: 'text',
-                text: '打开联通 App 查询一次',
-                font: {
-                  size: 'caption2',
-                  weight: 'medium',
-                },
-                textColor: COLORS.accent,
-                maxLines: 1,
-              },
-            ],
-          },
-          { type: 'spacer' },
-        ],
       },
     ],
   };
@@ -805,65 +568,39 @@ function buildError(title, message) {
 
 
 /* =========================================================
- * Widget 主逻辑
- * ========================================================= */
-
-async function handleWidget(ctx) {
-  const accountId = getAccountId(ctx);
-  const customTitle = (ctx.env.TITLE || '').trim();
-  const title =
-    customTitle ||
-    (accountId >= 1 ? `联通${accountId}` : '中国联通');
-
-  const result = await loadData(ctx);
-  const data = result.data;
-
-  if (!result.configured) {
-    return buildError(
-      title,
-      accountId >= 1
-        ? `请先用第 ${accountId} 个号码打开联通 App 并点击余额`
-        : '请打开联通 App，进入首页并点击余额位置'
-    );
-  }
-
-  if (!data) {
-    return buildError(
-      title,
-      '数据获取失败，请重新打开联通 App 查询一次'
-    );
-  }
-
-  const family = ctx.widgetFamily || 'systemSmall';
-
-  if (family.startsWith('accessory')) {
-    return buildLockScreen(title, data, family);
-  }
-
-  if (family === 'systemSmall') {
-    return buildSmall(title, data, false);
-  }
-
-  if (
-    family === 'systemMedium' ||
-    family === 'systemLarge' ||
-    family === 'systemExtraLarge'
-  ) {
-    return buildMainWidget(title, data, false);
-  }
-
-  return buildSmall(title, data, false);
-}
-
-
-/* =========================================================
- * Egern 入口
+ * 主入口
  * ========================================================= */
 
 export default async function (ctx) {
+  // 捕获模式
   if (ctx.request && ctx.request.url) {
     return handleCapture(ctx);
   }
 
-  return handleWidget(ctx);
+  // 小组件模式
+  const family =
+    ctx.widgetFamily ||
+    "systemSmall";
+
+  const title = "中国联通";
+  let data = await fetchData(ctx);
+  const fromCache = false;
+
+  if (data.error) {
+    return buildError(title, data.error);
+  }
+
+  if (
+    family === "accessoryCircular" ||
+    family === "accessoryRectangular" ||
+    family === "accessoryInline"
+  ) {
+    return buildLockScreen(title, data, family);
+  }
+
+  if (family === "systemSmall") {
+    return buildSmall(title, data, fromCache);
+  }
+
+  return buildMainWidget(title, data, fromCache);
 }
