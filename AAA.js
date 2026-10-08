@@ -145,17 +145,33 @@ async function handleCapture(ctx) {
    */
   const phone = extractPhone(url);
 
-  // 保存Cookie
+
+  /*
+   * 保存 Cookie
+   */
   if (cookie) {
-    ctx.storage.set('unicom_cookie', cookie);
-  }
-  // 保存手机号
-  if (phone) {
-    ctx.storage.set('unicom_phone', phone);
+    ctx.storage.set(
+      'unicom_cookie',
+      cookie
+    );
   }
 
-  // 【修改点】只要同时抓到cookie和手机号，每次捕获都推送通知，不再判断是否变更
-  if (cookie && phone) {
+
+  /*
+   * 保存手机号
+   */
+  if (phone) {
+    ctx.storage.set(
+      'unicom_phone',
+      phone
+    );
+  }
+
+
+  /*
+   * 每次成功捕获到 Cookie 都通知
+   */
+  if (cookie) {
     ctx.notify({
       title: '中国联通',
       body: '已自动获取登录信息，小组件将自动更新',
@@ -738,93 +754,119 @@ function buildMainWidget(
 
 
 /* =========================================================
- * 【修改部分：小尺寸 systemSmall 垂直布局，完全参照你的第二张截图样式】
- * 垂直3行：话费 → 流量 → 语音，每行：圆形背景图标 + 右侧文字+数值
+ * 小组件（小尺寸 - 三行图标样式）
  * ========================================================= */
+
 function buildSmall(
   title,
   data,
   fromCache
 ) {
-  // 单行条目模板（左圆形图标，右文字）
-  function rowItem(sfIcon, iconBgColor, labelText, numText, unitText) {
+
+  function makeRow(icon, iconColor, bgColor, value, unit, label, valueColor) {
     return {
       type: 'stack',
       direction: 'row',
       alignItems: 'center',
-      padding: [6,8,6,8],
-      gap:10,
-      children:[
+      gap: 10,
+      padding: [8, 10, 8, 10],
+      backgroundColor: bgColor,
+      borderRadius: 14,
+      children: [
         {
-          type:'stack',
-          width:32,
-          height:32,
-          borderRadius:999,
-          backgroundColor:iconBgColor,
-          alignItems:'center',
-          justifyContent:'center',
-          children:[
+          type: 'stack',
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          backgroundColor: iconColor,
+          alignItems: 'center',
+          justifyContent: 'center',
+          children: [
             {
-              type:'image',
-              src:`sf-symbol:${sfIcon}`,
-              color:'#ffffff',
-              width:18,
-              height:18
-            }
-          ]
+              type: 'image',
+              src: icon,
+              color: { light: '#FFFFFF', dark: '#FFFFFF' },
+              width: 16,
+              height: 16,
+            },
+          ],
         },
         {
-          type:'stack',
-          direction:'column',
-          flex:1,
-          children:[
+          type: 'stack',
+          direction: 'column',
+          alignItems: 'leading',
+          gap: 1,
+          children: [
             {
-              type:'text',
-              text:labelText,
-              font:{size:'caption2'},
-              textColor:COLORS.title,
-              maxLines:1
+              type: 'stack',
+              direction: 'row',
+              alignItems: 'baseline',
+              gap: 3,
+              children: [
+                {
+                  type: 'text',
+                  text: String(value),
+                  font: { size: 'title3', weight: 'semibold' },
+                  textColor: valueColor,
+                  maxLines: 1,
+                  minScale: 0.7,
+                },
+                {
+                  type: 'text',
+                  text: unit,
+                  font: { size: 'caption1', weight: 'medium' },
+                  textColor: valueColor,
+                  maxLines: 1,
+                },
+              ],
             },
             {
-              type:'text',
-              text:`${numText} ${unitText}`,
-              font:{size:'headline', weight:'semibold'},
-              textColor:COLORS.value,
-              maxLines:1
-            }
-          ]
-        }
-      ]
-    }
+              type: 'text',
+              text: label,
+              font: { size: 'caption2' },
+              textColor: { light: '#999999', dark: '#8E8E93' },
+              maxLines: 1,
+            },
+          ],
+        },
+      ],
+    };
   }
 
   return {
     type: 'widget',
     backgroundColor: COLORS.bg,
     padding: [10, 12, 10, 12],
-    gap: 6,
+    gap: 8,
     refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     children: [
-      headerRow(title, data, fromCache),
-      rowItem("creditcard.fill", "#E60012", data.fee.title, data.fee.value, data.fee.unit),
-      rowItem("wifi", "#0091ff", data.flow.title, data.flow.value, data.flow.unit),
-      rowItem("phone.fill", "#28c740", data.voice.title, data.voice.value, data.voice.unit),
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        children: [
-          { type: 'spacer' },
-          {
-            type: 'stack',
-            width: 42,
-            height: 3,
-            borderRadius: 2,
-            backgroundColor: COLORS.border,
-          },
-          { type: 'spacer' },
-        ],
-      },
+      makeRow(
+        'sf-symbol:circle.grid.cross.fill',
+        { light: '#E60012', dark: '#FF375F' },
+        { light: '#FFF0F0', dark: '#3A2A2A' },
+        data.fee.value,
+        data.fee.unit,
+        data.fee.title || '剩余话费',
+        { light: '#E60012', dark: '#FF6B6B' }
+      ),
+      makeRow(
+        'sf-symbol:antenna.radiowaves.left.and.right',
+        { light: '#007AFF', dark: '#0A84FF' },
+        { light: '#EEF5FF', dark: '#1A2A3A' },
+        data.flow.value,
+        data.flow.unit,
+        data.flow.title || '剩余流量',
+        { light: '#007AFF', dark: '#5AC8FA' }
+      ),
+      makeRow(
+        'sf-symbol:phone.fill',
+        { light: '#34C759', dark: '#30D158' },
+        { light: '#EEFFF2', dark: '#1A2A1A' },
+        data.voice.value,
+        data.voice.unit,
+        data.voice.title || '剩余语音',
+        { light: '#34C759', dark: '#30D158' }
+      ),
     ],
   };
 }
