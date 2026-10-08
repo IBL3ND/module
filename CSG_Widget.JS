@@ -64,6 +64,75 @@ async function handleCapture(ctx) {
 
 /* ---------- 小组件 ---------- */
 
+/* 小尺寸专用：圆形图标 + 数值 + 说明 的横条 */
+function smallRow(color, symbol, glyph, value, unit, label) {
+  const iconChild = symbol
+    ? {
+        type: "image",
+        src: symbol,
+        color: "#FFFFFF",
+        width: 16,
+        height: 16,
+      }
+    : {
+        type: "text",
+        text: glyph,
+        font: { size: "headline", weight: "bold" },
+        textColor: "#FFFFFF",
+      };
+
+  return {
+    type: "stack",
+    direction: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    padding: [4, 8, 4, 8],
+    backgroundColor: { light: color + "1F", dark: color + "33" },
+    borderRadius: 14,
+    children: [
+      {
+        type: "stack",
+        direction: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: color,
+        children: [iconChild],
+      },
+      {
+        type: "stack",
+        direction: "column",
+        flex: 1,
+        children: [
+          {
+            type: "stack",
+            direction: "row",
+            alignItems: "center",
+            gap: 3,
+            children: [
+              { type: "text", text: String(value), font: { size: "title3", weight: "bold" }, textColor: color, maxLines: 1, minScale: 0.5 },
+              { type: "text", text: String(unit), font: { size: "caption1", weight: "semibold" }, textColor: color, maxLines: 1 },
+              { type: "spacer" },
+            ],
+          },
+          {
+            type: "stack",
+            direction: "row",
+            alignItems: "center",
+            children: [
+              { type: "text", text: String(label), font: { size: "caption2", weight: "medium" }, textColor: color + "B3", maxLines: 1, minScale: 0.7 },
+              { type: "spacer" },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 async function handleWidget(ctx) {
   // 手动填写的 Token 优先，其次用自动捕获的
   const token =
@@ -232,6 +301,23 @@ async function handleWidget(ctx) {
       ],
     };
   }
+
+  // ═══════════ 小尺寸专用布局（仅 systemSmall 生效，其他尺寸不受影响）═══════════
+  if (isSmall) {
+    return {
+      type: "widget",
+      backgroundColor: colors.bg,
+      padding: [10, 10, 10, 10],
+      gap: 6,
+      refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      children: [
+        smallRow("#E8651F", "sf-symbol:bolt.fill", "", data.yst.value, data.yst.unit, data.yst.title),
+        smallRow("#4DA6F0", "sf-symbol:calendar", "", data.total.value, data.total.unit, data.total.title),
+        smallRow("#55C759", null, "¥", data.bal.value, data.bal.unit, data.bal.title),
+      ],
+    };
+  }
+  // ═══════════ 小尺寸专用布局结束 ═══════════
 
   return {
     type: "widget",
