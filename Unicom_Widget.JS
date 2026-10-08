@@ -1033,6 +1033,19 @@ function buildLockScreen(
   family
 ) {
 
+  /*
+   * 锁屏组件背景是透明的，文字颜色交给系统处理，
+   * 只有次要文字用半透明白色
+   */
+  const SUB = {
+    light: '#FFFFFFB3',
+    dark: '#FFFFFFB3',
+  };
+
+
+  /*
+   * 单行：话费 / 流量 / 语音
+   */
   if (
     family === 'accessoryInline'
   ) {
@@ -1054,9 +1067,6 @@ function buildLockScreen(
             weight: 'medium',
           },
 
-          textColor:
-            COLORS.value,
-
           maxLines: 1,
 
           minScale: 0.5,
@@ -1067,6 +1077,9 @@ function buildLockScreen(
   }
 
 
+  /*
+   * 圆形：只显示剩余流量
+   */
   if (
     family === 'accessoryCircular'
   ) {
@@ -1074,9 +1087,13 @@ function buildLockScreen(
     return {
       type: 'widget',
 
-      padding: 4,
+      padding: 2,
 
       children: [
+
+        {
+          type: 'spacer',
+        },
 
         {
           type: 'text',
@@ -1085,12 +1102,9 @@ function buildLockScreen(
             `${data.flow.value}`,
 
           font: {
-            size: 'title2',
+            size: 'headline',
             weight: 'bold',
           },
-
-          textColor:
-            COLORS.value,
 
           textAlign:
             'center',
@@ -1110,8 +1124,7 @@ function buildLockScreen(
             size: 'caption2',
           },
 
-          textColor:
-            COLORS.title,
+          textColor: SUB,
 
           textAlign:
             'center',
@@ -1119,82 +1132,112 @@ function buildLockScreen(
           maxLines: 1,
         },
 
+        {
+          type: 'spacer',
+        },
+
       ],
     };
   }
 
 
-  return {
-    type: 'widget',
+  /*
+   * 矩形：三行，左边说明，右边数值
+   */
+  const line = (
+    label,
+    value,
+    unit
+  ) => ({
 
-    padding: 4,
+    type: 'stack',
+
+    direction: 'row',
+
+    alignItems: 'center',
+
+    gap: 4,
 
     children: [
 
       {
-        type: 'stack',
+        type: 'text',
 
-        direction: 'row',
+        text: label,
 
-        alignItems: 'center',
+        font: {
+          size: 'caption2',
+          weight: 'medium',
+        },
 
-        children: [
+        textColor: SUB,
 
-          {
-            type: 'image',
-
-            src:
-              'sf-symbol:simcard.fill',
-
-            color:
-              COLORS.accent,
-
-            width: 15,
-
-            height: 15,
-          },
-
-          {
-            type: 'text',
-
-            text:
-              `${data.fee.value}${data.fee.unit}`,
-
-            font: {
-              size: 'headline',
-              weight: 'semibold',
-            },
-
-            textColor:
-              COLORS.value,
-
-            maxLines: 1,
-
-            minScale: 0.5,
-          },
-
-        ],
+        maxLines: 1,
       },
 
+      {
+        type: 'spacer',
+      },
 
       {
         type: 'text',
 
-        text:
-          `${data.flow.value}${data.flow.unit}`,
+        text: String(value),
 
         font: {
           size: 'caption1',
-          weight: 'medium',
+          weight: 'bold',
         },
-
-        textColor:
-          COLORS.title,
 
         maxLines: 1,
 
-        minScale: 0.5,
+        minScale: 0.6,
       },
+
+      {
+        type: 'text',
+
+        text: String(unit),
+
+        font: {
+          size: 'caption2',
+        },
+
+        textColor: SUB,
+
+        maxLines: 1,
+      },
+
+    ],
+  });
+
+
+  return {
+    type: 'widget',
+
+    padding: 2,
+
+    gap: 2,
+
+    children: [
+
+      line(
+        '话费',
+        data.fee.value,
+        data.fee.unit
+      ),
+
+      line(
+        '流量',
+        data.flow.value,
+        data.flow.unit
+      ),
+
+      line(
+        '语音',
+        data.voice.value,
+        data.voice.unit
+      ),
 
     ],
   };
