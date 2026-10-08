@@ -133,6 +133,80 @@ function smallRow(color, symbol, glyph, value, unit, label) {
   };
 }
 
+/* 锁屏专用：透明背景，文字颜色交给系统处理 */
+function buildLockScreen(data, family) {
+  const SUB = { light: "#FFFFFFB3", dark: "#FFFFFFB3" };
+
+  // 单行：昨日用电 · 余额
+  if (family === "accessoryInline") {
+    return {
+      type: "widget",
+      children: [
+        {
+          type: "text",
+          text: `南方电网 昨日${data.yst.value}${data.yst.unit} · 余额${data.bal.value}${data.bal.unit}`,
+          font: { size: "caption1", weight: "medium" },
+          maxLines: 1,
+          minScale: 0.5,
+        },
+      ],
+    };
+  }
+
+  // 圆形：只显示昨日用电
+  if (family === "accessoryCircular") {
+    return {
+      type: "widget",
+      padding: 2,
+      children: [
+        { type: "spacer" },
+        {
+          type: "text",
+          text: `${data.yst.value}`,
+          font: { size: "headline", weight: "bold" },
+          textAlign: "center",
+          maxLines: 1,
+          minScale: 0.5,
+        },
+        {
+          type: "text",
+          text: data.yst.unit,
+          font: { size: "caption2" },
+          textColor: SUB,
+          textAlign: "center",
+          maxLines: 1,
+        },
+        { type: "spacer" },
+      ],
+    };
+  }
+
+  // 矩形：三行，左边说明，右边数值
+  const line = (label, value, unit) => ({
+    type: "stack",
+    direction: "row",
+    alignItems: "center",
+    gap: 4,
+    children: [
+      { type: "text", text: label, font: { size: "caption2", weight: "medium" }, textColor: SUB, maxLines: 1 },
+      { type: "spacer" },
+      { type: "text", text: String(value), font: { size: "caption1", weight: "bold" }, maxLines: 1, minScale: 0.6 },
+      { type: "text", text: String(unit), font: { size: "caption2" }, textColor: SUB, maxLines: 1 },
+    ],
+  });
+
+  return {
+    type: "widget",
+    padding: 2,
+    gap: 2,
+    children: [
+      line("昨日", data.yst.value, data.yst.unit),
+      line("本月", data.total.value, data.total.unit),
+      line("余额", data.bal.value, data.bal.unit),
+    ],
+  };
+}
+
 async function handleWidget(ctx) {
   // 手动填写的 Token 优先，其次用自动捕获的
   const token =
@@ -301,6 +375,12 @@ async function handleWidget(ctx) {
       ],
     };
   }
+
+  // ═══════════ 锁屏专用布局（仅 accessory 系列生效）═══════════
+  if (ctx.widgetFamily && ctx.widgetFamily.startsWith("accessory")) {
+    return buildLockScreen(data, ctx.widgetFamily);
+  }
+  // ═══════════ 锁屏专用布局结束 ═══════════
 
   // ═══════════ 小尺寸专用布局（仅 systemSmall 生效，其他尺寸不受影响）═══════════
   if (isSmall) {
