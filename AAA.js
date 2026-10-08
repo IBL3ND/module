@@ -628,7 +628,7 @@ function buildMainWidget(
 
 
 /* =========================================================
- * 小尺寸（仅此处优化）
+ * 小尺寸（仅此处做了轻微压缩）
  * ========================================================= */
 
 function buildSmall(
@@ -636,43 +636,6 @@ function buildSmall(
   data,
   fromCache
 ) {
-
-  /* 小尺寸专用紧凑胶囊 */
-  function makeSmallCapsule(title, value, unit) {
-    return {
-      type: 'stack',
-      direction: 'row',
-      alignItems: 'center',
-      padding: [5, 12, 5, 12],
-      backgroundColor: COLORS.capsuleBg,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: COLORS.border,
-      children: [
-        {
-          type: 'text',
-          text: `${title} ${value}${unit ? ' ' + unit : ''}`,
-          font: { size: 'subheadline', weight: 'medium' },
-          textColor: COLORS.value,
-          textAlign: 'center',
-          maxLines: 1,
-          minScale: 0.7,
-        },
-      ],
-    };
-  }
-
-  function wrapCenter(child) {
-    return {
-      type: 'stack',
-      direction: 'row',
-      children: [
-        { type: 'spacer' },
-        child,
-        { type: 'spacer' },
-      ],
-    };
-  }
 
   return {
 
@@ -688,7 +651,7 @@ function buildSmall(
       10,
     ],
 
-    gap: 5,
+    gap: 6,
 
     refreshAfter:
       new Date(
@@ -709,35 +672,169 @@ function buildSmall(
 
 
       /*
-       * 三行紧凑胶囊垂直堆叠（适配小尺寸高度）
+       * 中间：剩余话费
+       *
+       * 左右 spacer 确保胶囊真正居中
        */
       {
         type: 'stack',
-        direction: 'column',
+
+        direction: 'row',
+
         alignItems: 'center',
-        gap: 5,
+
         children: [
-          wrapCenter(
-            makeSmallCapsule(
-              data.fee.title,
-              data.fee.value,
-              data.fee.unit
-            )
+
+          {
+            type: 'spacer',
+          },
+
+
+          {
+            type: 'stack',
+
+            direction: 'column',
+
+            alignItems: 'center',
+
+            justifyContent: 'center',
+
+            padding: [
+              5,
+              16,
+              5,
+              16,
+            ],
+
+            backgroundColor:
+              COLORS.capsuleBg,
+
+            borderRadius: 12,
+
+            borderWidth: 1,
+
+            borderColor:
+              COLORS.border,
+
+            children: [
+
+              {
+                type: 'text',
+
+                text:
+                  data.fee.title,
+
+                font: {
+                  size: 'caption2',
+                  weight: 'medium',
+                },
+
+                textColor:
+                  COLORS.title,
+
+                textAlign:
+                  'center',
+
+                maxLines: 1,
+              },
+
+
+              {
+                type: 'stack',
+
+                direction: 'row',
+
+                alignItems: 'center',
+
+                justifyContent:
+                  'center',
+
+                gap: 2,
+
+                children: [
+
+                  {
+                    type: 'text',
+
+                    text:
+                      String(
+                        data.fee.value
+                      ),
+
+                    font: {
+                      size: 'title3',
+                      weight: 'semibold',
+                    },
+
+                    textColor:
+                      COLORS.value,
+
+                    textAlign:
+                      'center',
+
+                    maxLines: 1,
+
+                    minScale: 0.7,
+                  },
+
+
+                  {
+                    type: 'text',
+
+                    text:
+                      data.fee.unit,
+
+                    font: {
+                      size: 'caption2',
+                    },
+
+                    textColor:
+                      COLORS.title,
+
+                    maxLines: 1,
+                  },
+
+                ],
+              },
+
+            ],
+          },
+
+
+          {
+            type: 'spacer',
+          },
+
+        ],
+      },
+
+
+      /*
+       * 下方：剩余语音 + 剩余流量
+       */
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        gap: 6,
+
+        children: [
+
+          makeCapsule(
+            data.voice.title,
+            data.voice.value,
+            data.voice.unit
           ),
-          wrapCenter(
-            makeSmallCapsule(
-              data.voice.title,
-              data.voice.value,
-              data.voice.unit
-            )
+
+          makeCapsule(
+            data.flow.title,
+            data.flow.value,
+            data.flow.unit
           ),
-          wrapCenter(
-            makeSmallCapsule(
-              data.flow.title,
-              data.flow.value,
-              data.flow.unit
-            )
-          ),
+
         ],
       },
 
