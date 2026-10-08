@@ -1137,9 +1137,20 @@ function buildLockScreen(
   family
 ) {
 
+  /*
+   * 锁屏组件背景是透明的，文字颜色交给系统处理，
+   * 只有次要文字用半透明白色
+   */
+  const SUB = {
+    light: '#FFFFFFB3',
+    dark: '#FFFFFFB3',
+  };
+
+
+  /*
+   * 单行：话费 · 流量
+   */
   if (
-    family ===
-      'accessoryCircular' ||
     family ===
       'accessoryInline'
   ) {
@@ -1154,26 +1165,104 @@ function buildLockScreen(
           type: 'text',
 
           text:
-            `¥${ds.fee.number}`,
+            `${title} ${ds.fee.number}${ds.fee.unit} · ` +
+            `${ds.flow.number}${ds.flow.unit}`,
 
           font: {
-            size: 'body',
-            weight: 'semibold',
+            size: 'caption1',
+            weight: 'medium',
           },
 
-          textAlign:
-            'center',
+          maxLines: 1,
+
+          minScale:
+            0.5,
         },
       ],
     };
   }
 
 
-  return {
+  /*
+   * 圆形：只显示剩余流量
+   */
+  if (
+    family ===
+      'accessoryCircular'
+  ) {
 
-    type: 'widget',
+    return {
 
-    padding: 8,
+      type: 'widget',
+
+      padding: 2,
+
+      children: [
+
+        {
+          type: 'spacer',
+        },
+
+        {
+          type: 'text',
+
+          text:
+            `${ds.flow.number}`,
+
+          font: {
+            size: 'headline',
+            weight: 'bold',
+          },
+
+          textAlign:
+            'center',
+
+          maxLines: 1,
+
+          minScale:
+            0.5,
+        },
+
+        {
+          type: 'text',
+
+          text:
+            ds.flow.unit,
+
+          font: {
+            size: 'caption2',
+          },
+
+          textColor: SUB,
+
+          textAlign:
+            'center',
+
+          maxLines: 1,
+        },
+
+        {
+          type: 'spacer',
+        },
+      ],
+    };
+  }
+
+
+  /*
+   * 矩形：三行，左边说明，右边数值
+   */
+  const line = (
+    label,
+    value,
+    unit
+  ) => ({
+
+    type: 'stack',
+
+    direction: 'row',
+
+    alignItems: 'center',
 
     gap: 4,
 
@@ -1182,30 +1271,81 @@ function buildLockScreen(
       {
         type: 'text',
 
-        text:
-          title,
+        text: label,
 
         font: {
           size: 'caption2',
-          weight: 'semibold',
+          weight: 'medium',
         },
+
+        textColor: SUB,
+
+        maxLines: 1,
+      },
+
+      {
+        type: 'spacer',
       },
 
       {
         type: 'text',
 
-        text:
-          `¥${ds.fee.number} · ${ds.flow.number}${ds.flow.unit} · ${ds.voice.number}分`,
+        text: String(value),
 
         font: {
-          size: 'footnote',
+          size: 'caption1',
+          weight: 'bold',
         },
 
         maxLines: 1,
 
-        minScale:
-          0.6,
+        minScale: 0.6,
       },
+
+      {
+        type: 'text',
+
+        text: String(unit),
+
+        font: {
+          size: 'caption2',
+        },
+
+        textColor: SUB,
+
+        maxLines: 1,
+      },
+    ],
+  });
+
+
+  return {
+
+    type: 'widget',
+
+    padding: 2,
+
+    gap: 2,
+
+    children: [
+
+      line(
+        '话费',
+        ds.fee.number,
+        ds.fee.unit
+      ),
+
+      line(
+        '流量',
+        ds.flow.number,
+        ds.flow.unit
+      ),
+
+      line(
+        '语音',
+        ds.voice.number,
+        ds.voice.unit
+      ),
     ],
   };
 }
