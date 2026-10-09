@@ -1,6 +1,6 @@
 /**
  * ════════════════════════════════════════════════════
- *  比特币价格小组件 - Egern 适配版
+ *  虚拟货币价格小组件
  *  数据源：Binance API（无需 Key，无速率限制）
  * ════════════════════════════════════════════════════
  * 
@@ -16,9 +16,10 @@
  *   ✓ 最多支持 8 个币种，超出部分自动忽略
  * 
  * 📊 尺寸说明：
- *   • 小尺寸  : 目前显示异常
+ *   • 小尺寸  : 显示 3 个币种卡片（币种、名称、价格、涨跌幅）
  *   • 中尺寸  : 显示 3 个币种列表
  *   • 大尺寸  : 显示 8 个币种列表
+ *   • 锁屏    : 单行 / 圆形 / 矩形（矩形显示 3 个币种）
  * 
  * 🎨 深色模式：
  *   • 所有颜色使用 { light, dark } 格式
@@ -38,7 +39,8 @@ export default async function(ctx) {
     down: { light: "#FF0000", dark: "#FF453A" }
   };
 
-  const widgetFamily = ctx.widgetFamily || "systemMedium";
+  // 没有传入尺寸时（例如脚本预览），按小尺寸处理
+  const widgetFamily = ctx.widgetFamily || "systemSmall";
   const btcType = ctx.env?.btcType || "BTC,ETH,BNB";
   const API = "https://api.binance.com/api/v3";
 
@@ -160,60 +162,127 @@ export default async function(ctx) {
     };
   };
 
-  // ⬅️ 小尺寸（已修复对齐）
-  if (widgetFamily === "systemSmall") {
-    const coin1 = dataSource[0];
-    const coin2 = dataSource[1] || dataSource[0];
-    
-    return {
-      type: "widget", padding: 12, backgroundColor: theme.bg,
-      url: `https://www.binance.com/zh-CN/price/${coin1.symbol}`, refreshAfter: "PT1M",
+  // ═══════════ 锁屏专用布局（仅 accessory 系列生效）═══════════
+  if (widgetFamily.startsWith("accessory")) {
+    // 锁屏背景透明，文字颜色交给系统处理，次要文字用半透明白色
+    const SUB = { light: "#FFFFFFB3", dark: "#FFFFFFB3" };
+    const sign = (n) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
+    // 锁屏空间小：1000 以上不显示小数
+    const lockPrice = (p) => p >= 1000 ? Math.round(p).toLocaleString("en-US") : formatPrice(p);
+    const compact = (p) => p >= 1000 ? `${(p / 1000).toFixed(1)}K` : formatPrice(p);
+    const c1 = dataSource[0];
+
+    // 单行：BTC $82,256 -0.63%
+    if (widgetFamily === "accessoryInline") {
+      return {
+        type: "widget", refreshAfter: "PT1M",
+        children: [{
+          type: "text",
+          text: `${c1.symbol} $${lockPrice(c1.price)} ${sign(c1.change)}`,
+          font: { size: "caption1", weight: "medium" },
+          lineLimit: 1, minScale: 0.5
+        }]
+      };
+    }
+
+    // 圆形：币种 / 价格 / 涨跌幅
+    if (widgetFamily === "accessoryCircular") {
+      return {
+        type: "widget", padding: 2, refreshAfter: "PT1M",
+        children: [
+          { type: "spacer" },
+          { type: "text", text: c1.symbol, font: { size: "caption2", weight: "medium" }, textColor: SUB, textAlign: "center", lineLimit: 1 },
+          { type: "text", text: compact(c1.price), font: { size: "headline", weight: "bold" }, textAlign: "center", lineLimit: 1, minScale: 0.5 },
+          { type: "text", text: sign(c1.change), font: { size: "caption2" }, textColor: SUB, textAlign: "center", lineLimit: 1, minScale: 0.6 },
+          { type: "spacer" }
+        ]
+      };
+    }
+
+    // 矩形：三行，左边币种，右边加粗价格 + 涨跌幅
+    const line = (coin) => ({
+      type: "stack", direction: "row", alignItems: "center", gap: 4,
       children: [
-        {
-          type: "stack", direction: "column",
-          children: [
-            {
-              type: "stack", direction: "row", alignItems: "flex-start",
-              children: [
-                {
-                  type: "stack", direction: "column", width: 72,
-                  children: [
-                    { type: "text", text: coin1.symbol, font: { size: 18, weight: "bold" }, textColor: theme.text },
-                    { type: "text", text: coin1.name, font: { size: 11 }, textColor: theme.textSecondary }
-                  ]
-                },
-                { type: "spacer", flex: 1 },
-                {
-                  type: "text", text: `$${formatPrice(coin1.price)}`,
-                  font: { size: 18, weight: "semibold" }, textColor: theme.text,
-                  textAlign: "right"
-                }
-              ]
-            },
-            { type: "spacer", length: 12 },
-            {
-              type: "stack", direction: "row", alignItems: "flex-start",
-              children: [
-                {
-                  type: "stack", direction: "column", width: 72,
-                  children: [
-                    { type: "text", text: coin2.symbol, font: { size: 18, weight: "bold" }, textColor: theme.text },
-                    { type: "text", text: coin2.name, font: { size: 11 }, textColor: theme.textSecondary }
-                  ]
-                },
-                { type: "spacer", flex: 1 },
-                {
-                  type: "text", text: `$${formatPrice(coin2.price)}`,
-                  font: { size: 18, weight: "semibold" }, textColor: theme.text,
-                  textAlign: "right"
-                }
-              ]
-            }
-          ]
-        }
+        { type: "text", text: coin.symbol, font: { size: "caption2", weight: "medium" }, textColor: SUB, lineLimit: 1 },
+        { type: "spacer" },
+        { type: "text", text: `$${lockPrice(coin.price)}`, font: { size: "caption1", weight: "bold" }, lineLimit: 1, minScale: 0.6 },
+        { type: "text", text: sign(coin.change), font: { size: "caption2" }, textColor: SUB, lineLimit: 1, minScale: 0.6 }
       ]
+    });
+
+    return {
+      type: "widget", padding: 2, gap: 2, refreshAfter: "PT1M",
+      children: dataSource.slice(0, 3).map(line)
     };
   }
+  // ═══════════ 锁屏专用布局结束 ═══════════
+
+  // ═══════════ 小尺寸专用布局：每个币种一张卡片 ═══════════
+  if (widgetFamily === "systemSmall") {
+    // 小尺寸空间有限：1000 以上不显示小数
+    const smallPrice = (p) => p >= 1000 ? `$${Math.round(p).toLocaleString("en-US")}` : `$${formatPrice(p)}`;
+
+    const smallCard = (coin) => {
+      const isUp = coin.change >= 0;
+      const color = isUp ? theme.up : theme.down;
+      return {
+        type: "stack", direction: "row", alignItems: "center", flex: 1, gap: 6,
+        padding: [4, 8, 4, 8], borderRadius: 12,
+        backgroundColor: { light: "#F5F5F7", dark: "#3A3A3C" },
+        url: `https://www.binance.com/zh-CN/price/${coin.symbol}`,
+        children: [
+          {
+            // 左边：币种 + 全称
+            type: "stack", direction: "column",
+            children: [
+              {
+                type: "stack", direction: "row", alignItems: "center",
+                children: [
+                  { type: "text", text: coin.symbol, font: { size: 15, weight: "bold" }, textColor: theme.text, lineLimit: 1 },
+                  { type: "spacer" }
+                ]
+              },
+              {
+                type: "stack", direction: "row", alignItems: "center",
+                children: [
+                  { type: "text", text: coin.name, font: { size: 10 }, textColor: theme.textSecondary, lineLimit: 1, minScale: 0.7 },
+                  { type: "spacer" }
+                ]
+              }
+            ]
+          },
+          { type: "spacer" },
+          {
+            // 右边：价格 + 涨跌幅
+            type: "stack", direction: "column",
+            children: [
+              {
+                type: "stack", direction: "row", alignItems: "center",
+                children: [
+                  { type: "spacer" },
+                  { type: "text", text: smallPrice(coin.price), font: { size: 15, weight: "semibold" }, textColor: theme.text, lineLimit: 1, minScale: 0.6 }
+                ]
+              },
+              {
+                type: "stack", direction: "row", alignItems: "center",
+                children: [
+                  { type: "spacer" },
+                  { type: "text", text: `${isUp ? "+" : ""}${coin.change.toFixed(2)}%`, font: { size: 11, weight: "semibold" }, textColor: color, lineLimit: 1, minScale: 0.7 }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+    };
+
+    return {
+      type: "widget", padding: 10, gap: 6, backgroundColor: theme.bg,
+      url: `https://www.binance.com/zh-CN/price/${dataSource[0].symbol}`, refreshAfter: "PT1M",
+      children: dataSource.slice(0, 3).map(smallCard)
+    };
+  }
+  // ═══════════ 小尺寸专用布局结束 ═══════════
 
   if (widgetFamily === "systemMedium") {
     return {
