@@ -15,6 +15,12 @@
  * 数据来源：
  *   https://e.dlife.cn/user/package_detail.do
  *   https://e.dlife.cn/user/balance.do
+ *
+ * 登录过期处理：
+ *   服务器拒绝 cookie（非 200 / 返回登录页 HTML / 异常载荷）时视为登录过期，
+ *   小组件显示"登录已过期"错误页（点小组件可直接跳登录页）并通知一次，
+ *   不再静默展示旧数据；仅当"连不上服务器"（断网/超时）时才用缓存顶一下，
+ *   此时标题栏会显示"缓存 HH:mm"以示区别。
  */
 
 const URLS = {
@@ -142,23 +148,37 @@ async function refreshCookie(ctx) {
 
 
 async function fetchJson(ctx, url, cookie) {
-  const resp = await ctx.http.get(url, {
-    headers: {
-      Cookie: cookie,
-    },
+  let resp;
+  try {
+    resp = await ctx.http.get(url, {
+      headers: {
+        Cookie: cookie,
+      },
 
-    timeout: 15000,
+      timeout: 15000,
 
-    credentials: 'omit',
-  });
+      credentials: 'omit',
+    });
+  } catch (e) {
+    // 连服务器都没连上（断网/DNS/超时）：瞬时故障，可以用缓存顶
+    const err = new Error(`network: ${url}`);
+    err.transient = true;
+    throw err;
+  }
 
   if (!resp || resp.status !== 200) {
+    // 服务器有响应但拒绝了（302 跳登录/401/403 等）：cookie 已失效
     throw new Error(
       `HTTP ${resp ? resp.status : 'no-response'}: ${url}`
     );
   }
 
-  return await resp.json();
+  try {
+    return await resp.json();
+  } catch (e) {
+    // 200 但不是 JSON（通常是被踢到登录页，拿回 HTML）：cookie 已失效
+    throw new Error(`not-json: ${url}`);
+  }
 }
 
 
@@ -411,6 +431,13 @@ async function tryCookie(
       cookie
     );
 
+  // 200 + JSON 但不是套餐数据（比如返回了错误码对象）：视为登录失效
+  for (const [name, data] of [['detail', detail], ['balance', balance]]) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error(`bad-payload: ${name}`);
+    }
+  }
+
   const ds =
     parseTelecom(
       detail,
@@ -464,6 +491,10 @@ async function loadData(ctx) {
     envCookie ||
     storedCookie;
 
+  // authFailed：服务器明确拒绝了 cookie（非 200 / 非 JSON / 异常载荷），
+  // 与"连不上服务器"（transient，走缓存）区分开
+  let authFailed = false;
+
   if (firstCookie) {
 
     try {
@@ -475,6 +506,8 @@ async function loadData(ctx) {
           settings
         );
 
+      clearExpiredFlag(ctx);
+
       return {
 
         configured,
@@ -482,9 +515,15 @@ async function loadData(ctx) {
         ds,
 
         fromCache: false,
+
+        authFailed: false,
       };
 
     } catch (e) {
+
+      if (!(e && e.transient)) {
+        authFailed = true;
+      }
     }
   }
 
@@ -504,21 +543,34 @@ async function loadData(ctx) {
         fresh !== firstCookie
       ) {
 
-        const ds =
-          await tryCookie(
-            ctx,
-            fresh,
-            settings
-          );
+        try {
 
-        return {
+          const ds =
+            await tryCookie(
+              ctx,
+              fresh,
+              settings
+            );
 
-          configured,
+          clearExpiredFlag(ctx);
 
-          ds,
+          return {
 
-          fromCache: false,
-        };
+            configured,
+
+            ds,
+
+            fromCache: false,
+
+            authFailed: false,
+          };
+
+        } catch (e2) {
+
+          if (!(e2 && e2.transient)) {
+            authFailed = true;
+          }
+        }
       }
 
     } catch (e) {
@@ -531,6 +583,11 @@ async function loadData(ctx) {
       'ct_datasource'
     );
 
+  if (authFailed) {
+    // cookie 被服务器拒绝且刷新无果：登录已过期，通知一次（同个 cookie 只通知一次）
+    notifyExpiredOnce(ctx, firstCookie);
+  }
+
   return {
 
     configured,
@@ -540,7 +597,35 @@ async function loadData(ctx) {
 
     fromCache:
       !!cached,
+
+    authFailed,
   };
+}
+
+
+// 登录过期通知：同一个失效 cookie 只通知一次，成功刷新后清除标记
+function notifyExpiredOnce(ctx, cookie) {
+  const key = 'ct_expired_notified';
+  const marker = cookie || 'none';
+
+  if (ctx.storage.get(key) === marker) {
+    return;
+  }
+
+  ctx.storage.set(key, marker);
+
+  try {
+    ctx.notify({
+      title: '中国电信',
+      body: '登录已过期，请在 Safari 重新登录 e.dlife.cn',
+    });
+  } catch (e) {
+  }
+}
+
+
+function clearExpiredFlag(ctx) {
+  ctx.storage.delete('ct_expired_notified');
 }
 
 
@@ -766,7 +851,7 @@ function headerRow(
             type: 'text',
 
             text:
-              time,
+              fromCache ? `缓存 ${time}` : time,
 
             font: {
               size: 'caption2',
@@ -1668,6 +1753,7 @@ async function handleWidget(ctx) {
     configured,
     ds,
     fromCache,
+    authFailed,
   } =
     await loadData(ctx);
 
@@ -1676,6 +1762,17 @@ async function handleWidget(ctx) {
     return buildError(
       title,
       '未登录：在 Safari 打开 e.dlife.cn 登录一次',
+      URLS.login
+    );
+  }
+
+
+  // cookie 被服务器拒绝：不再展示旧数据，直接提示重新登录
+  if (authFailed) {
+
+    return buildError(
+      title,
+      '登录已过期：在 Safari 打开 e.dlife.cn 重新登录',
       URLS.login
     );
   }
