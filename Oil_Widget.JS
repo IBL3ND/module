@@ -10,6 +10,7 @@
  * - 实时显示 92/95/98 号汽油和柴油价格
  * - 深色模式自动适配
  * - 全 iPhone 机型适配
+ * - 支持锁屏小组件（单行 / 圆形 / 矩形）
  * 
  * 📚 使用教程
  * ═══════════════════════════════════════════════════
@@ -262,6 +263,114 @@ export default async function (ctx) {
       ]
     }
   }
+
+  // ═══════════ 锁屏专用布局（仅 accessory 系列生效，其他尺寸不受影响）═══════════
+  if (ctx.widgetFamily && ctx.widgetFamily.startsWith("accessory")) {
+    // 锁屏背景透明，文字颜色交给系统处理，次要文字用半透明白色
+    const SUB = { light: "#FFFFFFB3", dark: "#FFFFFFB3" };
+    const short = (label) => label.replace(/\s/g, "");   // "92 号" → "92号"
+    const place = regionName || "油价";
+
+    let lockDate = "";
+    const ldm = trendInfo.match(/(\d{1,2})月(\d{1,2})日/);
+    if (SHOW_TREND && ldm) {
+      lockDate = `${ldm[1].padStart(2,"0")}-${ldm[2].padStart(2,"0")}`;
+    }
+
+    // 没有任何价格数据
+    if (rows.length === 0) {
+      return {
+        type:"widget",
+        refreshAfter:refreshTime,
+        children:[{
+          type:"text",
+          text: fetchError ? `油价 ${errorMsg}` : "暂无油价数据",
+          font:{size:"caption1",weight:"medium"},
+          lineLimit:1,
+          minScale:0.5
+        }]
+      };
+    }
+
+    // 单行：海口 92号 9.72 · 95号 10.33
+    if (ctx.widgetFamily === "accessoryInline") {
+      return {
+        type:"widget",
+        refreshAfter:refreshTime,
+        children:[{
+          type:"text",
+          text:`${place} ${rows.slice(0, 2).map(r => `${short(r.label)} ${r.price.toFixed(2)}`).join(" · ")}`,
+          font:{size:"caption1",weight:"medium"},
+          lineLimit:1,
+          minScale:0.5
+        }]
+      };
+    }
+
+    // 圆形：只显示 92 号（没有则显示第一项）
+    if (ctx.widgetFamily === "accessoryCircular") {
+      const r0 = rows.find(r => r.label.includes("92")) || rows[0];
+      return {
+        type:"widget",
+        padding:2,
+        refreshAfter:refreshTime,
+        children:[
+          {type:"spacer"},
+          {type:"text",text:short(r0.label),font:{size:"caption2",weight:"medium"},textColor:SUB,textAlign:"center",lineLimit:1},
+          {type:"text",text:r0.price.toFixed(2),font:{size:"headline",weight:"bold"},textAlign:"center",lineLimit:1,minScale:0.5},
+          {type:"text",text:"元/升",font:{size:"caption2"},textColor:SUB,textAlign:"center",lineLimit:1},
+          {type:"spacer"}
+        ]
+      };
+    }
+
+    // 矩形：第一行地区 + 调价日期，下面两行每行两个油品（左边说明，右边加粗价格）
+    const cell = (r) => ({
+      type:"stack",
+      direction:"row",
+      alignItems:"center",
+      flex:1,
+      gap:4,
+      children:[
+        {type:"text",text:short(r.label),font:{size:"caption2",weight:"medium"},textColor:SUB,lineLimit:1},
+        {type:"spacer"},
+        {type:"text",text:r.price.toFixed(2),font:{size:"caption1",weight:"bold"},lineLimit:1,minScale:0.6}
+      ]
+    });
+
+    const lockPairs = [];
+    for (let i = 0; i < rows.length; i += 2) lockPairs.push(rows.slice(i, i + 2));
+
+    return {
+      type:"widget",
+      padding:2,
+      gap:3,
+      refreshAfter:refreshTime,
+      children:[
+        {
+          type:"stack",
+          direction:"row",
+          alignItems:"center",
+          gap:4,
+          children:[
+            {type:"image",src:"sf-symbol:fuelpump.fill",width:11,height:11},
+            {type:"text",text:place,font:{size:"caption2",weight:"semibold"},lineLimit:1,minScale:0.7},
+            {type:"spacer"},
+            ...(lockDate ? [{type:"text",text:lockDate,font:{size:"caption2"},textColor:SUB,lineLimit:1}] : [])
+          ]
+        },
+        ...lockPairs.map(pair => ({
+          type:"stack",
+          direction:"row",
+          alignItems:"center",
+          gap:10,
+          children: pair.length === 1 ? [cell(pair[0]), {type:"spacer"}] : pair.map(cell)
+        }))
+      ]
+    };
+  }
+  // ═══════════ 锁屏专用布局结束 ═══════════
+
   if (ctx.widgetFamily === "systemSmall") {
     const smallCard = (row) => ({
       type:"stack",
