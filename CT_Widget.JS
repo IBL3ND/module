@@ -1880,8 +1880,32 @@ export default async function(ctx) {
 }
 
 
-// 定时保活：触发一次真实查询。注意 schedule 脚本不需要返回值。
+// 定时保活：轻量 ping 一次续 session。
+//
+// 注意：不要调完整 loadData——它最坏要串行发 5 个请求（每个 15s 超时），
+// 累计时长超过 Egern 定时任务的脚本超时会被直接终止。
+// 保活只需要一次真实触达；成功/失败都不通知不写缓存，
+// 下次小组件刷新会正常处理显示和过期提醒。
 async function handleKeepAlive(ctx) {
 
-  await loadData(ctx);
+  const cookie =
+    (ctx.env.CT_COOKIE || '').trim() ||
+    ctx.storage.get('ct_cookie') ||
+    '';
+
+  if (!cookie) return;
+
+  try {
+
+    await ctx.http.get(URLS.detail, {
+      headers: {
+        Cookie: cookie,
+      },
+
+      timeout: 10000,
+
+      credentials: 'omit',
+    });
+
+  } catch (e) {}
 }
