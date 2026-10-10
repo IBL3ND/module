@@ -1,5 +1,5 @@
 name: 中国电信小组件
-description: 中国电信 话费 语音 流量小组件
+description: 中国电信 话费 语音 流量小组件（含定时保活）
 author: iBL3ND
 icon: https://iili.io/nEufFXR.png
 compat_arguments:
@@ -21,6 +21,10 @@ scriptings:
     name: 中国电信自动捕获
     match: '^https://e\.dli[^{{{ctCapture}}}]e\.cn/'
     script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/ChinaTelecom.js
+- schedule:
+    name: 中国电信保活
+    cron: '*/20 * * * *'
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CT_Widget.JS
 mitm:
   hostnames:
     includes:
