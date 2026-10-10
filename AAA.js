@@ -135,15 +135,15 @@ async function handleCapture(ctx) {
 
 
   /*
-   * 调试：发现疑似流量明细接口时用通知显示 URL
-   * 用途：找到返回通用/定向分项数据的接口
+   * 调试：发现联通接口时用通知显示 URL
+   * 用途：找到返回通用/定向分项数据的流量明细接口
    * 开关：Env CU_DEBUG_URLS=true（模块里有对应按钮，默认关闭）
    */
   if (
     ctx.env &&
     ctx.env.CU_DEBUG_URLS === 'true'
   ) {
-    debugFlowApiUrl(ctx, url);
+    debugApiUrl(ctx, url);
   }
 
 
@@ -220,37 +220,14 @@ async function handleCapture(ctx) {
 
 
 /* =========================================================
- * 调试：流量明细接口发现
+ * 调试：联通接口发现
  * ========================================================= */
 
-const FLOW_API_KEYWORDS = [
-  'flow', 'Flow', 'FLOW',
-  'detail', 'Detail',
-  'package', 'Package',
-  'quota', 'remain', 'balance',
-  'resource', 'Resource',
-  '余量', '详单', '明细',
-];
-
-
-function debugFlowApiUrl(ctx, url) {
+function debugApiUrl(ctx, url) {
 
   // 去掉 query 参数，避免通知里泄露手机号等隐私信息
   const path =
     String(url).split('?')[0];
-
-  // 首页汇总接口本来就是已知的，跳过
-  if (path.includes('queryUserInfoSeven')) {
-    return;
-  }
-
-  if (
-    !FLOW_API_KEYWORDS.some(
-      (k) => path.includes(k)
-    )
-  ) {
-    return;
-  }
 
   // 同一小时内同一接口只通知一次
   const KEY = 'cu_debug_urls';
