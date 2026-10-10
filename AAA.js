@@ -623,7 +623,7 @@ async function loadDataByToken(ctx, phone, password, settings) {
     if (e && e.loginFailed) {
       // 密码错误 / 账号异常：通知一次
       notifyTokenLoginFailedOnce(ctx, phone);
-      return { configured, ds: null, fromCache: false, authFailed: 'token' };
+      return { configured, ds: null, fromCache: false, authFailed: 'token', authMessage: e.message };
     }
     // 其他异常：有缓存用缓存顶一下并标过期，无缓存则报错
     const cached = ctx.storage.getJSON('ct_datasource');
@@ -632,6 +632,7 @@ async function loadDataByToken(ctx, phone, password, settings) {
       ds: cached || null,
       fromCache: !!cached,
       authFailed: cached ? false : 'token',
+      authMessage: e && e.message,
     };
   }
 }
@@ -2235,6 +2236,7 @@ async function handleWidget(ctx) {
     ds,
     fromCache,
     authFailed,
+    authMessage,
   } =
     await loadData(ctx);
 
@@ -2257,7 +2259,9 @@ async function handleWidget(ctx) {
 
       return buildError(
         title,
-        '登录失败：请检查环境变量里的手机号和服务密码'
+        authMessage
+          ? `登录失败：${authMessage}`
+          : '登录失败：请检查模块里的手机号和服务密码'
       );
     }
 
