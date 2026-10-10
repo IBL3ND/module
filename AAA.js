@@ -1,34 +1,46 @@
-/**
- * 中国联通话费流量小组件
+/*
+ * 中国电信小组件
+ * 用这个链接去登录 https://e.dlife.cn
+ * 同一个文件，两种用法：
+ *   1. generic 类型 → iOS 小组件
+ *   2. request 类型 → 登录捕获
  *
- * 自动获取方式：
- * 1. 打开中国联通 App
- * 2. 进入首页
- * 3. 点击当前余额 / 话费位置，让 App 查询一次
- * 4. Egern 会自动捕获联通 App 请求中的 Cookie 和手机号
- * 5. 小组件自动使用捕获的数据，无需手动填写环境变量
+ * 环境变量： 不需要手动填 添加模块后登录即可
+ *   CT_LOGIN_URL
+ *   CT_COOKIE
+ *   CT_SHOW_USED_FLOW
+ *   CT_FILTER_ORIENTATE_FLOW
+ *   CT_TITLE
  *
- * 自动捕获域名：
- * m.client.10010.com
+ * 数据来源：
+ *   https://e.dlife.cn/user/package_detail.do
+ *   https://e.dlife.cn/user/balance.do
  *
- * 数据接口：
- * https://m.client.10010.com/mobileserviceimportant/home/queryUserInfoSeven
+ * 登录过期处理：
+ *   服务器拒绝 cookie（非 200 / 返回登录页 HTML / 异常载荷）时视为登录过期，
+ *   小组件显示"登录已过期"错误页（点小组件可直接跳登录页）并通知一次，
+ *   不再静默展示旧数据；仅当"连不上服务器"（断网/超时）时才用缓存顶一下，
+ *   此时标题栏会显示"缓存 HH:mm"以示区别。
+ *
+ * 保活模式（三种用法，同一个文件）：
+ *   1. generic 类型 → iOS 小组件
+ *   2. http_request 类型 → 登录捕获
+ *   3. schedule 类型 → 定时保活：在 Egern 里建 schedule 脚本条目指向本文件，
+ *      cron 设为每 20 分钟执行一次，每次触发会查一次接口，
+ *      若服务端 session 是滑动过期即可续命。注意：若 e.dlife.cn 是固定时长
+ *      过期，保活无效，只能手动重登（过期会有通知提示）。
  */
 
-
-/* =========================================================
- * 基础配置
- * ========================================================= */
-
-const API_HOST = 'm.client.10010.com';
-
-const API_URL =
-  'https://m.client.10010.com/mobileserviceimportant/home/queryUserInfoSeven';
+const URLS = {
+  login: 'https://e.dlife.cn/index.do',
+  detail: 'https://e.dlife.cn/user/package_detail.do',
+  balance: 'https://e.dlife.cn/user/balance.do',
+};
 
 
-/* =========================================================
- * 颜色
- * ========================================================= */
+const FLOW_COLOR = '#FF6620';
+const VOICE_COLOR = '#78C100';
+
 
 const COLORS = {
   bg: {
@@ -67,365 +79,714 @@ const COLORS = {
   },
 
   accent: {
-    light: '#E60012',
-    dark: '#FF375F',
+    light: '#FF6620',
+    dark: '#FF854D',
   },
 };
 
 
-/* =========================================================
- * Cookie / 手机号捕获
- * ========================================================= */
+function formatFlow(flow) {
+  const remain = flow / 1024;
 
-function getRequestHeader(headers, name) {
-  if (!headers) return '';
-
-  try {
-    if (typeof headers.get === 'function') {
-      return headers.get(name) || '';
-    }
-  } catch (e) {}
-
-  try {
-    for (const key of Object.keys(headers)) {
-      if (String(key).toLowerCase() === name.toLowerCase()) {
-        return headers[key] || '';
-      }
-    }
-  } catch (e) {}
-
-  return '';
-}
-
-
-function extractPhone(url) {
-  if (!url) return '';
-
-  try {
-    const match = url.match(
-      /[?&]desmobiel=([^&]+)/i
-    );
-
-    if (match && match[1]) {
-      return decodeURIComponent(match[1]).trim();
-    }
-  } catch (e) {}
-
-  return '';
-}
-
-
-async function handleCapture(ctx) {
-  const req = ctx.request || {};
-  const url = String(req.url || '');
-
-  if (!url) return;
-
-  /*
-   * 只捕获中国联通 App 的接口请求
-   */
-  if (!url.includes(API_HOST)) {
-    return;
+  if (remain < 1024) {
+    return {
+      amount: remain.toFixed(2),
+      unit: 'MB',
+    };
   }
-
-
-  /*
-   * 获取 Cookie
-   */
-  const cookie = String(
-    getRequestHeader(req.headers, 'cookie') || ''
-  ).trim();
-
-
-  /*
-   * 获取手机号
-   *
-   * 联通这个接口使用：
-   * desmobiel=手机号
-   */
-  const phone = extractPhone(url);
-
-
-  let changed = false;
-
-
-  /*
-   * 保存 Cookie
-   */
-  if (cookie) {
-    const oldCookie =
-      ctx.storage.get('unicom_cookie') || '';
-
-    if (cookie !== oldCookie) {
-      ctx.storage.set(
-        'unicom_cookie',
-        cookie
-      );
-
-      changed = true;
-    }
-  }
-
-
-  /*
-   * 保存手机号
-   */
-  if (phone) {
-    const oldPhone =
-      ctx.storage.get('unicom_phone') || '';
-
-    if (phone !== oldPhone) {
-      ctx.storage.set(
-        'unicom_phone',
-        phone
-      );
-
-      changed = true;
-    }
-  }
-
-
-  /*
-   * 第一次成功捕获时通知
-   */
-  if (
-    changed &&
-    cookie &&
-    phone
-  ) {
-    ctx.notify({
-      title: '中国联通',
-      body: '已自动获取登录信息，小组件将自动更新',
-    });
-  }
-}
-
-
-/* =========================================================
- * 数据请求
- * ========================================================= */
-
-async function fetchUnicomData(
-  ctx,
-  cookie,
-  phone
-) {
-
-  const url =
-    `${API_URL}?version=iphone_c@10.0100` +
-    `&desmobiel=${encodeURIComponent(phone)}` +
-    `&showType=0`;
-
-  const resp = await ctx.http.get(
-    url,
-    {
-      timeout: 10000,
-
-      headers: {
-        Host: API_HOST,
-
-        'User-Agent':
-          'ChinaUnicom.x CFNetwork iOS/16.3',
-
-        Cookie: cookie,
-      },
-
-      credentials: 'omit',
-    }
-  );
-
-
-  if (!resp || resp.status !== 200) {
-    throw new Error(
-      `HTTP ${resp ? resp.status : 'no-response'}`
-    );
-  }
-
-
-  return await resp.json();
-}
-
-
-/* =========================================================
- * 数据解析
- * ========================================================= */
-
-function parseUnicomData(res) {
-
-  if (
-    !res ||
-    res.code !== 'Y' ||
-    !res.feeResource ||
-    !res.voiceResource ||
-    !res.flowResource
-  ) {
-    throw new Error(
-      `API 返回异常：${res?.code || 'unknown'}`
-    );
-  }
-
-
-  const feeResource =
-    res.feeResource;
-
-  const voiceResource =
-    res.voiceResource;
-
-  const flowResource =
-    res.flowResource;
-
 
   return {
-    fee: {
-      title:
-        feeResource.dynamicFeeTitle ||
-        '剩余话费',
-
-      value:
-        feeResource.feePersent ??
-        0,
-
-      unit:
-        feeResource.newUnit ||
-        '元',
-    },
-
-    voice: {
-      title:
-        voiceResource.dynamicVoiceTitle ||
-        '剩余语音',
-
-      value:
-        voiceResource.voicePersent ??
-        0,
-
-      unit:
-        voiceResource.newUnit ||
-        '分钟',
-    },
-
-    flow: {
-      title:
-        flowResource.dynamicFlowTitle ||
-        '剩余流量',
-
-      value:
-        flowResource.flowPersent ??
-        0,
-
-      unit:
-        flowResource.newUnit ||
-        'MB',
-    },
-
-    updateTime:
-      new Date().toLocaleTimeString(
-        'zh-CN',
-        {
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'Asia/Shanghai',
-        }
-      ),
-
-    timestamp: Date.now(),
+    amount: (remain / 1024).toFixed(2),
+    unit: 'GB',
   };
 }
 
 
-/* =========================================================
- * 加载数据
- * ========================================================= */
+function pad2(n) {
+  return n < 10 ? `0${n}` : `${n}`;
+}
 
-async function loadData(ctx) {
 
-  const cookie =
-    ctx.storage.get('unicom_cookie') ||
+function fmtTime(ts) {
+  const d = new Date(ts);
+
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+
+async function refreshCookie(ctx) {
+  const loginUrl =
+    (ctx.env.CT_LOGIN_URL || '').trim() ||
+    ctx.storage.get('ct_login_url') ||
     '';
 
-  const phone =
-    ctx.storage.get('unicom_phone') ||
-    '';
-
-
-  /*
-   * 没有自动捕获到登录信息
-   */
-  if (!cookie || !phone) {
-
-    return {
-      data: null,
-      configured: false,
-      error: null,
-    };
+  if (!loginUrl) {
+    return ctx.storage.get('ct_cookie') || '';
   }
 
+  const url =
+    (loginUrl.match(/(http.+)&sign/) || [])[1] ||
+    loginUrl;
+
+  const resp = await ctx.http.get(url, {
+    redirect: 'manual',
+    timeout: 15000,
+    credentials: 'omit',
+  });
+
+  const setCookies =
+    (resp.headers &&
+      resp.headers.getAll &&
+      resp.headers.getAll('set-cookie')) ||
+    [];
+
+  const pairs = setCookies
+    .map((c) => String(c).split(';')[0].trim())
+    .filter(Boolean);
+
+  if (pairs.length > 0) {
+    ctx.storage.set(
+      'ct_cookie',
+      pairs.join('; ')
+    );
+  }
+
+  return ctx.storage.get('ct_cookie') || '';
+}
+
+
+async function fetchJson(ctx, url, cookie) {
+  let resp;
+  try {
+    resp = await ctx.http.get(url, {
+      headers: {
+        Cookie: cookie,
+      },
+
+      timeout: 15000,
+
+      credentials: 'omit',
+    });
+  } catch (e) {
+    // 连服务器都没连上（断网/DNS/超时）：瞬时故障，可以用缓存顶
+    const err = new Error(`network: ${url}`);
+    err.transient = true;
+    throw err;
+  }
+
+  if (!resp || resp.status !== 200) {
+    // 服务器有响应但拒绝了（302 跳登录/401/403 等）：cookie 已失效
+    throw new Error(
+      `HTTP ${resp ? resp.status : 'no-response'}: ${url}`
+    );
+  }
 
   try {
-
-    const res =
-      await fetchUnicomData(
-        ctx,
-        cookie,
-        phone
-      );
-
-
-    const data =
-      parseUnicomData(res);
-
-
-    /*
-     * 保存最新数据
-     */
-    ctx.storage.setJSON(
-      'unicom_datasource',
-      data
-    );
-
-
-    return {
-      data,
-      configured: true,
-      error: null,
-    };
-
+    return await resp.json();
   } catch (e) {
-
-    /*
-     * 如果接口失败，尝试使用缓存
-     */
-    const cached =
-      ctx.storage.getJSON(
-        'unicom_datasource'
-      );
-
-
-    return {
-      data: cached || null,
-      configured: true,
-      error: e,
-    };
+    // 200 但不是 JSON（通常是被踢到登录页，拿回 HTML）：cookie 已失效
+    throw new Error(`not-json: ${url}`);
   }
 }
 
 
-/* =========================================================
- * 顶部标题
- * ========================================================= */
+function parseTelecom(detail, balance, opts) {
+  const {
+    showUsedFlow,
+    showGeneralFlow,
+    showDirectionalFlow,
+  } = opts;
 
-function headerRow(
-  title,
-  data,
-  fromCache
-) {
+  let totalFlowAmount = 0;
+  let totalBalanceFlowAmount = 0;
+  let totalUsedFlowAmount = 0;
 
-  const updateTime =
-    data?.updateTime ||
-    '--:--';
+  let totalVoiceAmount = 0;
+  let totalBalanceVoiceAmount = 0;
+
+  let isUnlimitedFlow = false;
+
+  for (const data of detail?.items || []) {
+
+    if (data.offerType === 19) {
+      continue;
+    }
+
+    for (const item of data.items || []) {
+
+
+      if (item.unitTypeId == 3) {
+
+        // 定向判断：资源名含"定向"即为定向流量，其余为通用流量
+        const isDirectional =
+          /定向/.test(
+            item.ratableResourcename || ''
+          );
+
+        const directionAllowed =
+          isDirectional ?
+            showDirectionalFlow :
+            showGeneralFlow;
+
+        if (
+          !(
+            item.usageAmount == 0 &&
+            item.balanceAmount == 0
+          )
+        ) {
+
+          const skip =
+            item.balanceAmount == '999999999999' ||
+            !directionAllowed;
+
+          if (!skip) {
+
+            totalFlowAmount +=
+              parseFloat(
+                item.ratableAmount
+              ) || 0;
+
+            totalBalanceFlowAmount +=
+              parseFloat(
+                item.balanceAmount
+              ) || 0;
+          }
+        }
+
+        // 已用流量同样按开关过滤，保证"只显示通用"时已用也是通用的
+        if (directionAllowed) {
+
+          totalUsedFlowAmount +=
+            parseFloat(
+              item.usageAmount
+            ) || 0;
+        }
+
+        if (
+          data.offerType == 21 &&
+          item.ratableAmount == '0'
+        ) {
+          isUnlimitedFlow = true;
+        }
+
+      }
+
+
+      else if (
+        !detail.voiceBalance &&
+        item.unitTypeId == 1
+      ) {
+
+        totalVoiceAmount +=
+          parseInt(
+            item.ratableAmount,
+            10
+          ) || 0;
+
+        totalBalanceVoiceAmount +=
+          parseInt(
+            item.balanceAmount,
+            10
+          ) || 0;
+      }
+    }
+  }
+
+
+  if (
+    detail.voiceAmount &&
+    detail.voiceBalance
+  ) {
+
+    totalVoiceAmount =
+      detail.voiceAmount;
+
+    totalBalanceVoiceAmount =
+      detail.voiceBalance;
+  }
+
+
+  const balanceFlow =
+    formatFlow(
+      totalBalanceFlowAmount
+    );
+
+  const usedFlow =
+    formatFlow(
+      totalUsedFlowAmount
+    );
+
+
+  const flow = {
+
+    title:
+      '剩余流量',
+
+    number:
+      balanceFlow.amount,
+
+    unit:
+      balanceFlow.unit,
+
+    percent:
+      +(
+        (
+          totalBalanceFlowAmount /
+          (totalFlowAmount || 1)
+        ) *
+        100
+      ).toFixed(2),
+
+    color:
+      FLOW_COLOR,
+  };
+
+
+  if (showUsedFlow) {
+
+    flow.title =
+      '已用流量';
+
+    flow.number =
+      usedFlow.amount;
+
+    flow.unit =
+      usedFlow.unit;
+  }
+
+
+  if (isUnlimitedFlow) {
+
+    flow.title =
+      '已用流量';
+
+    flow.number =
+      usedFlow.amount;
+
+    flow.unit =
+      usedFlow.unit;
+  }
+
+
+  const voice = {
+
+    title:
+      '剩余语音',
+
+    number:
+      `${totalBalanceVoiceAmount}`,
+
+    unit:
+      '分钟',
+
+    percent:
+      +(
+        (
+          totalBalanceVoiceAmount /
+          (totalVoiceAmount || 1)
+        ) *
+        100
+      ).toFixed(2),
+
+    color:
+      VOICE_COLOR,
+  };
+
+
+  const feeNum =
+    Number(
+      balance?.totalBalanceAvailable
+    );
+
+  const fee = {
+
+    title:
+      '剩余话费',
+
+    number:
+      Number.isFinite(feeNum)
+        ? (feeNum / 100).toFixed(2)
+        : '0.00',
+
+    unit:
+      '元',
+  };
 
 
   return {
+
+    fee,
+
+    flow,
+
+    voice,
+
+    updatedAt:
+      Date.now(),
+  };
+}
+
+
+async function tryCookie(
+  ctx,
+  cookie,
+  settings
+) {
+
+  const detail =
+    await fetchJson(
+      ctx,
+      URLS.detail,
+      cookie
+    );
+
+  const balance =
+    await fetchJson(
+      ctx,
+      URLS.balance,
+      cookie
+    );
+
+  // 200 + JSON 但不是套餐数据（比如返回了错误码对象）：视为登录失效
+  for (const [name, data] of [['detail', detail], ['balance', balance]]) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error(`bad-payload: ${name}`);
+    }
+  }
+
+  const ds =
+    parseTelecom(
+      detail,
+      balance,
+      settings
+    );
+
+  ctx.storage.setJSON(
+    'ct_datasource',
+    ds
+  );
+
+  return ds;
+}
+
+
+async function loadData(ctx) {
+
+  const envCookie =
+    (ctx.env.CT_COOKIE || '').trim();
+
+  const loginUrl =
+    (ctx.env.CT_LOGIN_URL || '').trim() ||
+    ctx.storage.get('ct_login_url') ||
+    '';
+
+  const settings = {
+
+    showUsedFlow:
+      ctx.env.CT_SHOW_USED_FLOW ===
+      'true',
+
+    // 模块开关：通用流量 / 定向流量显示控制（默认都显示，即原来的"全部流量"）
+    showGeneralFlow:
+      ctx.env.CT_SHOW_GENERAL_FLOW !==
+      'false',
+
+    // 兼容旧版 CT_FILTER_ORIENTATE_FLOW=true（等价于定向流量开关关闭）
+    showDirectionalFlow:
+      ctx.env.CT_SHOW_DIRECTIONAL_FLOW !==
+      'false' &&
+      ctx.env.CT_FILTER_ORIENTATE_FLOW !==
+      'true',
+  };
+
+  const storedCookie =
+    ctx.storage.get('ct_cookie') ||
+    '';
+
+  const configured =
+    !!(
+      envCookie ||
+      loginUrl ||
+      storedCookie
+    );
+
+
+  const firstCookie =
+    envCookie ||
+    storedCookie;
+
+  // authFailed：服务器明确拒绝了 cookie（非 200 / 非 JSON / 异常载荷），
+  // 与"连不上服务器"（transient，走缓存）区分开
+  let authFailed = false;
+
+  if (firstCookie) {
+
+    try {
+
+      const ds =
+        await tryCookie(
+          ctx,
+          firstCookie,
+          settings
+        );
+
+      clearExpiredFlag(ctx);
+
+      return {
+
+        configured,
+
+        ds,
+
+        fromCache: false,
+
+        authFailed: false,
+      };
+
+    } catch (e) {
+
+      if (!(e && e.transient)) {
+        authFailed = true;
+      }
+    }
+  }
+
+
+  if (
+    !envCookie &&
+    loginUrl
+  ) {
+
+    try {
+
+      const fresh =
+        await refreshCookie(ctx);
+
+      if (
+        fresh &&
+        fresh !== firstCookie
+      ) {
+
+        try {
+
+          const ds =
+            await tryCookie(
+              ctx,
+              fresh,
+              settings
+            );
+
+          clearExpiredFlag(ctx);
+
+          return {
+
+            configured,
+
+            ds,
+
+            fromCache: false,
+
+            authFailed: false,
+          };
+
+        } catch (e2) {
+
+          if (!(e2 && e2.transient)) {
+            authFailed = true;
+          }
+        }
+      }
+
+    } catch (e) {
+    }
+  }
+
+
+  const cached =
+    ctx.storage.getJSON(
+      'ct_datasource'
+    );
+
+  if (authFailed) {
+    // cookie 被服务器拒绝且刷新无果：登录已过期，通知一次（同个 cookie 只通知一次）
+    notifyExpiredOnce(ctx, firstCookie);
+  }
+
+  return {
+
+    configured,
+
+    ds:
+      cached || null,
+
+    fromCache:
+      !!cached,
+
+    authFailed,
+  };
+}
+
+
+// 登录过期通知：同一个失效 cookie 只通知一次，成功刷新后清除标记
+function notifyExpiredOnce(ctx, cookie) {
+  const key = 'ct_expired_notified';
+  const marker = cookie || 'none';
+
+  if (ctx.storage.get(key) === marker) {
+    return;
+  }
+
+  ctx.storage.set(key, marker);
+
+  try {
+    ctx.notify({
+      title: '中国电信',
+      body: '登录已过期，请在 Safari 重新登录 e.dlife.cn',
+    });
+  } catch (e) {
+  }
+}
+
+
+function clearExpiredFlag(ctx) {
+  ctx.storage.delete('ct_expired_notified');
+}
+
+
+function makeCapsule(
+  title,
+  value,
+  unit
+) {
+
+  return {
+
+    type: 'stack',
+
+    direction: 'column',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    flex: 1,
+
+    padding: [
+      8,
+      8,
+      8,
+      8,
+    ],
+
+    backgroundColor:
+      COLORS.capsuleBg,
+
+    borderRadius: 14,
+
+    borderWidth: 1,
+
+    borderColor:
+      COLORS.border,
+
+    children: [
+
+      {
+        type: 'text',
+
+        text:
+          title,
+
+        font: {
+          size: 'caption2',
+          weight: 'medium',
+        },
+
+        textColor:
+          COLORS.title,
+
+        textAlign:
+          'center',
+
+        maxLines: 1,
+
+        minScale:
+          0.7,
+      },
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        justifyContent:
+          'center',
+
+        gap: 3,
+
+        children: [
+
+          {
+            type: 'text',
+
+            text:
+              String(value),
+
+            font: {
+              size: 'title2',
+              weight: 'semibold',
+            },
+
+            textColor:
+              COLORS.value,
+
+            textAlign:
+              'center',
+
+            maxLines: 1,
+
+            minScale:
+              0.65,
+          },
+
+          {
+            type: 'text',
+
+            text:
+              unit,
+
+            font: {
+              size: 'caption2',
+              weight: 'regular',
+            },
+
+            textColor:
+              COLORS.title,
+
+            maxLines: 1,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+
+function headerRow(
+  title,
+  ds,
+  fromCache
+) {
+
+  const time =
+    ds &&
+    ds.updatedAt
+      ? fmtTime(ds.updatedAt)
+      : '--:--';
+
+  return {
+
     type: 'stack',
 
     direction: 'row',
@@ -441,7 +802,7 @@ function headerRow(
 
         alignItems: 'center',
 
-        gap: 6,
+        gap: 7,
 
         children: [
 
@@ -449,20 +810,21 @@ function headerRow(
             type: 'image',
 
             src:
-              'sf-symbol:simcard.fill',
+              'sf-symbol:antenna.radiowaves.left.and.right',
 
             color:
               COLORS.accent,
 
-            width: 17,
+            width: 18,
 
-            height: 17,
+            height: 18,
           },
 
           {
             type: 'text',
 
-            text: title,
+            text:
+              title,
 
             font: {
               size: 'headline',
@@ -474,17 +836,15 @@ function headerRow(
 
             maxLines: 1,
 
-            minScale: 0.8,
+            minScale:
+              0.75,
           },
-
         ],
       },
-
 
       {
         type: 'spacer',
       },
-
 
       {
         type: 'stack',
@@ -514,7 +874,8 @@ function headerRow(
           {
             type: 'text',
 
-            text: updateTime,
+            text:
+              fromCache ? `缓存 ${time}` : time,
 
             font: {
               size: 'caption2',
@@ -525,146 +886,21 @@ function headerRow(
 
             maxLines: 1,
           },
-
         ],
       },
-
     ],
   };
 }
 
-
-/* =========================================================
- * 通用数据胶囊
- * ========================================================= */
-
-function makeCapsule(
-  title,
-  value,
-  unit
-) {
-
-  return {
-    type: 'stack',
-
-    direction: 'column',
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    flex: 1,
-
-    padding: [
-      7,
-      8,
-      7,
-      8,
-    ],
-
-    backgroundColor:
-      COLORS.capsuleBg,
-
-    borderRadius: 14,
-
-    borderWidth: 1,
-
-    borderColor:
-      COLORS.border,
-
-    children: [
-
-      {
-        type: 'text',
-
-        text: title,
-
-        font: {
-          size: 'caption2',
-          weight: 'medium',
-        },
-
-        textColor:
-          COLORS.title,
-
-        textAlign: 'center',
-
-        maxLines: 1,
-
-        minScale: 0.7,
-      },
-
-
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        justifyContent: 'center',
-
-        gap: 3,
-
-        children: [
-
-          {
-            type: 'text',
-
-            text: String(value),
-
-            font: {
-              size: 'title2',
-              weight: 'semibold',
-            },
-
-            textColor:
-              COLORS.value,
-
-            textAlign: 'center',
-
-            maxLines: 1,
-
-            minScale: 0.55,
-          },
-
-
-          {
-            type: 'text',
-
-            text: unit,
-
-            font: {
-              size: 'caption2',
-            },
-
-            textColor:
-              COLORS.title,
-
-            maxLines: 1,
-
-            minScale: 0.7,
-          },
-
-        ],
-      },
-
-    ],
-  };
-}
-
-
-/* =========================================================
- * 中号 / 大号 / 超大号
- * ========================================================= */
 
 function buildMainWidget(
   title,
-  data,
+  ds,
   fromCache
 ) {
 
   return {
+
     type: 'widget',
 
     backgroundColor:
@@ -677,7 +913,7 @@ function buildMainWidget(
       14,
     ],
 
-    gap: 10,
+    gap: 12,
 
     refreshAfter:
       new Date(
@@ -687,19 +923,15 @@ function buildMainWidget(
 
     children: [
 
-      /*
-       * 顶部
-       */
+      /* 顶部 */
+
       headerRow(
         title,
-        data,
+        ds,
         fromCache
       ),
 
 
-      /*
-       * 三项数据
-       */
       {
         type: 'stack',
 
@@ -707,35 +939,31 @@ function buildMainWidget(
 
         alignItems: 'center',
 
-        gap: 8,
+        gap: 9,
 
         children: [
 
           makeCapsule(
-            data.fee.title,
-            data.fee.value,
-            data.fee.unit
+            ds.fee.title,
+            ds.fee.number,
+            ds.fee.unit
           ),
 
           makeCapsule(
-            data.voice.title,
-            data.voice.value,
-            data.voice.unit
+            ds.voice.title,
+            ds.voice.number,
+            ds.voice.unit
           ),
 
           makeCapsule(
-            data.flow.title,
-            data.flow.value,
-            data.flow.unit
+            ds.flow.title,
+            ds.flow.number,
+            ds.flow.unit
           ),
-
         ],
       },
 
 
-      /*
-       * 底部短横线
-       */
       {
         type: 'stack',
 
@@ -752,9 +980,9 @@ function buildMainWidget(
           {
             type: 'stack',
 
-            width: 42,
+            width: 48,
 
-            height: 3,
+            height: 4,
 
             borderRadius: 2,
 
@@ -765,20 +993,11 @@ function buildMainWidget(
           {
             type: 'spacer',
           },
-
         ],
       },
-
     ],
   };
 }
-
-
-/* =========================================================
- * 小组件
- *
- * 三行横条：圆形图标 + 数值 + 说明
- * ========================================================= */
 
 /* 小尺寸专用：圆形图标 + 数值 + 说明 的横条 */
 function smallRow(
@@ -963,7 +1182,7 @@ function smallRow(
 
 function buildSmall(
   title,
-  data,
+  ds,
   fromCache
 ) {
 
@@ -995,41 +1214,35 @@ function buildSmall(
         '#E8651F',
         null,
         '¥',
-        data.fee.value,
-        data.fee.unit,
-        data.fee.title
+        ds.fee.number,
+        ds.fee.unit,
+        ds.fee.title
       ),
 
       smallRow(
         '#4DA6F0',
         'sf-symbol:antenna.radiowaves.left.and.right',
         '',
-        data.flow.value,
-        data.flow.unit,
-        data.flow.title
+        ds.flow.number,
+        ds.flow.unit,
+        ds.flow.title
       ),
 
       smallRow(
         '#55C759',
         'sf-symbol:phone.and.waveform.fill',
         '',
-        data.voice.value,
-        data.voice.unit,
-        data.voice.title
+        ds.voice.number,
+        ds.voice.unit,
+        ds.voice.title
       ),
-
     ],
   };
 }
 
-
-/* =========================================================
- * 锁屏小组件
- * ========================================================= */
-
 function buildLockScreen(
   title,
-  data,
+  ds,
   family
 ) {
 
@@ -1044,13 +1257,15 @@ function buildLockScreen(
 
 
   /*
-   * 单行：话费 / 流量 / 语音
+   * 单行：话费 · 流量
    */
   if (
-    family === 'accessoryInline'
+    family ===
+      'accessoryInline'
   ) {
 
     return {
+
       type: 'widget',
 
       children: [
@@ -1059,8 +1274,8 @@ function buildLockScreen(
           type: 'text',
 
           text:
-            `${title} ${data.fee.value}${data.fee.unit} · ` +
-            `${data.flow.value}${data.flow.unit}`,
+            `${title} ${ds.fee.number}${ds.fee.unit} · ` +
+            `${ds.flow.number}${ds.flow.unit}`,
 
           font: {
             size: 'caption1',
@@ -1069,9 +1284,9 @@ function buildLockScreen(
 
           maxLines: 1,
 
-          minScale: 0.5,
+          minScale:
+            0.5,
         },
-
       ],
     };
   }
@@ -1081,10 +1296,12 @@ function buildLockScreen(
    * 圆形：只显示剩余流量
    */
   if (
-    family === 'accessoryCircular'
+    family ===
+      'accessoryCircular'
   ) {
 
     return {
+
       type: 'widget',
 
       padding: 2,
@@ -1099,7 +1316,7 @@ function buildLockScreen(
           type: 'text',
 
           text:
-            `${data.flow.value}`,
+            `${ds.flow.number}`,
 
           font: {
             size: 'headline',
@@ -1111,14 +1328,15 @@ function buildLockScreen(
 
           maxLines: 1,
 
-          minScale: 0.5,
+          minScale:
+            0.5,
         },
 
         {
           type: 'text',
 
           text:
-            data.flow.unit,
+            ds.flow.unit,
 
           font: {
             size: 'caption2',
@@ -1135,7 +1353,6 @@ function buildLockScreen(
         {
           type: 'spacer',
         },
-
       ],
     };
   }
@@ -1207,12 +1424,12 @@ function buildLockScreen(
 
         maxLines: 1,
       },
-
     ],
   });
 
 
   return {
+
     type: 'widget',
 
     padding: 2,
@@ -1223,44 +1440,42 @@ function buildLockScreen(
 
       line(
         '话费',
-        data.fee.value,
-        data.fee.unit
+        ds.fee.number,
+        ds.fee.unit
       ),
 
       line(
         '流量',
-        data.flow.value,
-        data.flow.unit
+        ds.flow.number,
+        ds.flow.unit
       ),
 
       line(
         '语音',
-        data.voice.value,
-        data.voice.unit
+        ds.voice.number,
+        ds.voice.unit
       ),
-
     ],
   };
 }
 
 
-/* =========================================================
- * 错误界面
- * ========================================================= */
-
 function buildError(
   title,
-  message
+  message,
+  url
 ) {
 
-  return {
+  const w = {
 
     type: 'widget',
 
     backgroundColor:
       COLORS.bg,
 
-    padding: 12,
+    padding: 14,
+
+    gap: 9,
 
     children: [
 
@@ -1284,62 +1499,45 @@ function buildError(
             color:
               COLORS.error,
 
-            width: 15,
+            width: 14,
 
-            height: 15,
+            height: 14,
           },
 
           {
             type: 'text',
 
-            text: title,
+            text:
+              title,
 
             font: {
               size: 'headline',
-              weight: 'semibold',
+              weight: 'bold',
             },
 
             textColor:
-              COLORS.value,
+              COLORS.error,
 
             maxLines: 1,
           },
-
         ],
       },
-
-
-      {
-        type: 'spacer',
-      },
-
 
       {
         type: 'text',
 
-        text: message,
+        text:
+          message,
 
         font: {
           size: 'caption1',
-          weight: 'medium',
         },
 
         textColor:
           COLORS.title,
 
-        textAlign:
-          'center',
-
         maxLines: 3,
-
-        minScale: 0.75,
       },
-
-
-      {
-        type: 'spacer',
-      },
-
 
       {
         type: 'stack',
@@ -1348,105 +1546,267 @@ function buildError(
 
         alignItems: 'center',
 
+        gap: 5,
+
+        padding: [
+          6,
+          10,
+          6,
+          10,
+        ],
+
+        backgroundColor:
+          COLORS.capsuleBg,
+
+        borderRadius: 10,
+
+        borderWidth: 1,
+
+        borderColor:
+          COLORS.border,
+
         children: [
 
           {
-            type: 'spacer',
+            type: 'image',
+
+            src:
+              'sf-symbol:phone.circle',
+
+            color:
+              COLORS.time,
+
+            width: 12,
+
+            height: 12,
           },
 
           {
-            type: 'stack',
+            type: 'text',
 
-            padding: [
-              5,
-              12,
-              5,
-              12,
-            ],
+            text:
+              '请在 Safari 登录电信账号',
 
-            backgroundColor:
-              COLORS.capsuleBg,
+            font: {
+              size: 'caption2',
+            },
 
-            borderRadius: 10,
+            textColor:
+              COLORS.time,
 
-            borderWidth: 1,
+            maxLines: 1,
 
-            borderColor:
-              COLORS.border,
-
-            children: [
-
-              {
-                type: 'text',
-
-                text:
-                  '打开联通 App 查询一次',
-
-                font: {
-                  size: 'caption2',
-                  weight: 'medium',
-                },
-
-                textColor:
-                  COLORS.accent,
-
-                maxLines: 1,
-              },
-
-            ],
+            minScale:
+              0.7,
           },
-
-          {
-            type: 'spacer',
-          },
-
         ],
       },
-
     ],
   };
+
+
+  if (url) {
+    w.url = url;
+  }
+
+  return w;
 }
 
 
-/* =========================================================
- * Widget 主逻辑
- * ========================================================= */
+function getReqCookie(headers) {
+
+  if (!headers) {
+    return '';
+  }
+
+  if (
+    typeof headers.get ===
+    'function'
+  ) {
+
+    return (
+      headers.get('cookie') ||
+      headers.get('Cookie') ||
+      ''
+    );
+  }
+
+  for (
+    const k of Object.keys(headers)
+  ) {
+
+    if (
+      String(k).toLowerCase() ===
+      'cookie'
+    ) {
+
+      return headers[k] || '';
+    }
+  }
+
+  return '';
+}
+
+
+async function handleCapture(ctx) {
+
+  const req =
+    ctx.request || {};
+
+  const url =
+    req.url || '';
+
+  if (
+    !url.includes(
+      'e.dlife.cn'
+    )
+  ) {
+    return;
+  }
+
+
+  if (
+    url.includes(
+      '/user/loginMiddle'
+    )
+  ) {
+
+    const loginUrl =
+      (
+        url.match(
+          /(http.+)&sign/
+        ) || []
+      )[1] ||
+      url;
+
+
+    if (
+      loginUrl &&
+      ctx.storage.get(
+        'ct_login_url'
+      ) !== loginUrl
+    ) {
+
+      ctx.storage.set(
+        'ct_login_url',
+        loginUrl
+      );
+    }
+
+
+    ctx.storage.set(
+      'ct_login_ts',
+      String(Date.now())
+    );
+
+    return;
+  }
+
+
+  const cookie =
+    String(
+      getReqCookie(
+        req.headers
+      ) || ''
+    ).trim();
+
+
+  if (
+    !cookie ||
+    ctx.storage.get(
+      'ct_cookie'
+    ) === cookie
+  ) {
+    return;
+  }
+
+
+  ctx.storage.set(
+    'ct_cookie',
+    cookie
+  );
+
+  const ts =
+    Number(
+      ctx.storage.get(
+        'ct_login_ts'
+      ) || 0
+    );
+
+
+  if (
+    Date.now() - ts <
+    10 * 60 * 1000
+  ) {
+
+    ctx.storage.delete(
+      'ct_login_ts'
+    );
+
+
+    ctx.notify({
+
+      title:
+        '中国电信',
+
+      body:
+        '登录成功，小组件将自动更新',
+
+      action: {
+        type: 'clipboard',
+
+        text:
+          cookie,
+      },
+    });
+  }
+}
+
 
 async function handleWidget(ctx) {
 
   const title =
-    '中国联通';
+    (
+      ctx.env.CT_TITLE ||
+      '中国电信'
+    ).trim() ||
+    '中国电信';
 
 
-  const result =
+  const {
+    configured,
+    ds,
+    fromCache,
+    authFailed,
+  } =
     await loadData(ctx);
 
-
-  const data =
-    result.data;
-
-
-  /*
-   * 尚未自动捕获
-   */
-  if (!result.configured) {
+  if (!configured) {
 
     return buildError(
       title,
-      '请打开联通 App，进入首页并点击余额位置'
+      '未登录：在 Safari 打开 e.dlife.cn 登录一次',
+      URLS.login
     );
   }
 
 
-  /*
-   * 有缓存就继续显示缓存
-   * 没有缓存才显示错误
-   */
-  if (!data) {
+  // cookie 被服务器拒绝：不再展示旧数据，直接提示重新登录
+  if (authFailed) {
 
     return buildError(
       title,
-      '数据获取失败，请重新打开联通 App 查询一次'
+      '登录已过期：在 Safari 打开 e.dlife.cn 重新登录',
+      URLS.login
+    );
+  }
+
+
+  if (!ds) {
+
+    return buildError(
+      title,
+      '数据获取失败，请检查网络或重新登录'
     );
   }
 
@@ -1455,76 +1815,46 @@ async function handleWidget(ctx) {
     ctx.widgetFamily ||
     'systemSmall';
 
-
-  /*
-   * 锁屏组件
-   */
   if (
-    family.startsWith('accessory')
-  ) {
-
-    return buildLockScreen(
-      title,
-      data,
-      family
-    );
-  }
-
-
-  /*
-   * 小组件
-   */
-  if (
-    family === 'systemSmall'
-  ) {
-
-    return buildSmall(
-      title,
-      data,
-      false
-    );
-  }
-
-
-  /*
-   * 中号 / 大号 / 超大号
-   */
-  if (
-    family === 'systemMedium' ||
-    family === 'systemLarge' ||
-    family === 'systemExtraLarge'
+    family ===
+      'systemMedium' ||
+    family ===
+      'systemLarge' ||
+    family ===
+      'systemExtraLarge'
   ) {
 
     return buildMainWidget(
       title,
-      data,
-      false
+      ds,
+      fromCache
     );
   }
 
+  if (
+    family.startsWith(
+      'accessory'
+    )
+  ) {
+
+    return buildLockScreen(
+      title,
+      ds,
+      family
+    );
+  }
 
   return buildSmall(
     title,
-    data,
-    false
+    ds,
+    fromCache
   );
 }
 
 
-/* =========================================================
- * Egern 入口
- *
- * 同一个 JS：
- *
- * http_request → 自动抓 Cookie / 手机号
- * generic      → 显示 Widget
- * ========================================================= */
-
 export default async function(ctx) {
 
-  /*
-   * HTTP Request 模式
-   */
+
   if (
     ctx.request &&
     ctx.request.url
@@ -1534,8 +1864,24 @@ export default async function(ctx) {
   }
 
 
-  /*
-   * Generic Widget 模式
-   */
+  // 保活模式：schedule 定时任务（ctx.cron 存在）或 Env CT_KEEPALIVE=true。
+  // 定时查一次接口，利用服务端 session 滑动过期机制续命；
+  // 若已过期，loadData 内部会按"登录已过期"处理并通知一次。
+  if (
+    ctx.cron ||
+    (ctx.env && ctx.env.CT_KEEPALIVE === 'true')
+  ) {
+
+    return handleKeepAlive(ctx);
+  }
+
+
   return handleWidget(ctx);
+}
+
+
+// 定时保活：触发一次真实查询。注意 schedule 脚本不需要返回值。
+async function handleKeepAlive(ctx) {
+
+  await loadData(ctx);
 }
