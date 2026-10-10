@@ -13,6 +13,19 @@
  *
  * 数据接口：
  * https://m.client.10010.com/mobileserviceimportant/home/queryUserInfoSeven
+ * （汇总：话费/语音/流量总数）
+ *
+ * 流量明细接口（通用/定向分项）：
+ * POST https://m.client.10010.com/servicequerybusiness/operationservice/queryOcsPackageFlowLeftContentRevisedInJune
+ * （只需 Cookie，无 body；code === '0000' 为成功）
+ * 定向判定规则（来自 ChinaTelecomOperators/ChinaUnicom 联通余量 v4）：
+ * addupItemCode === '40008' / addUpItemName === '套餐内专享免费流量' /
+ * 资源类型为「免流流量」/ feePolicyName 匹配 /（免流）|畅视/
+ *
+ * 三种用法（同一个 JS）：
+ * http_request → 自动抓 Cookie / 手机号
+ * generic      → 显示 Widget
+ * schedule     → 保活：定时查一次接口续 session（ctx.cron 或 Env CU_KEEPALIVE=true）
  */
 
 
@@ -24,6 +37,16 @@ const API_HOST = 'm.client.10010.com';
 
 const API_URL =
   'https://m.client.10010.com/mobileserviceimportant/home/queryUserInfoSeven';
+
+/*
+ * 流量明细接口（返回通用/定向分项数据）
+ *
+ * 分析来源：ChinaTelecomOperators/ChinaUnicom 的联通余量 v4 脚本
+ * POST，无 body，Header 带 Cookie 即可
+ * 成功标志：code === '0000'
+ */
+const FLOW_DETAIL_URL =
+  'https://m.client.10010.com/servicequerybusiness/operationservice/queryOcsPackageFlowLeftContentRevisedInJune';
 
 
 /* =========================================================
@@ -246,6 +269,223 @@ async function fetchUnicomData(
 }
 
 
+/*
+ * 拉取流量明细（通用/定向分项）
+ *
+ * 只需要 Cookie，不需要 body
+ */
+async function fetchFlowDetail(
+  ctx,
+  cookie
+) {
+
+  const resp = await ctx.http.post(
+    FLOW_DETAIL_URL,
+    {
+      timeout: 10000,
+
+      headers: {
+        Host: API_HOST,
+
+        'User-Agent':
+          'ChinaUnicom.x CFNetwork iOS/16.3',
+
+        Cookie: cookie,
+      },
+
+      credentials: 'omit',
+    }
+  );
+
+
+  if (!resp || resp.status !== 200) {
+    throw new Error(
+      `HTTP ${resp ? resp.status : 'no-response'}`
+    );
+  }
+
+
+  const data = await resp.json();
+
+  if (
+    !data ||
+    String(data.code) !== '0000'
+  ) {
+    throw new Error(
+      `API 返回异常：${data?.code || 'unknown'}`
+    );
+  }
+
+
+  return data;
+}
+
+
+/*
+ * 流量明细里的资源类型（中文名）
+ */
+const FLOW_RESOURCE_NAMES = {
+  resources: '套餐内流量&流量包',
+  unshared: '套餐内流量&流量包(非共享)',
+  rzbresources: '日租宝',
+  mlresources: '免流流量',
+  twresources: '套外流量',
+};
+
+
+/*
+ * 判断明细项是否为定向（免流）流量
+ *
+ * 规则来自联通余量 v4 脚本，满足任一即为定向：
+ * 1. addupItemCode === '40008'
+ * 2. addUpItemName === '套餐内专享免费流量'
+ * 3. 资源类型名为「免流流量」
+ * 4. feePolicyName 匹配 /（免流）|畅视/
+ */
+function isDirectionalFlowItem(
+  item,
+  resourceName
+) {
+
+  const addupItemCode =
+    String(item.addupItemCode || '');
+
+  const addUpItemName =
+    String(item.addUpItemName || '');
+
+  const feePolicyName =
+    String(item.feePolicyName || '');
+
+  return (
+    addupItemCode === '40008' ||
+    addUpItemName === '套餐内专享免费流量' ||
+    resourceName === '免流流量' ||
+    /（免流）|畅视/.test(feePolicyName)
+  );
+}
+
+
+/*
+ * 流量数值自动换算单位：>= 1024 MB 时显示为 GB
+ */
+function formatFlowValue(value, unit) {
+
+  const v = parseFloat(value) || 0;
+
+  const u =
+    String(unit || '').toUpperCase();
+
+  if (
+    (u === 'MB' || u === 'M') &&
+    v >= 1024
+  ) {
+    return {
+      value:
+        Math.round(v / 1024 * 100) / 100,
+      unit: 'GB',
+    };
+  }
+
+  return {
+    value:
+      Math.round(v * 100) / 100,
+    unit: String(unit || 'MB'),
+  };
+}
+
+
+/*
+ * 解析流量明细，按通用/定向汇总（单位：MB）
+ */
+function parseFlowDetail(data) {
+
+  let generalRemain = 0;
+  let directionalRemain = 0;
+
+  let generalTotal = 0;
+  let directionalTotal = 0;
+
+  let generalUsed = 0;
+  let directionalUsed = 0;
+
+
+  for (
+    const key of Object.keys(
+      FLOW_RESOURCE_NAMES
+    )
+  ) {
+
+    const resourceName =
+      FLOW_RESOURCE_NAMES[key];
+
+    const list = data[key];
+
+    if (!Array.isArray(list)) {
+      continue;
+    }
+
+
+    for (const res of list) {
+
+      const details = res.details;
+
+      if (!Array.isArray(details)) {
+        continue;
+      }
+
+
+      for (const item of details) {
+
+        const directional =
+          isDirectionalFlowItem(
+            item,
+            resourceName
+          );
+
+        const remain =
+          Math.max(
+            0,
+            parseFloat(item.remain) || 0
+          );
+
+        const total =
+          Math.max(
+            0,
+            parseFloat(item.total) || 0
+          );
+
+        const used =
+          Math.max(
+            0,
+            parseFloat(item.use) || 0
+          );
+
+
+        if (directional) {
+          directionalRemain += remain;
+          directionalTotal += total;
+          directionalUsed += used;
+        } else {
+          generalRemain += remain;
+          generalTotal += total;
+          generalUsed += used;
+        }
+      }
+    }
+  }
+
+
+  return {
+    generalRemain,
+    directionalRemain,
+    generalTotal,
+    directionalTotal,
+    generalUsed,
+    directionalUsed,
+  };
+}
+
+
 /* =========================================================
  * 数据解析
  * ========================================================= */
@@ -304,19 +544,24 @@ function parseUnicomData(res) {
         '分钟',
     },
 
-    flow: {
-      title:
-        flowResource.dynamicFlowTitle ||
-        '剩余流量',
+    flow: (() => {
 
-      value:
-        flowResource.flowPersent ??
-        0,
+      const formatted =
+        formatFlowValue(
+          flowResource.flowPersent ?? 0,
+          flowResource.newUnit || 'MB'
+        );
 
-      unit:
-        flowResource.newUnit ||
-        'MB',
-    },
+      return {
+        title:
+          flowResource.dynamicFlowTitle ||
+          '剩余流量',
+
+        value: formatted.value,
+
+        unit: formatted.unit,
+      };
+    })(),
 
     updateTime:
       new Date().toLocaleTimeString(
@@ -373,6 +618,59 @@ async function loadData(ctx) {
 
     const data =
       parseUnicomData(res);
+
+
+    /*
+     * 通用 / 定向流量开关（模块里配置，默认都开）
+     */
+    const showGeneralFlow =
+      ctx.env.CU_SHOW_GENERAL_FLOW !==
+      'false';
+
+    const showDirectionalFlow =
+      ctx.env.CU_SHOW_DIRECTIONAL_FLOW !==
+      'false';
+
+
+    /*
+     * 拉取流量明细，按开关过滤后覆盖流量数值
+     *
+     * 明细接口失败时降级为汇总接口的原值，
+     * 不影响话费和语音的显示
+     */
+    try {
+
+      const detail =
+        await fetchFlowDetail(
+          ctx,
+          cookie
+        );
+
+      const {
+        generalRemain,
+        directionalRemain,
+      } = parseFlowDetail(detail);
+
+      let flowValue = 0;
+
+      if (showGeneralFlow) {
+        flowValue += generalRemain;
+      }
+
+      if (showDirectionalFlow) {
+        flowValue += directionalRemain;
+      }
+
+      /*
+       * 超过 1024MB 自动换算为 GB 显示
+       */
+      const formatted =
+        formatFlowValue(flowValue, 'MB');
+
+      data.flow.value = formatted.value;
+      data.flow.unit = formatted.unit;
+
+    } catch (e) {}
 
 
     /*
@@ -1512,11 +1810,30 @@ async function handleWidget(ctx) {
 
 
 /* =========================================================
+ * 保活模式（schedule 定时任务调用）
+ *
+ * 定时查一次接口，利用服务端 session 滑动过期机制续命；
+ * 局限：只对"因不活跃过期"有效，若服务端是固定时长过期则无效；
+ * iOS 后台定时触发频率不保证。
+ * ========================================================= */
+
+async function handleKeepAlive(ctx) {
+
+  /*
+   * 直接走正常的数据加载流程：
+   * 成功则刷新缓存续命，失败则静默（小组件下次刷新时会显示状态）
+   */
+  await loadData(ctx);
+}
+
+
+/* =========================================================
  * Egern 入口
  *
  * 同一个 JS：
  *
  * http_request → 自动抓 Cookie / 手机号
+ * schedule     → 保活（ctx.cron 存在，或 Env CU_KEEPALIVE=true）
  * generic      → 显示 Widget
  * ========================================================= */
 
@@ -1531,6 +1848,19 @@ export default async function(ctx) {
   ) {
 
     return handleCapture(ctx);
+  }
+
+
+  /*
+   * 保活模式：schedule 定时任务（ctx.cron 存在）或 Env CU_KEEPALIVE=true。
+   * 定时查一次接口，利用服务端 session 滑动过期机制续命。
+   */
+  if (
+    ctx.cron ||
+    (ctx.env && ctx.env.CU_KEEPALIVE === 'true')
+  ) {
+
+    return handleKeepAlive(ctx);
   }
 
 
