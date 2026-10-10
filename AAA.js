@@ -366,6 +366,35 @@ function isDirectionalFlowItem(
 
 
 /*
+ * 流量数值自动换算单位：>= 1024 MB 时显示为 GB
+ */
+function formatFlowValue(value, unit) {
+
+  const v = parseFloat(value) || 0;
+
+  const u =
+    String(unit || '').toUpperCase();
+
+  if (
+    (u === 'MB' || u === 'M') &&
+    v >= 1024
+  ) {
+    return {
+      value:
+        Math.round(v / 1024 * 100) / 100,
+      unit: 'GB',
+    };
+  }
+
+  return {
+    value:
+      Math.round(v * 100) / 100,
+    unit: String(unit || 'MB'),
+  };
+}
+
+
+/*
  * 解析流量明细，按通用/定向汇总（单位：MB）
  */
 function parseFlowDetail(data) {
@@ -515,19 +544,24 @@ function parseUnicomData(res) {
         '分钟',
     },
 
-    flow: {
-      title:
-        flowResource.dynamicFlowTitle ||
-        '剩余流量',
+    flow: (() => {
 
-      value:
-        flowResource.flowPersent ??
-        0,
+      const formatted =
+        formatFlowValue(
+          flowResource.flowPersent ?? 0,
+          flowResource.newUnit || 'MB'
+        );
 
-      unit:
-        flowResource.newUnit ||
-        'MB',
-    },
+      return {
+        title:
+          flowResource.dynamicFlowTitle ||
+          '剩余流量',
+
+        value: formatted.value,
+
+        unit: formatted.unit,
+      };
+    })(),
 
     updateTime:
       new Date().toLocaleTimeString(
@@ -627,10 +661,14 @@ async function loadData(ctx) {
         flowValue += directionalRemain;
       }
 
-      data.flow.value =
-        Math.round(flowValue * 100) / 100;
+      /*
+       * 超过 1024MB 自动换算为 GB 显示
+       */
+      const formatted =
+        formatFlowValue(flowValue, 'MB');
 
-      data.flow.unit = 'MB';
+      data.flow.value = formatted.value;
+      data.flow.unit = formatted.unit;
 
     } catch (e) {}
 
