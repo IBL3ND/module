@@ -21,6 +21,14 @@
  *   小组件显示"登录已过期"错误页（点小组件可直接跳登录页）并通知一次，
  *   不再静默展示旧数据；仅当"连不上服务器"（断网/超时）时才用缓存顶一下，
  *   此时标题栏会显示"缓存 HH:mm"以示区别。
+ *
+ * 保活模式（三种用法，同一个文件）：
+ *   1. generic 类型 → iOS 小组件
+ *   2. http_request 类型 → 登录捕获
+ *   3. schedule 类型 → 定时保活：在 Egern 里建 schedule 脚本条目指向本文件，
+ *      cron 设为每 20 分钟执行一次，每次触发会查一次接口，
+ *      若服务端 session 是滑动过期即可续命。注意：若 e.dlife.cn 是固定时长
+ *      过期，保活无效，只能手动重登（过期会有通知提示）。
  */
 
 const URLS = {
@@ -1840,5 +1848,24 @@ export default async function(ctx) {
   }
 
 
+  // 保活模式：schedule 定时任务（ctx.cron 存在）或 Env CT_KEEPALIVE=true。
+  // 定时查一次接口，利用服务端 session 滑动过期机制续命；
+  // 若已过期，loadData 内部会按"登录已过期"处理并通知一次。
+  if (
+    ctx.cron ||
+    (ctx.env && ctx.env.CT_KEEPALIVE === 'true')
+  ) {
+
+    return handleKeepAlive(ctx);
+  }
+
+
   return handleWidget(ctx);
+}
+
+
+// 定时保活：触发一次真实查询。注意 schedule 脚本不需要返回值。
+async function handleKeepAlive(ctx) {
+
+  await loadData(ctx);
 }
