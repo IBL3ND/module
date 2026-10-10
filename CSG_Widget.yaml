@@ -1,5 +1,5 @@
 name: 南方电网
-description: 南方电网用电小组件
+description: 南方电网用电小组件（含定时保活）
 author: iBL3ND
 icon: https://iili.io/nEG5oxt.png
 compat_arguments:
