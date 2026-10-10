@@ -4,10 +4,26 @@ author: iBL3ND
 icon: https://iili.io/nEufFXR.png
 compat_arguments:
   ctCapture: 'true'
+  ctGeneralFlow: 'true'
+  ctDirectionalFlow: 'true'
 compat_arguments_schema:
   ctCapture:
     name: 中国电信数据抓取
     description: 用这个链接去登录 https://e.dlife.cn（抓到数据后可以关闭）
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  ctGeneralFlow:
+    name: 显示通用流量
+    description: 小组件流量统计包含通用流量（关闭则只统计定向流量）
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  ctDirectionalFlow:
+    name: 显示定向流量
+    description: 小组件流量统计包含定向流量（关闭则只统计通用流量）
     default_value: 'true'
     options:
     - 'true'
@@ -17,6 +33,9 @@ scriptings:
 - generic:
     name: china-telecom
     script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CT_Widget.JS
+    env:
+      CT_SHOW_GENERAL_FLOW: '{{{ctGeneralFlow}}}'
+      CT_SHOW_DIRECTIONAL_FLOW: '{{{ctDirectionalFlow}}}'
 - http_request:
     name: 中国电信自动捕获
     match: '^https://e\.dli[^{{{ctCapture}}}]e\.cn/'
