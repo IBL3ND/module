@@ -15,6 +15,7 @@
  *
  * 同一个 JS：
  * http_request → 自动抓 Token
+ * schedule     → 保活：定时查一次接口续 session（ctx.cron 或 Env CSG_KEEPALIVE=true）
  * generic      → 显示 Widget
  */
 
@@ -60,6 +61,87 @@ async function handleCapture(ctx) {
     title: "南方电网",
     body: "已自动获取登录信息，小组件将自动更新",
   });
+}
+
+/* ---------- 数据请求（小组件与保活用） ---------- */
+
+async function fetchCsgData(ctx, token) {
+  const resp = await ctx.http.post(
+    "https://95598.csg.cn/ucs/ma/zt/eleCustNumber/queryBindEleUsers",
+    {
+      headers: { "x-auth-token": token, "Content-Type": "application/json" },
+      body: "{}"
+    }
+  );
+  const res = await resp.json();
+
+  // 原逻辑：未绑定用电户时静默跳过（保持 "--" 显示，不报错）
+  if (!res?.data?.[0]) {
+    return null;
+  }
+  const u = res.data[0];
+
+  const bResp = await ctx.http.post(
+    "https://95598.csg.cn/ucs/ma/zt/charge/queryUserAccountNumberSurplus",
+    {
+      headers: { "x-auth-token": token, "Content-Type": "application/json" },
+      body: JSON.stringify({ areaCode: u.areaCode, eleCustId: u.bindingId })
+    }
+  );
+  const bRes = await bResp.json();
+
+  const ym = new Date().toISOString().slice(0, 7).replace(/-/g, '');
+  const pResp = await ctx.http.post(
+    "https://95598.csg.cn/ucs/ma/zt/charge/queryDayElectricByMPoint",
+    {
+      headers: { "x-auth-token": token, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eleCustId: u.bindingId,
+        areaCode: u.areaCode,
+        yearMonth: ym,
+        meteringPointId: u.meteringPointId
+      })
+    }
+  );
+  const pRes = await pResp.json();
+
+  const out = {
+    bal: String(bRes.data?.[0]?.balance ?? "0.00"),
+    total: "--",
+    yst: "--",
+    updateTime: new Date().toLocaleTimeString("zh-CN", {
+      hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai"
+    }),
+  };
+
+  if (pRes?.data) {
+    out.total = String(pRes.data.totalPower ?? "0.00");
+    const list = pRes.data.result || [];
+    if (list.length > 0) {
+      out.yst = String(list[list.length - 1].power ?? "0.00");
+    }
+  }
+
+  return out;
+}
+
+/* ---------- 保活模式（schedule 定时任务调用） ----------
+ *
+ * 定时查一次接口，利用服务端 session 滑动过期机制续命；
+ * 局限：只对"因不活跃过期"有效，若服务端是固定时长过期则无效；
+ * iOS 后台定时触发频率不保证。
+ * 失败时静默（小组件下次刷新时会显示请求失败状态）。
+ */
+async function handleKeepAlive(ctx) {
+  const token =
+    (ctx.env.Token || "").trim() ||
+    (ctx.storage.get("csg_token") || "").trim();
+
+  if (!token) return;
+
+  try {
+    await fetchCsgData(ctx, token);
+  } catch (e) {}
 }
 
 /* ---------- 小组件 ---------- */
@@ -240,53 +322,13 @@ async function handleWidget(ctx) {
     data.debugInfo.push("💡 请打开南方电网 App 或小程序，进入「我的用电」页面");
   } else {
     try {
-      const resp = await ctx.http.post(
-        "https://95598.csg.cn/ucs/ma/zt/eleCustNumber/queryBindEleUsers",
-        {
-          headers: { "x-auth-token": token, "Content-Type": "application/json" },
-          body: "{}"
-        }
-      );
-      const res = await resp.json();
-      
-      if (res?.data?.[0]) {
-        const u = res.data[0];
+      const f = await fetchCsgData(ctx, token);
 
-        const bResp = await ctx.http.post(
-          "https://95598.csg.cn/ucs/ma/zt/charge/queryUserAccountNumberSurplus",
-          {
-            headers: { "x-auth-token": token, "Content-Type": "application/json" },
-            body: JSON.stringify({ areaCode: u.areaCode, eleCustId: u.bindingId })
-          }
-        );
-        const bRes = await bResp.json();
-        data.bal.value = String(bRes.data?.[0]?.balance ?? "0.00");
-
-        const ym = new Date().toISOString().slice(0, 7).replace(/-/g, '');
-        const pResp = await ctx.http.post(
-          "https://95598.csg.cn/ucs/ma/zt/charge/queryDayElectricByMPoint",
-          {
-            headers: { "x-auth-token": token, "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-              eleCustId: u.bindingId, 
-              areaCode: u.areaCode, 
-              yearMonth: ym, 
-              meteringPointId: u.meteringPointId 
-            })
-          }
-        );
-        const pRes = await pResp.json();
-        if (pRes?.data) {
-          data.total.value = String(pRes.data.totalPower ?? "0.00");
-          const list = pRes.data.result || [];
-          if (list.length > 0) {
-            data.yst.value = String(list[list.length - 1].power ?? "0.00");
-          }
-        }
-
-        data.updateTime = new Date().toLocaleTimeString("zh-CN", { 
-          hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" 
-        });
+      if (f) {
+        data.bal.value = f.bal;
+        data.total.value = f.total;
+        data.yst.value = f.yst;
+        data.updateTime = f.updateTime;
       }
     } catch (e) {
       data.error = "请求失败";
@@ -471,12 +513,22 @@ async function handleWidget(ctx) {
   };
 }
 
-/* ---------- Egern 入口：单文件双模式 ---------- */
+/* ---------- Egern 入口：单文件三模式 ----------
+ *
+ * http_request → 自动抓 Token
+ * schedule     → 保活：定时查一次接口续 session（ctx.cron 或 Env CSG_KEEPALIVE=true）
+ * generic      → 显示小组件
+ */
 
 export default async function(ctx) {
   // http_request 模式 → 自动抓 Token
   if (ctx.request && ctx.request.url) {
     return handleCapture(ctx);
+  }
+
+  // 保活模式：schedule 定时任务（ctx.cron 存在）或 Env CSG_KEEPALIVE=true
+  if (ctx.cron || (ctx.env && ctx.env.CSG_KEEPALIVE === 'true')) {
+    return handleKeepAlive(ctx);
   }
 
   // generic 模式 → 显示小组件
