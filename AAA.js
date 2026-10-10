@@ -591,6 +591,34 @@ function clearTokenLoginFlag(ctx) {
   ctx.storage.delete('ct_token_login_notified');
 }
 
+// 登录失败冷却：密码错误后 30 秒内不再向服务端发登录请求，
+// 避免短时间内连续试错触发服务端的"认证错误超 10 次锁定 1 小时"。
+// 手机号或密码变了则清除冷却（用户修正了密码）。
+function loginCooldownActive(ctx, phone, password) {
+  const key = `${phone}:${password}`;
+  const failKey = ctx.storage.get('ct_login_fail_key') || '';
+  const failTs = Number(ctx.storage.get('ct_login_fail_ts') || 0);
+
+  if (failKey && failKey === key) {
+    return Date.now() - failTs < 30 * 1000;
+  }
+
+  // 账号/密码变了：清除旧冷却记录
+  ctx.storage.delete('ct_login_fail_key');
+  ctx.storage.delete('ct_login_fail_ts');
+  return false;
+}
+
+function markLoginFailed(ctx, phone, password) {
+  ctx.storage.set('ct_login_fail_key', `${phone}:${password}`);
+  ctx.storage.set('ct_login_fail_ts', String(Date.now()));
+}
+
+function clearLoginFailed(ctx) {
+  ctx.storage.delete('ct_login_fail_key');
+  ctx.storage.delete('ct_login_fail_ts');
+}
+
 // 密码登录模式的数据加载：token 失效自动重登；断网走缓存
 async function loadDataByToken(ctx, phone, password, settings) {
   const configured = true;
@@ -601,8 +629,15 @@ async function loadDataByToken(ctx, phone, password, settings) {
       apiData = await fetchImportantData(ctx, phone);
     } catch (e) {
       if (e && e.tokenExpired) {
-        // token 失效：自动重新登录一次
+        // token 失效：自动重新登录一次（冷却期内直接报错，不再撞服务端）
+        if (loginCooldownActive(ctx, phone, password)) {
+          const coolErr = new Error('密码多次错误，冷却中（30秒后再试）');
+          coolErr.loginFailed = true;
+          coolErr.coolingDown = true;
+          throw coolErr;
+        }
         await telecomLogin(ctx, phone, password);
+        clearLoginFailed(ctx);
         apiData = await fetchImportantData(ctx, phone);
       } else {
         throw e;
@@ -621,7 +656,8 @@ async function loadDataByToken(ctx, phone, password, settings) {
       return { configured, ds: cached || null, fromCache: !!cached, authFailed: false };
     }
     if (e && e.loginFailed) {
-      // 密码错误 / 账号异常：通知一次
+      // 密码错误 / 账号异常：记冷却 + 通知一次
+      if (!e.coolingDown) markLoginFailed(ctx, phone, password);
       notifyTokenLoginFailedOnce(ctx, phone);
       return { configured, ds: null, fromCache: false, authFailed: 'token', authMessage: e.message };
     }
@@ -2368,6 +2404,7 @@ async function handleKeepAlive(ctx) {
   if (phone && password) {
 
     // 密码登录模式：查一次数据接口；token 失效时自动重登一次
+    // 冷却期内不发登录请求
     try {
 
       try {
@@ -2379,13 +2416,23 @@ async function handleKeepAlive(ctx) {
 
       } catch (e) {
 
-        if (e && e.tokenExpired) {
+        if (
+          e &&
+          e.tokenExpired &&
+          !loginCooldownActive(
+            ctx,
+            phone,
+            password
+          )
+        ) {
 
           await telecomLogin(
             ctx,
             phone,
             password
           );
+
+          clearLoginFailed(ctx);
 
           await fetchImportantData(
             ctx,
