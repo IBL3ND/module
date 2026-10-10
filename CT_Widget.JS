@@ -193,7 +193,8 @@ async function fetchJson(ctx, url, cookie) {
 function parseTelecom(detail, balance, opts) {
   const {
     showUsedFlow,
-    filterOrientateFlow,
+    showGeneralFlow,
+    showDirectionalFlow,
   } = opts;
 
   let totalFlowAmount = 0;
@@ -216,6 +217,17 @@ function parseTelecom(detail, balance, opts) {
 
       if (item.unitTypeId == 3) {
 
+        // 定向判断：资源名含"定向"即为定向流量，其余为通用流量
+        const isDirectional =
+          /定向/.test(
+            item.ratableResourcename || ''
+          );
+
+        const directionAllowed =
+          isDirectional ?
+            showDirectionalFlow :
+            showGeneralFlow;
+
         if (
           !(
             item.usageAmount == 0 &&
@@ -223,17 +235,9 @@ function parseTelecom(detail, balance, opts) {
           )
         ) {
 
-          const isDirectional =
-            /定向/.test(
-              item.ratableResourcename || ''
-            );
-
           const skip =
             item.balanceAmount == '999999999999' ||
-            (
-              filterOrientateFlow &&
-              isDirectional
-            );
+            !directionAllowed;
 
           if (!skip) {
 
@@ -249,10 +253,14 @@ function parseTelecom(detail, balance, opts) {
           }
         }
 
-        totalUsedFlowAmount +=
-          parseFloat(
-            item.usageAmount
-          ) || 0;
+        // 已用流量同样按开关过滤，保证"只显示通用"时已用也是通用的
+        if (directionAllowed) {
+
+          totalUsedFlowAmount +=
+            parseFloat(
+              item.usageAmount
+            ) || 0;
+        }
 
         if (
           data.offerType == 21 &&
@@ -478,8 +486,16 @@ async function loadData(ctx) {
       ctx.env.CT_SHOW_USED_FLOW ===
       'true',
 
-    filterOrientateFlow:
-      ctx.env.CT_FILTER_ORIENTATE_FLOW ===
+    // 模块开关：通用流量 / 定向流量显示控制（默认都显示，即原来的"全部流量"）
+    showGeneralFlow:
+      ctx.env.CT_SHOW_GENERAL_FLOW !==
+      'false',
+
+    // 兼容旧版 CT_FILTER_ORIENTATE_FLOW=true（等价于定向流量开关关闭）
+    showDirectionalFlow:
+      ctx.env.CT_SHOW_DIRECTIONAL_FLOW !==
+      'false' &&
+      ctx.env.CT_FILTER_ORIENTATE_FLOW !==
       'true',
   };
 
