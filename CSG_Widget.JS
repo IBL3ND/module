@@ -70,7 +70,8 @@ async function fetchCsgData(ctx, token) {
     "https://95598.csg.cn/ucs/ma/zt/eleCustNumber/queryBindEleUsers",
     {
       headers: { "x-auth-token": token, "Content-Type": "application/json" },
-      body: "{}"
+      body: "{}",
+      timeout: 10000
     }
   );
   const res = await resp.json();
@@ -85,7 +86,8 @@ async function fetchCsgData(ctx, token) {
     "https://95598.csg.cn/ucs/ma/zt/charge/queryUserAccountNumberSurplus",
     {
       headers: { "x-auth-token": token, "Content-Type": "application/json" },
-      body: JSON.stringify({ areaCode: u.areaCode, eleCustId: u.bindingId })
+      body: JSON.stringify({ areaCode: u.areaCode, eleCustId: u.bindingId }),
+      timeout: 10000
     }
   );
   const bRes = await bResp.json();
@@ -100,7 +102,8 @@ async function fetchCsgData(ctx, token) {
         areaCode: u.areaCode,
         yearMonth: ym,
         meteringPointId: u.meteringPointId
-      })
+      }),
+      timeout: 10000
     }
   );
   const pRes = await pResp.json();
@@ -127,9 +130,8 @@ async function fetchCsgData(ctx, token) {
 
 /* ---------- 保活模式（schedule 定时任务调用） ----------
  *
- * 定时查一次接口，利用服务端 session 滑动过期机制续命；
- * 局限：只对"因不活跃过期"有效，若服务端是固定时长过期则无效；
- * iOS 后台定时触发频率不保证。
+ * 轻量 ping 一次续 session：只调绑定查询接口，不跑完整 3 连请求，
+ * 避免多请求累积超时被 Egern 终止。
  * 失败时静默（小组件下次刷新时会显示请求失败状态）。
  */
 async function handleKeepAlive(ctx) {
@@ -140,7 +142,14 @@ async function handleKeepAlive(ctx) {
   if (!token) return;
 
   try {
-    await fetchCsgData(ctx, token);
+    await ctx.http.post(
+      "https://95598.csg.cn/ucs/ma/zt/eleCustNumber/queryBindEleUsers",
+      {
+        headers: { "x-auth-token": token, "Content-Type": "application/json" },
+        body: "{}",
+        timeout: 10000,
+      }
+    );
   } catch (e) {}
 }
 
