@@ -1820,10 +1820,29 @@ async function handleWidget(ctx) {
 async function handleKeepAlive(ctx) {
 
   /*
-   * 直接走正常的数据加载流程：
-   * 成功则刷新缓存续命，失败则静默（小组件下次刷新时会显示状态）
+   * 轻量保活：只发一次汇总查询触达服务端续 session，
+   * 不跑完整 loadData（明细接口也是串行请求，累积超时会被 Egern 终止）。
+   * 成功/失败都不通知不写缓存，下次小组件刷新会正常处理显示。
    */
-  await loadData(ctx);
+  const cookie =
+    ctx.storage.get('unicom_cookie') ||
+    '';
+
+  const phone =
+    ctx.storage.get('unicom_phone') ||
+    '';
+
+  if (!cookie || !phone) return;
+
+  try {
+
+    await fetchUnicomData(
+      ctx,
+      cookie,
+      phone
+    );
+
+  } catch (e) {}
 }
 
 
