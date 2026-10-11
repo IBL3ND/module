@@ -1,7 +1,37 @@
 /** 汇率看板
+ * 样式：WIDGET_STYLE=glass（默认透明）| classic（经典纯色）
 */
 
+function getStyleMode(ctx) {
+  const v = String((ctx.env && ctx.env.WIDGET_STYLE) || 'glass').trim().toLowerCase();
+  return v === 'classic' ? 'classic' : 'glass';
+}
+
+function getColors(isGlass) {
+  return {
+    bg: isGlass ? undefined : { light: "#FFFFFF", dark: "#2C2C2E" },
+    title: isGlass
+      ? { light: "#FFFFFF", dark: "#F7F7F8" }
+      : { light: "#000000", dark: "#FFFFFF" },
+    label: isGlass
+      ? { light: "#FFFFFF", dark: "#F7F7F8" }
+      : { light: "#1C1C1E", dark: "#EBEBF5CC" },
+    value: isGlass
+      ? { light: "#FFFFFF", dark: "#F7F7F8" }
+      : { light: "#BF5900", dark: "#FFD60A" },
+    secondary: isGlass
+      ? { light: "rgba(255,255,255,0.7)", dark: "rgba(247,247,248,0.6)" }
+      : { light: "#86868B", dark: "#636366" },
+    error: { light: "#FF3B30", dark: "#FF453A" },
+    divider: isGlass
+      ? { light: "rgba(255,255,255,0.2)", dark: "rgba(255,255,255,0.15)" }
+      : { light: "#00000010", dark: "#FFFFFF18" },
+  };
+}
+
 export default async function (ctx) {
+  const isGlass = getStyleMode(ctx) === 'glass';
+  const COLORS = getColors(isGlass);
   const family = ctx.widgetFamily;
 
   const allCurrencies = [
@@ -14,8 +44,14 @@ export default async function (ctx) {
     { code: "THB", label: "THB",        unit: 1,    flag: "🇹🇭" },
   ];
 
-  // ✅ 背景颜色：浅色 #FFFFFF / 深色 #2C2C2E
-  const bgColor = { light: "#FFFFFF", dark: "#2C2C2E" };
+  // 背景颜色：glass 模式不设（透明），classic 用纯色
+  const bgColor = COLORS.bg;
+
+  function widgetWithBg(extra) {
+    const w = Object.assign({ type: "widget" }, extra);
+    if (bgColor) w.backgroundColor = bgColor;
+    return w;
+  }
 
   // 📱 弹性适配参数（仅内部计算，不影响视觉布局）
   const adapt = {
@@ -30,16 +66,14 @@ export default async function (ctx) {
   };
 
   function errorWidget(msg) {
-    return {
-      type: "widget",
-      backgroundColor: bgColor,
+    return widgetWithBg({
       padding: 14,
       gap: 6,
       children: [
-        { type: "text", text: "加载失败", font: { size: "headline", weight: "bold" }, textColor: { light: "#FF3B30", dark: "#FF453A" } },
-        { type: "text", text: msg, font: { size: "caption1" }, textColor: { light: "#86868B", dark: "#636366" }, maxLines: 2 },
+        { type: "text", text: "加载失败", font: { size: "headline", weight: "bold" }, textColor: COLORS.error },
+        { type: "text", text: msg, font: { size: "caption1" }, textColor: COLORS.secondary, maxLines: 2 },
       ],
-    };
+    });
   }
 
   // ① 先读上次快照和时间戳
@@ -112,9 +146,9 @@ export default async function (ctx) {
     return { light: "#86868B", dark: "#636366" };
   }
 
-  // ✅ 分隔线颜色适配
-  const hDivider = { type: "stack", height: 1, backgroundColor: { light: "#00000010", dark: "#FFFFFF18" } };
-  const vDivider = { type: "stack", width: 1, backgroundColor: { light: "#00000010", dark: "#FFFFFF18" } };
+  // 分隔线颜色适配
+  const hDivider = { type: "stack", height: 1, backgroundColor: COLORS.divider };
+  const vDivider = { type: "stack", width: 1, backgroundColor: COLORS.divider };
 
   // ── Small ────────────────────────────────────────────────
   if (family === "systemSmall") {
@@ -143,7 +177,7 @@ export default async function (ctx) {
             type: "text",
             text: c.label,
             font: { size: "caption1", weight: "medium" },
-            textColor: { light: "#1C1C1E", dark: "#EBEBF5CC" },
+            textColor: COLORS.label,
             flex: flexBase * 1.2,  // ✅ 动态 flex 比例
             maxLines: 1,
             minScale: adapt.getMinScale(),
@@ -154,7 +188,7 @@ export default async function (ctx) {
             type: "text",
             text: rate ? `¥${rate}` : "--",
             font: { size: "caption1", weight: "semibold" },
-            textColor: { light: "#BF5900", dark: "#FFD60A" },
+            textColor: COLORS.value,
             flex: flexBase,
             textAlign: "right",
             maxLines: 1,
@@ -177,9 +211,7 @@ export default async function (ctx) {
       };
     });
 
-    return {
-      type: "widget",
-      backgroundColor: bgColor,
+    return widgetWithBg({
       padding: [12, 14, 10, 14],
       gap: 0,
       refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
@@ -195,7 +227,7 @@ export default async function (ctx) {
               type: "text", 
               text: "汇率 (CNY)", 
               font: { size: "subheadline", weight: "bold" }, 
-              textColor: { light: "#000000", dark: "#FFFFFF" },
+              textColor: COLORS.title,
               flex: 1,  // ✅ 标题弹性占宽
               maxLines: 1,
               minScale: 0.85,
@@ -215,13 +247,13 @@ export default async function (ctx) {
           type: "text",
           text: updateTime ? `更新于 ${updateTime}` : "获取中...",
           font: { size: "caption2" },
-          textColor: { light: "#86868B", dark: "#636366" },
+          textColor: COLORS.secondary,
           maxLines: 1,
           minScale: 0.9,
           textAlign: "right",  // ✅ 时间右对齐
         },
       ],
-    };
+    });
   }
 
   // ── Medium / Large ───────────────────────────────────────
@@ -255,7 +287,7 @@ export default async function (ctx) {
           type: "text",
           text: unitLabel,
           font: { size: "footnote", weight: "regular" },
-          textColor: { light: "#1C1C1E", dark: "#EBEBF5CC" },
+          textColor: COLORS.label,
           flex: flexBase * 5,  // ✅ 动态 flex 比例（保持原 5:1:4）
           maxLines: 1,
           minScale: adapt.getMinScale(),
@@ -265,7 +297,7 @@ export default async function (ctx) {
           type: "text",
           text: "=",
           font: { size: "footnote" },
-          textColor: { light: "#86868B", dark: "#636366" },
+          textColor: COLORS.secondary,
           flex: flexBase,
           textAlign: "center",
           maxLines: 1,
@@ -284,7 +316,7 @@ export default async function (ctx) {
               type: "text",
               text: rate ? `¥${rate}` : "--",
               font: { size: "footnote", weight: "semibold" },
-              textColor: { light: "#BF5900", dark: "#FFD60A" },
+              textColor: COLORS.value,
               maxLines: 1,
               minScale: adapt.getMinScale() * 0.9,
               textAlign: "right",
@@ -322,9 +354,7 @@ export default async function (ctx) {
     });
   }
 
-  return {
-    type: "widget",
-    backgroundColor: bgColor,
+  return widgetWithBg({
     padding: [10, 14, 10, 14],
     gap: 6,
     refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
@@ -333,7 +363,7 @@ export default async function (ctx) {
         type: "text",
         text: "汇率看板（人民币 / 单位）",
         font: { size: "caption2" },
-        textColor: { light: "#86868B", dark: "#636366" },
+        textColor: COLORS.secondary,
         maxLines: 1,
         minScale: 0.9,
       },
@@ -348,7 +378,7 @@ export default async function (ctx) {
             type: "text",
             text: `国际${mainCurrency.label} ¥${mainRate || "--"}`,
             font: { size: "title3", weight: "bold" },
-            textColor: { light: "#000000", dark: "#FFFFFF" },
+            textColor: COLORS.title,
             flex: 1,  // ✅ 主汇率文字弹性占宽
             maxLines: 1,
             minScale: 0.7,
@@ -366,7 +396,7 @@ export default async function (ctx) {
             date: new Date().toISOString(),
             format: "time",
             font: { size: "caption1" },
-            textColor: { light: "#86868B", dark: "#636366" },
+            textColor: COLORS.secondary,
             minScale: 0.9,
           },
         ],
@@ -381,6 +411,6 @@ export default async function (ctx) {
         children: gridRows,
       },
     ],
-  };
+  });
 }
 
