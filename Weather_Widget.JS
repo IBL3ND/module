@@ -66,11 +66,11 @@ function renderMedium(now, air, city) {
   const timeStr = `${time.getMonth() + 1}-${time.getDate()} ${time.getHours()}:${String(time.getMinutes()).padStart(2, '0')}`;
 
   const bg = { light: '#FFFFFF', dark: '#2C2C2E' };
-  const cardBg = { light: '#F2F2F7', dark: '#3A3A3C' };
+  const cardBg = { light: '#F2F2F715', dark: '#FFFFFF15' };
 
   return {
     type: 'widget',
-    backgroundColor: bg,
+    
     padding: 14,
     gap: 10,
     children: [
@@ -81,7 +81,7 @@ function renderMedium(now, air, city) {
         alignItems: 'center',
         gap: 6,
         children: [
-          capsuleTag(city, { light: '#FF3B30', dark: '#FF453A' }, { light: '#FFF0EE', dark: '#3A1F1F' }),
+          capsuleTag(city, { light: '#FF3B30', dark: '#FF453A' }, { light: '#FF3B3015', dark: '#FF453A25' }),
           capsuleTag(now.text, iconColor, getBadgeBg(now.icon)),
           { type: 'spacer' },
           capsuleTag(`AQI ${air?.aqi ?? '--'}`, aqiStyle.color, aqiStyle.bg),
@@ -139,11 +139,11 @@ function renderSmall(now, city) {
   const { icon, color: iconColor } = getWeatherStyle(now.icon);
   return {
     type: 'widget',
-    backgroundColor: { light: '#FFFFFF', dark: '#2C2C2E' },
+    
     padding: 14,
     gap: 8,
     children: [
-      capsuleTag(city, { light: '#FF3B30', dark: '#FF453A' }, { light: '#FFF0EE', dark: '#3A1F1F' }),
+      capsuleTag(city, { light: '#FF3B30', dark: '#FF453A' }, { light: '#FF3B3015', dark: '#FF453A25' }),
       {
         type: 'image',
         src: `sf-symbol:${icon}`,
@@ -265,33 +265,33 @@ function getWeatherStyle(code) {
 
 function getBadgeBg(code) {
   const n = Number(code);
-  if (n >= 100 && n <= 103) return { light: '#FFF3E0', dark: '#3A2800' };
-  if (n >= 200 && n <= 299) return { light: '#EDE7F6', dark: '#1E1A36' };
-  if (n >= 300 && n <= 399) return { light: '#E3F2FD', dark: '#001A36' };
-  if (n >= 400 && n <= 499) return { light: '#E0F7FA', dark: '#003336' };
-  return { light: '#F2F2F7', dark: '#2C2C2E' };
+  if (n >= 100 && n <= 103) return { light: '#FFF3E015', dark: '#3A280025' };
+  if (n >= 200 && n <= 299) return { light: '#EDE7F615', dark: '#1E1A3625' };
+  if (n >= 300 && n <= 399) return { light: '#E3F2FD15', dark: '#001A3625' };
+  if (n >= 400 && n <= 499) return { light: '#E0F7FA15', dark: '#00333625' };
+  return { light: '#F2F2F715', dark: '#2C2C2E25' };
 }
 
 function getAQIStyle(val) {
   const n = Number(val);
   if (isNaN(n) || val === '--') return {
     text: '--', color: { light: '#8E8E93', dark: '#636366' },
-    bg: { light: '#F2F2F7', dark: '#2C2C2E' }
+    bg: { light: '#F2F2F715', dark: '#FFFFFF15' }
   };
-  if (n <= 50)  return { text: '优', color: { light: '#34C759', dark: '#30D158' }, bg: { light: '#E8F8ED', dark: '#0D2E15' } };
-  if (n <= 100) return { text: '良', color: { light: '#FF9500', dark: '#FF9F0A' }, bg: { light: '#FFF3E0', dark: '#3A2800' } };
-  if (n <= 150) return { text: '轻度', color: { light: '#FF6B35', dark: '#FF6B35' }, bg: { light: '#FFF0EB', dark: '#3A1500' } };
-  return { text: '中度', color: { light: '#FF3B30', dark: '#FF453A' }, bg: { light: '#FFF0EE', dark: '#3A1F1F' } };
+  if (n <= 50)  return { text: '优', color: { light: '#34C759', dark: '#30D158' }, bg: { light: '#34C75915', dark: '#30D15825' } };
+  if (n <= 100) return { text: '良', color: { light: '#FF9500', dark: '#FF9F0A' }, bg: { light: '#FF950015', dark: '#FF9F0A25' } };
+  if (n <= 150) return { text: '轻度', color: { light: '#FF6B35', dark: '#FF6B35' }, bg: { light: '#FF6B3515', dark: '#FF6B3525' } };
+  return { text: '中度', color: { light: '#FF3B30', dark: '#FF453A' }, bg: { light: '#FF3B3015', dark: '#FF453A25' } };
 }
 
 function renderError(msg) {
   return {
     type: 'widget',
-    backgroundColor: { light: '#FFFFFF', dark: '#2C2C2E' },
+    
     padding: 16,
     children: [{
       type: 'stack',
-      backgroundColor: { light: '#FFF0EE', dark: '#3A1F1F' },
+      backgroundColor: { light: '#FF3B3015', dark: '#FF453A25' },
       borderRadius: 14,
       padding: 12,
       children: [{
