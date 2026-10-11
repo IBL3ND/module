@@ -75,18 +75,6 @@ function handleCapture(ctx) {
   const headers = req.headers || {};
   const url = req.url || '';
 
-  // 诊断：确认脚本跑起来了
-  const diagKey = 'wx_diag_' + Date.now();
-  if (!ctx.storage.get('wx_diag_done')) {
-    ctx.storage.set('wx_diag_done', '1');
-    const hkeys = Object.keys(headers).join(',');
-    ctx.notify(
-      '电信抓取诊断',
-      `URL: ${url.slice(0, 60)}`,
-      `headers: ${hkeys.slice(0, 100)}\nbody类型: ${typeof req.body}`
-    );
-  }
-
   // 只处理网关请求
   if (url.indexOf('/xcxApiService/api/gateway') < 0 && url.indexOf('wcmp.189.cn') < 0) return;
 
@@ -408,19 +396,9 @@ function handleKeepAlive(ctx) {
 
 /* ---------- 入口 ---------- */
 
-function main(ctx) {
-  // http_request 抓取模式
-  if (ctx.request && ctx.request.url) {
-    try { handleCapture(ctx); } catch (e) {}
-    return {};
-  }
-  // schedule 保活模式
-  if (ctx.cron || ctx.env.CT_KEEPALIVE === 'true') {
-    try { handleKeepAlive(ctx); } catch (e) {}
-    return {};
-  }
-  // 小组件模式
-  return loadData(ctx).then(result => {
+async function handleWidget(ctx) {
+  try {
+    const result = await loadData(ctx);
     if (result.error) {
       const cached = loadCached(ctx);
       if (cached && cached.data && cached.data.balance !== null) {
@@ -429,51 +407,26 @@ function main(ctx) {
       return renderError(result.message);
     }
     return renderWidget(result, 0);
-  }).catch(e => {
-    const cached = loadCached(ctx);
-    if (cached && cached.data) return renderWidget(cached.data, cached.time);
+  } catch (e) {
+    try {
+      const cached = loadCached(ctx);
+      if (cached && cached.data) return renderWidget(cached.data, cached.time);
+    } catch (e2) {}
     return renderError('网络异常\n请检查连接后重试');
-  });
+  }
 }
 
-// Egern 兼容
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = main;
-}
-// Surge/Loon 兼容
-if (typeof $done !== 'undefined') {
-  try {
-    const ctx = {
-      request: typeof $request !== 'undefined' ? $request : null,
-      storage: {
-        get: (k) => typeof $persistentStore !== 'undefined' ? $persistentStore.read(k) : '',
-        set: (k, v) => { if (typeof $persistentStore !== 'undefined') $persistentStore.write(v, k); },
-      },
-      notify: (t, s, b) => { if (typeof $notification !== 'undefined') $notification.post(t, s, b); },
-      http: {
-        post: (url, opt) => new Promise((resolve, reject) => {
-          $httpClient.post({ url, headers: opt.headers, body: opt.body }, (err, resp, body) => {
-            if (err) reject(err);
-            else resolve({ status: resp.status, body });
-          });
-        }),
-      },
-      env: {},
-      cron: typeof $trigger !== 'undefined' ? $trigger : null,
-    };
-    if (typeof $argument !== 'undefined' && $argument) {
-      $argument.split('&').forEach(pair => {
-        const [k, v] = pair.split('=');
-        if (k) ctx.env[k] = decodeURIComponent(v || '');
-      });
-    }
-    const r = main(ctx);
-    if (r && typeof r.then === 'function') {
-      r.then(w => $done(w)).catch(() => $done({}));
-    } else {
-      $done(r || {});
-    }
-  } catch (e) {
-    $done({});
+export default async function(ctx) {
+  // http_request 抓取模式
+  if (ctx.request && ctx.request.url) {
+    try { handleCapture(ctx); } catch (e) {}
+    return {};
   }
+  // schedule 保活模式
+  if (ctx.cron || (ctx.env && ctx.env.CT_KEEPALIVE === 'true')) {
+    try { handleKeepAlive(ctx); } catch (e) {}
+    return {};
+  }
+  // 小组件模式
+  return handleWidget(ctx);
 }
