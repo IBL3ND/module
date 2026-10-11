@@ -231,6 +231,15 @@ const TELECOM_API = 'https://appfuwusz.189.cn:443/query/queryMainDataArea';
 function extractAuthFromRequest(ctx) {
   const req = ctx.request || {};
   const url = req.url || '';
+
+  // 诊断：记录拦截到的 URL（只通知一次）
+  try {
+    if (!ctx.storage.get('ct_diag_notified')) {
+      ctx.storage.set('ct_diag_notified', '1');
+      ctx.notify({ title: '中国电信诊断', body: `拦截到: ${url.slice(0, 80)} | body类型: ${typeof req.body}` });
+    }
+  } catch (e) {}
+
   if (!url.includes('189.cn')) return false;
 
   let body = null;
