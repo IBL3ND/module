@@ -51,116 +51,49 @@ const FLOW_DETAIL_URL =
 
 /* =========================================================
  * 颜色
- *
- * WIDGET_STYLE 环境变量：
- *   glass   → 透明（默认）：不设背景，真透明，白字
- *   classic → 经典纯色：原来的白底 / 深色底
  * ========================================================= */
 
-function getStyleMode(ctx) {
-  const value =
-    String(
-      (ctx && ctx.env && ctx.env.WIDGET_STYLE) ||
-      'glass'
-    ).trim().toLowerCase();
+const COLORS = {
+  bg: {
+    light: '#FFFFFF',
+    dark: '#2C2C2E',
+  },
 
-  return value === 'classic' ?
-    'classic' :
-    'glass';
-}
+  border: {
+    light: '#E5E5EA',
+    dark: '#3A3A3C',
+  },
 
-function getColors(isGlass) {
+  title: {
+    light: '#666666',
+    dark: '#8E8E93',
+  },
 
-  if (!isGlass) {
+  value: {
+    light: '#1C1C1E',
+    dark: '#FFFFFF',
+  },
 
-    return {
+  time: {
+    light: '#999999',
+    dark: '#666666',
+  },
 
-      bg: {
-        light: '#FFFFFF',
-        dark: '#2C2C2E',
-      },
+  error: {
+    light: '#FF3B30',
+    dark: '#FF453A',
+  },
 
-      border: {
-        light: '#E5E5EA',
-        dark: '#3A3A3C',
-      },
+  capsuleBg: {
+    light: '#F5F5F7',
+    dark: '#3A3A3C',
+  },
 
-      title: {
-        light: '#666666',
-        dark: '#8E8E93',
-      },
-
-      value: {
-        light: '#1C1C1E',
-        dark: '#FFFFFF',
-      },
-
-      time: {
-        light: '#999999',
-        dark: '#666666',
-      },
-
-      error: {
-        light: '#FF3B30',
-        dark: '#FF453A',
-      },
-
-      capsuleBg: {
-        light: '#F5F5F7',
-        dark: '#3A3A3C',
-      },
-
-      accent: {
-        light: '#FF6620',
-        dark: '#FF854D',
-      },
-
-    };
-  }
-
-
-  return {
-
-    /* 玻璃模式：真透明 + 白字（与电信版一致） */
-    bg: undefined,
-
-    border: {
-      light: 'rgba(255, 255, 255, 0.2)',
-      dark: 'rgba(255, 255, 255, 0.12)',
-    },
-
-    title: {
-      light: 'rgba(255, 255, 255, 0.8)',
-      dark: 'rgba(247, 247, 248, 0.7)',
-    },
-
-    value: {
-      light: '#FFFFFF',
-      dark: '#F7F7F8',
-    },
-
-    time: {
-      light: 'rgba(255, 255, 255, 0.7)',
-      dark: 'rgba(247, 247, 248, 0.6)',
-    },
-
-    error: {
-      light: '#FF3B30',
-      dark: '#FF453A',
-    },
-
-    capsuleBg: {
-      light: 'rgba(255, 255, 255, 0.18)',
-      dark: 'rgba(255, 255, 255, 0.12)',
-    },
-
-    accent: {
-      light: '#FF6620',
-      dark: '#FF854D',
-    },
-
-  };
-}
+  accent: {
+    light: '#E60012',
+    dark: '#FF375F',
+  },
+};
 
 
 /* =========================================================
@@ -782,8 +715,7 @@ async function loadData(ctx) {
 function headerRow(
   title,
   data,
-  fromCache,
-  COLORS
+  fromCache
 ) {
 
   const updateTime =
@@ -907,8 +839,7 @@ function headerRow(
 function makeCapsule(
   title,
   value,
-  unit,
-  COLORS
+  unit
 ) {
 
   return {
@@ -1028,12 +959,14 @@ function makeCapsule(
 function buildMainWidget(
   title,
   data,
-  fromCache,
-  COLORS
+  fromCache
 ) {
 
-  const widgetConfig = {
+  return {
     type: 'widget',
+
+    backgroundColor:
+      COLORS.bg,
 
     padding: [
       10,
@@ -1058,8 +991,7 @@ function buildMainWidget(
       headerRow(
         title,
         data,
-        fromCache,
-        COLORS
+        fromCache
       ),
 
 
@@ -1080,22 +1012,19 @@ function buildMainWidget(
           makeCapsule(
             data.fee.title,
             data.fee.value,
-            data.fee.unit,
-            COLORS
+            data.fee.unit
           ),
 
           makeCapsule(
             data.voice.title,
             data.voice.value,
-            data.voice.unit,
-            COLORS
+            data.voice.unit
           ),
 
           makeCapsule(
             data.flow.title,
             data.flow.value,
-            data.flow.unit,
-            COLORS
+            data.flow.unit
           ),
 
         ],
@@ -1140,14 +1069,6 @@ function buildMainWidget(
 
     ],
   };
-
-
-  if (COLORS.bg) {
-    widgetConfig.backgroundColor = COLORS.bg;
-  }
-
-
-  return widgetConfig;
 }
 
 
@@ -1164,8 +1085,7 @@ function smallRow(
   glyph,
   value,
   unit,
-  label,
-  isGlass
+  label
 ) {
 
   const iconChild =
@@ -1213,12 +1133,10 @@ function smallRow(
       8,
     ],
 
-    backgroundColor: isGlass
-      ? { light: 'rgba(255, 255, 255, 0.18)', dark: 'rgba(255, 255, 255, 0.12)' }
-      : {
-          light: color + '1F',
-          dark: color + '33',
-        },
+    backgroundColor: {
+      light: color + '1F',
+      dark: color + '33',
+    },
 
     borderRadius: 14,
 
@@ -1239,7 +1157,7 @@ function smallRow(
 
         borderRadius: 15,
 
-        backgroundColor: isGlass ? 'rgba(0, 0, 0, 0.15)' : color,
+        backgroundColor: color,
 
         children: [
           iconChild,
@@ -1276,7 +1194,7 @@ function smallRow(
                   weight: 'bold',
                 },
 
-                textColor: isGlass ? { light: '#FFFFFF', dark: '#F7F7F8' } : color,
+                textColor: color,
 
                 maxLines: 1,
 
@@ -1293,9 +1211,7 @@ function smallRow(
                   weight: 'semibold',
                 },
 
-                textColor: isGlass
-                  ? { light: 'rgba(255, 255, 255, 0.8)', dark: 'rgba(247, 247, 248, 0.7)' }
-                  : color,
+                textColor: color,
 
                 maxLines: 1,
               },
@@ -1325,9 +1241,7 @@ function smallRow(
                   weight: 'medium',
                 },
 
-                textColor: isGlass
-                  ? { light: 'rgba(255, 255, 255, 0.7)', dark: 'rgba(247, 247, 248, 0.6)' }
-                  : color + 'B3',
+                textColor: color + 'B3',
 
                 maxLines: 1,
 
@@ -1348,14 +1262,15 @@ function smallRow(
 function buildSmall(
   title,
   data,
-  fromCache,
-  COLORS,
-  isGlass
+  fromCache
 ) {
 
-  const widgetConfig = {
+  return {
 
     type: 'widget',
+
+    backgroundColor:
+      COLORS.bg,
 
     padding: [
       10,
@@ -1380,8 +1295,7 @@ function buildSmall(
         '¥',
         data.fee.value,
         data.fee.unit,
-        data.fee.title,
-        isGlass
+        data.fee.title
       ),
 
       smallRow(
@@ -1390,8 +1304,7 @@ function buildSmall(
         '',
         data.flow.value,
         data.flow.unit,
-        data.flow.title,
-        isGlass
+        data.flow.title
       ),
 
       smallRow(
@@ -1400,20 +1313,11 @@ function buildSmall(
         '',
         data.voice.value,
         data.voice.unit,
-        data.voice.title,
-        isGlass
+        data.voice.title
       ),
 
     ],
   };
-
-
-  if (COLORS.bg) {
-    widgetConfig.backgroundColor = COLORS.bg;
-  }
-
-
-  return widgetConfig;
 }
 
 
@@ -1644,13 +1548,15 @@ function buildLockScreen(
 
 function buildError(
   title,
-  message,
-  COLORS
+  message
 ) {
 
-  const widgetConfig = {
+  return {
 
     type: 'widget',
+
+    backgroundColor:
+      COLORS.bg,
 
     padding: 12,
 
@@ -1797,14 +1703,6 @@ function buildError(
 
     ],
   };
-
-
-  if (COLORS.bg) {
-    widgetConfig.backgroundColor = COLORS.bg;
-  }
-
-
-  return widgetConfig;
 }
 
 
@@ -1816,17 +1714,6 @@ async function handleWidget(ctx) {
 
   const title =
     '中国联通';
-
-
-  /*
-   * 样式模式：glass（默认透明）| classic（经典纯色）
-   * 通过模块 compat_arguments → env WIDGET_STYLE 传入
-   */
-  const isGlass =
-    getStyleMode(ctx) === 'glass';
-
-  const COLORS =
-    getColors(isGlass);
 
 
   const result =
@@ -1844,8 +1731,7 @@ async function handleWidget(ctx) {
 
     return buildError(
       title,
-      '请打开联通 App，进入首页并点击余额位置',
-      COLORS
+      '请打开联通 App，进入首页并点击余额位置'
     );
   }
 
@@ -1858,8 +1744,7 @@ async function handleWidget(ctx) {
 
     return buildError(
       title,
-      '数据获取失败，请重新打开联通 App 查询一次',
-      COLORS
+      '数据获取失败，请重新打开联通 App 查询一次'
     );
   }
 
@@ -1894,9 +1779,7 @@ async function handleWidget(ctx) {
     return buildSmall(
       title,
       data,
-      false,
-      COLORS,
-      isGlass
+      false
     );
   }
 
@@ -1913,8 +1796,7 @@ async function handleWidget(ctx) {
     return buildMainWidget(
       title,
       data,
-      false,
-      COLORS
+      false
     );
   }
 
@@ -1922,9 +1804,7 @@ async function handleWidget(ctx) {
   return buildSmall(
     title,
     data,
-    false,
-    COLORS,
-    isGlass
+    false
   );
 }
 
