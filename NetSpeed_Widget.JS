@@ -1,7 +1,27 @@
 // NetSpeed 小组件
 // 测试网络下载速度
+// 样式：WIDGET_STYLE=glass（默认透明）| classic（经典纯色）
+
+function getStyleMode(ctx) {
+  const v = String((ctx.env && ctx.env.WIDGET_STYLE) || 'glass').trim().toLowerCase();
+  return v === 'classic' ? 'classic' : 'glass';
+}
+
+function getColors(isGlass) {
+  return {
+    bg: isGlass ? undefined : { light: '#FFFFFF', dark: '#2C2C2E' },
+    secondary: isGlass
+      ? { light: 'rgba(255,255,255,0.7)', dark: 'rgba(247,247,248,0.6)' }
+      : { light: '#8E8E93', dark: '#8E8E93' },
+    muted: isGlass
+      ? { light: 'rgba(255,255,255,0.8)', dark: 'rgba(247,247,248,0.7)' }
+      : { light: '#6B6B6B', dark: '#A1A1A6' },
+  };
+}
 
 export default async function(ctx) {
+  const isGlass = getStyleMode(ctx) === 'glass';
+  const COLORS = getColors(isGlass);
   const MB = 3;
   const BYTES = MB * 1024 * 1024;
   const SPEED_TEST_URL = `https://speed.cloudflare.com/__down?bytes=${BYTES}`;
@@ -55,15 +75,10 @@ export default async function(ctx) {
   
   const isSmall = ctx.widgetFamily === 'systemSmall';
 
-  return {
+  const widgetConfig = {
     type: 'widget',
     padding: isSmall ? 12 : 16,
     gap: isSmall ? 8 : 12,
-
-    backgroundColor: { 
-      light: '#FFFFFF', 
-      dark: '#2C2C2E' 
-    },
 
     children: [
 
@@ -90,7 +105,7 @@ export default async function(ctx) {
             type: 'text',
             text: `↻ ${timeStr}`,
             font: { size: 'caption2' },
-            textColor: { light: '#8E8E93', dark: '#8E8E93' }
+            textColor: COLORS.secondary
           }
         ]
       },
@@ -135,18 +150,24 @@ export default async function(ctx) {
             type: 'text',
             text: `${speedData.mBs} MB/s`,
             font: { size: isSmall ? 'caption2' : 'caption1' },
-            textColor: { light: '#6B6B6B', dark: '#A1A1A6' }
+            textColor: COLORS.muted
           },
           { type: 'spacer' },
           {
             type: 'text',
             text: `${speedData.duration}s`,
             font: { size: isSmall ? 'caption2' : 'caption1' },
-            textColor: { light: '#6B6B6B', dark: '#A1A1A6' }
+            textColor: COLORS.muted
           }
         ]
       }
     ]
   };
+
+  if (COLORS.bg) {
+    widgetConfig.backgroundColor = COLORS.bg;
+  }
+
+  return widgetConfig;
 }
 
