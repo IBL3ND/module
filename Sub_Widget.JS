@@ -64,19 +64,11 @@ export default async function (ctx) {
  const now = new Date();
  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
- const colors = {
-  textPrimary: { light: "#000000", dark: "#FFFFFF" },
-  textSecondary: { light: "#555555", dark: "#EBEBF5" },
-  textTertiary: { light: "#888888", dark: "#8E8E93" },
-  accentBlue: { light: "#007AFF", dark: "#0A84FF" },
-  accentGreen: { light: "#34C759", dark: "#30D158" },
-  accentOrange: { light: "#FF9500", dark: "#FF9F0A" },
-  accentRed: { light: "#FF3B30", dark: "#FF453A" },
-  accentPurple: { light: "#5856D6", dark: "#5856D6" },
-  divider: { light: "#E5E5EA", dark: "#48484A" },
- };
+ const isGlass = getStyleMode(ctx) === 'glass';
 
- const bgGradient = {
+ const colors = getColors(isGlass);
+
+ const bgGradient = isGlass ? undefined : {
   type: "linear",
   colors: [
    { light: "#FFFFFF", dark: "#2C2C2E" },
@@ -88,9 +80,8 @@ export default async function (ctx) {
  };
 
  if (!slots.length) {
-  return {
+  const emptyConfig = {
    type: "widget",
-   backgroundGradient: bgGradient,
    padding: 16,
    gap: 12,
    refreshAfter: refreshTime,
@@ -107,6 +98,8 @@ export default async function (ctx) {
     },
    ],
   };
+  if (bgGradient) emptyConfig.backgroundGradient = bgGradient;
+  return emptyConfig;
  }
 
  const results = await Promise.all(slots.map((s) => fetchInfo(ctx, s)));
@@ -122,9 +115,8 @@ export default async function (ctx) {
  
  const isMediumThree = isMedium && numSubs === 3;
 
- return {
+ const widgetConfig = {
   type: "widget",
-  backgroundGradient: bgGradient,
   padding: isMediumThree ? 6 : (isCompact ? 8 : 12),
   gap: isMediumThree ? 4 : (isCompact ? 5 : 8),
   refreshAfter: refreshTime,
@@ -150,9 +142,46 @@ export default async function (ctx) {
    },
   ],
  };
+ if (bgGradient) widgetConfig.backgroundGradient = bgGradient;
+ return widgetConfig;
 }
 
 const CACHE_TIME = 1 * 60 * 60 * 1000;
+
+/* ---------- 透明/经典双模式 ---------- */
+
+function getStyleMode(ctx) {
+ const value = String((ctx.env && ctx.env.WIDGET_STYLE) || 'glass').trim().toLowerCase();
+ return value === 'classic' ? 'classic' : 'glass';
+}
+
+function getColors(isGlass) {
+ return {
+  textPrimary: isGlass
+   ? { light: "#FFFFFF", dark: "#F7F7F8" }
+   : { light: "#000000", dark: "#FFFFFF" },
+  textSecondary: isGlass
+   ? { light: "rgba(255, 255, 255, 0.8)", dark: "rgba(247, 247, 248, 0.7)" }
+   : { light: "#555555", dark: "#EBEBF5" },
+  textTertiary: isGlass
+   ? { light: "rgba(255, 255, 255, 0.7)", dark: "rgba(247, 247, 248, 0.6)" }
+   : { light: "#888888", dark: "#8E8E93" },
+  accentBlue: { light: "#007AFF", dark: "#0A84FF" },
+  accentGreen: { light: "#34C759", dark: "#30D158" },
+  accentOrange: { light: "#FF9500", dark: "#FF9F0A" },
+  accentRed: { light: "#FF3B30", dark: "#FF453A" },
+  accentPurple: { light: "#5856D6", dark: "#5856D6" },
+  divider: isGlass
+   ? { light: "rgba(255, 255, 255, 0.2)", dark: "rgba(255, 255, 255, 0.12)" }
+   : { light: "#E5E5EA", dark: "#48484A" },
+  cardBg: isGlass
+   ? { light: "rgba(255, 255, 255, 0.18)", dark: "rgba(255, 255, 255, 0.12)" }
+   : { light: "#FFFFFF", dark: "#2B2B2D" },
+  trackBg: isGlass
+   ? { light: "rgba(255, 255, 255, 0.25)", dark: "rgba(255, 255, 255, 0.18)" }
+   : { light: "#E8E8EA", dark: "#48484A" },
+ };
+}
 
 async function fetchInfo(ctx, slot) {
  const cacheKey = `sub_cache_${slot.url}`;
@@ -245,7 +274,6 @@ function buildCard(result, colors, ctx, isMediumThree) {
    ],
   };
  }
-
  const progressPercent = Math.min(Math.max(percent, 0), 100);
  const usedStr = formatBytes(used);
  const totalStr = formatBytes(totalBytes);
@@ -269,7 +297,7 @@ function buildCard(result, colors, ctx, isMediumThree) {
   direction: "column",
   gap: innerGap,
   padding: cardPadding,
-  backgroundColor: { light: "#FFFFFF", dark: "#2B2B2D" },
+  backgroundColor: colors.cardBg,
   borderRadius: 8,
   borderWidth: 1,
   borderColor: colors.divider,
@@ -292,7 +320,7 @@ function buildCard(result, colors, ctx, isMediumThree) {
     borderRadius: 3,
     children: [
      { type: "stack", flex: Math.max(progressPercent, 1), height: barHeight, backgroundColor: statusColor, borderRadius: 3 },
-     { type: "stack", flex: Math.max(100 - progressPercent, 1), height: barHeight, backgroundColor: { light: "#E8E8EA", dark: "#48484A" }, borderRadius: 3 },
+     { type: "stack", flex: Math.max(100 - progressPercent, 1), height: barHeight, backgroundColor: colors.trackBg, borderRadius: 3 },
     ],
    },
    {
