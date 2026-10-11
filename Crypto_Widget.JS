@@ -34,14 +34,30 @@
  * ════════════════════════════════════════════════════
  */
 
-export default async function(ctx) {
-  const theme = {
-    bg: { light: "#FFFFFF", dark: "#2C2C2E" },
-    text: { light: "#000000", dark: "#FFFFFF" },
-    textSecondary: { light: "#666666", dark: "#AAAAAA" },
+// ── 小组件样式：glass（默认透明）| classic（经典纯色），由环境变量 WIDGET_STYLE 控制 ──
+function getStyleMode(ctx) {
+  const value = String(ctx.env?.WIDGET_STYLE || 'glass').trim().toLowerCase();
+  return value === 'classic' ? 'classic' : 'glass';
+}
+
+function getColors(isGlass) {
+  return {
+    bg: isGlass ? undefined : { light: "#FFFFFF", dark: "#2C2C2E" },
+    text: isGlass ? { light: "#FFFFFF", dark: "#FFFFFF" } : { light: "#000000", dark: "#FFFFFF" },
+    textSecondary: isGlass
+      ? { light: "rgba(255,255,255,0.8)", dark: "rgba(255,255,255,0.7)" }
+      : { light: "#666666", dark: "#AAAAAA" },
+    cardBg: isGlass
+      ? { light: "rgba(255,255,255,0.18)", dark: "rgba(255,255,255,0.12)" }
+      : { light: "#F5F5F7", dark: "#3A3A3C" },
     up: { light: "#00AA00", dark: "#30D158" },
     down: { light: "#FF0000", dark: "#FF453A" }
   };
+}
+
+export default async function(ctx) {
+  const isGlass = getStyleMode(ctx) === 'glass';
+  const theme = getColors(isGlass);
 
   // 没有传入尺寸时（例如脚本预览），按小尺寸处理
   const widgetFamily = ctx.widgetFamily || "systemSmall";
@@ -149,7 +165,8 @@ export default async function(ctx) {
   // 全部获取失败：显示错误页，并安排自动重试（之前这里没有 refreshAfter，会一直卡住）
   if (dataSource.length === 0) {
     return {
-      type: "widget", padding: 16, backgroundColor: theme.bg,
+      type: "widget", padding: 16,
+      ...(theme.bg ? { backgroundColor: theme.bg } : {}),
       refreshAfter: refreshAfter(RETRY_MS),
       children: [{
         type: "stack", direction: "column", alignItems: "center", gap: 8,
@@ -278,7 +295,7 @@ export default async function(ctx) {
       return {
         type: "stack", direction: "row", alignItems: "center", flex: 1, gap: 6,
         padding: [4, 8, 4, 8], borderRadius: 12,
-        backgroundColor: { light: "#F5F5F7", dark: "#3A3A3C" },
+        backgroundColor: theme.cardBg,
         url: `https://www.binance.com/zh-CN/price/${coin.symbol}`,
         children: [
           {
@@ -327,7 +344,8 @@ export default async function(ctx) {
     };
 
     return {
-      type: "widget", padding: 10, gap: 6, backgroundColor: theme.bg,
+      type: "widget", padding: 10, gap: 6,
+      ...(theme.bg ? { backgroundColor: theme.bg } : {}),
       url: `https://www.binance.com/zh-CN/price/${dataSource[0].symbol}`,
       refreshAfter: refreshAfter(REFRESH_MS),
       children: [...dataSource.slice(0, 3).map(smallCard), ...(hasFailure ? [statusLine()] : [])]
@@ -337,7 +355,8 @@ export default async function(ctx) {
 
   if (widgetFamily === "systemMedium") {
     return {
-      type: "widget", padding: 12, backgroundColor: theme.bg,
+      type: "widget", padding: 12,
+      ...(theme.bg ? { backgroundColor: theme.bg } : {}),
       refreshAfter: refreshAfter(REFRESH_MS),
       children: [
         ...dataSource.slice(0, 3).flatMap((coin, i) => [renderRow(coin), i < 2 ? { type: "spacer", length: 6 } : null]).filter(Boolean),
@@ -347,7 +366,8 @@ export default async function(ctx) {
   }
 
   return {
-    type: "widget", padding: 12, backgroundColor: theme.bg,
+    type: "widget", padding: 12,
+    ...(theme.bg ? { backgroundColor: theme.bg } : {}),
     refreshAfter: refreshAfter(REFRESH_MS),
     children: [
       ...dataSource.slice(0, 8).flatMap((coin, i) => [
