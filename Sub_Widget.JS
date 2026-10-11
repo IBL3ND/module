@@ -35,27 +35,6 @@
  * - 加了缓存机制 如果数据存在且距离上次请求未超过 1 小时，则直接返回缓存结果，不再发起网络请求，避免风控 导致机场主拉黑
  */
 
-/* ---------- 透明/经典双模式 ---------- */
-function getStyleMode(c) {
- const v = String((c.env && c.env.WIDGET_STYLE) || 'glass').trim().toLowerCase();
- return v === 'classic' ? 'classic' : 'glass';
-}
-function getColors(isGlass) {
- return {
-  textPrimary: isGlass ? { light: "#1A1A1A", dark: "#FFFFFF" } : { light: "#000000", dark: "#FFFFFF" },
-  textSecondary: isGlass ? { light: "rgba(0,0,0,0.6)", dark: "rgba(255,255,255,0.7)" } : { light: "#555555", dark: "#EBEBF5" },
-  textTertiary: isGlass ? { light: "rgba(0,0,0,0.45)", dark: "rgba(255,255,255,0.55)" } : { light: "#888888", dark: "#8E8E93" },
-  accentBlue: { light: "#007AFF", dark: "#0A84FF" },
-  accentGreen: { light: "#34C759", dark: "#30D158" },
-  accentOrange: { light: "#FF9500", dark: "#FF9F0A" },
-  accentRed: { light: "#FF3B30", dark: "#FF453A" },
-  accentPurple: { light: "#5856D6", dark: "#5856D6" },
-  divider: isGlass ? { light: "rgba(0,0,0,0.1)", dark: "rgba(255,255,255,0.2)" } : { light: "#E5E5EA", dark: "#48484A" },
-  cardBg: isGlass ? { light: "rgba(255,255,255,0.4)", dark: "rgba(255,255,255,0.18)" } : { light: "#FFFFFF", dark: "#2B2B2D" },
-  trackBg: isGlass ? { light: "rgba(0,0,0,0.12)", dark: "rgba(255,255,255,0.2)" } : { light: "#E8E8EA", dark: "#48484A" },
- };
-}
-
 export default async function (ctx) {
  const MAX = 5;
  const slots = [];
@@ -85,14 +64,23 @@ export default async function (ctx) {
  const now = new Date();
  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
- const isGlass = getStyleMode(ctx) === 'glass';
- const colors = getColors(isGlass);
+ const colors = {
+  textPrimary: { light: "#000000", dark: "#FFFFFF" },
+  textSecondary: { light: "#555555", dark: "#EBEBF5" },
+  textTertiary: { light: "#888888", dark: "#8E8E93" },
+  accentBlue: { light: "#007AFF", dark: "#0A84FF" },
+  accentGreen: { light: "#34C759", dark: "#30D158" },
+  accentOrange: { light: "#FF9500", dark: "#FF9F0A" },
+  accentRed: { light: "#FF3B30", dark: "#FF453A" },
+  accentPurple: { light: "#5856D6", dark: "#5856D6" },
+  divider: { light: "#E5E5EA", dark: "#48484A" },
+ };
 
  const bgGradient = {
   type: "linear",
   colors: [
-   isGlass ? { light: "rgba(255,255,255,0.25)", dark: "rgba(0,0,0,0.25)" } : { light: "#FFFFFF", dark: "#2C2C2E" },
-   isGlass ? { light: "rgba(255,255,255,0.25)", dark: "rgba(0,0,0,0.25)" } : { light: "#FFFFFF", dark: "#2C2C2E" },
+   { light: "#FFFFFF", dark: "#2C2C2E" },
+   { light: "#FFFFFF", dark: "#2C2C2E" },
   ],
   stops: [0, 1],
   startPoint: { x: 0, y: 0 },
@@ -281,7 +269,7 @@ function buildCard(result, colors, ctx, isMediumThree) {
   direction: "column",
   gap: innerGap,
   padding: cardPadding,
-  backgroundColor: colors.cardBg,
+  backgroundColor: { light: "#FFFFFF", dark: "#2B2B2D" },
   borderRadius: 8,
   borderWidth: 1,
   borderColor: colors.divider,
@@ -304,7 +292,7 @@ function buildCard(result, colors, ctx, isMediumThree) {
     borderRadius: 3,
     children: [
      { type: "stack", flex: Math.max(progressPercent, 1), height: barHeight, backgroundColor: statusColor, borderRadius: 3 },
-     { type: "stack", flex: Math.max(100 - progressPercent, 1), height: barHeight, backgroundColor: colors.trackBg, borderRadius: 3 },
+     { type: "stack", flex: Math.max(100 - progressPercent, 1), height: barHeight, backgroundColor: { light: "#E8E8EA", dark: "#48484A" }, borderRadius: 3 },
     ],
    },
    {
