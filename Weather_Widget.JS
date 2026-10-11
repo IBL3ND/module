@@ -70,18 +70,20 @@ function getStyleMode(ctx) {
 
 function getColors(isGlass) {
   return {
-    bg: isGlass ? undefined : { light: '#FFFFFF', dark: '#2C2C2E' },
+    bg: isGlass
+      ? { light: 'rgba(255, 255, 255, 0.25)', dark: 'rgba(0, 0, 0, 0.25)' }
+      : { light: '#FFFFFF', dark: '#2C2C2E' },
     cardBg: isGlass
-      ? { light: 'rgba(255, 255, 255, 0.18)', dark: 'rgba(255, 255, 255, 0.12)' }
+      ? { light: 'rgba(255, 255, 255, 0.4)', dark: 'rgba(255, 255, 255, 0.18)' }
       : { light: '#F2F2F7', dark: '#3A3A3C' },
     textPrimary: isGlass
-      ? { light: '#FFFFFF', dark: '#F7F7F8' }
+      ? { light: '#1A1A1A', dark: '#FFFFFF' }
       : { light: '#1C1C1E', dark: '#F2F2F7' },
     textSecondary: isGlass
-      ? { light: 'rgba(255, 255, 255, 0.8)', dark: 'rgba(247, 247, 248, 0.7)' }
+      ? { light: 'rgba(0, 0, 0, 0.6)', dark: 'rgba(255, 255, 255, 0.7)' }
       : { light: '#6E6E73', dark: '#AEAEB2' },
     textTertiary: isGlass
-      ? { light: 'rgba(255, 255, 255, 0.7)', dark: 'rgba(247, 247, 248, 0.6)' }
+      ? { light: 'rgba(0, 0, 0, 0.45)', dark: 'rgba(255, 255, 255, 0.55)' }
       : { light: '#8E8E93', dark: '#636366' },
   };
 }
@@ -157,7 +159,7 @@ function renderMedium(now, air, city, COLORS, isGlass) {
       }
     ]
   };
-  if (COLORS.bg) widgetConfig.backgroundColor = COLORS.bg;
+  widgetConfig.backgroundColor = COLORS.bg;
   return widgetConfig;
 }
 
@@ -190,7 +192,7 @@ function renderSmall(now, city, COLORS) {
       }
     ]
   };
-  if (COLORS.bg) widgetConfig.backgroundColor = COLORS.bg;
+  widgetConfig.backgroundColor = COLORS.bg;
   return widgetConfig;
 }
 
@@ -329,7 +331,7 @@ function renderError(msg, COLORS) {
       }]
     }]
   };
-  if (c.bg) widgetConfig.backgroundColor = c.bg;
+  widgetConfig.backgroundColor = c.bg;
   return widgetConfig;
 }
 
