@@ -389,7 +389,9 @@ async function telecomLogin(ctx, phone, password, deviceId) {
   let data;
   try { data = await resp.json(); } catch (e) { throw new Error('not-json: login'); }
   if (data?.responseData?.resultCode !== '0000') {
-    const err = new Error(data?.responseData?.resultDesc || '登录失败');
+    const code = data?.responseData?.resultCode || 'unknown';
+    const desc = data?.responseData?.resultDesc || '登录失败';
+    const err = new Error(`[${code}] ${desc}`);
     err.loginFailed = true;
     throw err;
   }
@@ -506,7 +508,7 @@ function notifyTokenLoginFailedOnce(ctx, phone) {
   if (ctx.storage.get(key) === marker) return;
   ctx.storage.set(key, marker);
   try {
-    ctx.notify({ title: '中国电信', body: '密码登录失败，请检查手机号、服务密码和 androidId 是否正确' });
+    ctx.notify({ title: '中国电信', body: '密码登录失败，请检查手机号、服务密码是否正确' });
   } catch (e) {}
 }
 
