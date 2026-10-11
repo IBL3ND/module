@@ -51,49 +51,116 @@ const FLOW_DETAIL_URL =
 
 /* =========================================================
  * 颜色
+ *
+ * WIDGET_STYLE 环境变量：
+ *   glass   → 透明样式（默认）：不设背景色，文字用白色系
+ *   classic → 经典纯色：原来的白底 / 深色底
  * ========================================================= */
 
-const COLORS = {
-  bg: {
-    light: '#FFFFFF',
-    dark: '#2C2C2E',
-  },
+function getStyleMode(ctx) {
+  const value =
+    String(
+      (ctx && ctx.env && ctx.env.WIDGET_STYLE) ||
+      'glass'
+    ).trim().toLowerCase();
 
-  border: {
-    light: '#E5E5EA',
-    dark: '#3A3A3C',
-  },
+  return value === 'classic' ?
+    'classic' :
+    'glass';
+}
 
-  title: {
-    light: '#666666',
-    dark: '#8E8E93',
-  },
+function getColors(isGlass) {
 
-  value: {
-    light: '#1C1C1E',
-    dark: '#FFFFFF',
-  },
+  if (!isGlass) {
 
-  time: {
-    light: '#999999',
-    dark: '#666666',
-  },
+    return {
 
-  error: {
-    light: '#FF3B30',
-    dark: '#FF453A',
-  },
+      bg: {
+        light: '#FFFFFF',
+        dark: '#2C2C2E',
+      },
 
-  capsuleBg: {
-    light: '#F5F5F7',
-    dark: '#3A3A3C',
-  },
+      border: {
+        light: '#E5E5EA',
+        dark: '#3A3A3C',
+      },
 
-  accent: {
-    light: '#E60012',
-    dark: '#FF375F',
-  },
-};
+      title: {
+        light: '#666666',
+        dark: '#8E8E93',
+      },
+
+      value: {
+        light: '#1C1C1E',
+        dark: '#FFFFFF',
+      },
+
+      time: {
+        light: '#999999',
+        dark: '#666666',
+      },
+
+      error: {
+        light: '#FF3B30',
+        dark: '#FF453A',
+      },
+
+      capsuleBg: {
+        light: '#F5F5F7',
+        dark: '#3A3A3C',
+      },
+
+      accent: {
+        light: '#E60012',
+        dark: '#FF375F',
+      },
+
+    };
+  }
+
+
+  return {
+
+    /* 透明模式：不设背景，交给系统壁纸 */
+    bg: undefined,
+
+    border: {
+      light: 'rgba(255, 255, 255, 0.2)',
+      dark: 'rgba(255, 255, 255, 0.12)',
+    },
+
+    title: {
+      light: 'rgba(255, 255, 255, 0.8)',
+      dark: 'rgba(247, 247, 248, 0.7)',
+    },
+
+    value: {
+      light: '#FFFFFF',
+      dark: '#F7F7F8',
+    },
+
+    time: {
+      light: 'rgba(255, 255, 255, 0.7)',
+      dark: 'rgba(247, 247, 248, 0.6)',
+    },
+
+    error: {
+      light: '#FF3B30',
+      dark: '#FF453A',
+    },
+
+    capsuleBg: {
+      light: 'rgba(255, 255, 255, 0.18)',
+      dark: 'rgba(255, 255, 255, 0.12)',
+    },
+
+    accent: {
+      light: '#FF6620',
+      dark: '#FF854D',
+    },
+
+  };
+}
 
 
 /* =========================================================
@@ -715,7 +782,8 @@ async function loadData(ctx) {
 function headerRow(
   title,
   data,
-  fromCache
+  fromCache,
+  COLORS
 ) {
 
   const updateTime =
@@ -839,7 +907,8 @@ function headerRow(
 function makeCapsule(
   title,
   value,
-  unit
+  unit,
+  COLORS
 ) {
 
   return {
@@ -959,14 +1028,12 @@ function makeCapsule(
 function buildMainWidget(
   title,
   data,
-  fromCache
+  fromCache,
+  COLORS
 ) {
 
-  return {
+  const widgetConfig = {
     type: 'widget',
-
-    backgroundColor:
-      COLORS.bg,
 
     padding: [
       10,
@@ -991,7 +1058,8 @@ function buildMainWidget(
       headerRow(
         title,
         data,
-        fromCache
+        fromCache,
+        COLORS
       ),
 
 
@@ -1012,19 +1080,22 @@ function buildMainWidget(
           makeCapsule(
             data.fee.title,
             data.fee.value,
-            data.fee.unit
+            data.fee.unit,
+            COLORS
           ),
 
           makeCapsule(
             data.voice.title,
             data.voice.value,
-            data.voice.unit
+            data.voice.unit,
+            COLORS
           ),
 
           makeCapsule(
             data.flow.title,
             data.flow.value,
-            data.flow.unit
+            data.flow.unit,
+            COLORS
           ),
 
         ],
@@ -1069,6 +1140,17 @@ function buildMainWidget(
 
     ],
   };
+
+
+  /*
+   * 透明模式不设背景，交给系统壁纸
+   */
+  if (COLORS.bg) {
+    widgetConfig.backgroundColor = COLORS.bg;
+  }
+
+
+  return widgetConfig;
 }
 
 
@@ -1085,7 +1167,8 @@ function smallRow(
   glyph,
   value,
   unit,
-  label
+  label,
+  isGlass
 ) {
 
   const iconChild =
@@ -1133,10 +1216,15 @@ function smallRow(
       8,
     ],
 
-    backgroundColor: {
-      light: color + '1F',
-      dark: color + '33',
-    },
+    backgroundColor: isGlass
+      ? {
+          light: 'rgba(255, 255, 255, 0.18)',
+          dark: 'rgba(255, 255, 255, 0.12)',
+        }
+      : {
+          light: color + '1F',
+          dark: color + '33',
+        },
 
     borderRadius: 14,
 
@@ -1157,7 +1245,10 @@ function smallRow(
 
         borderRadius: 15,
 
-        backgroundColor: color,
+        /* 玻璃模式下去掉实色大圆底，改用半透明暗底 */
+        backgroundColor: isGlass ?
+          'rgba(0, 0, 0, 0.15)' :
+          color,
 
         children: [
           iconChild,
@@ -1194,7 +1285,12 @@ function smallRow(
                   weight: 'bold',
                 },
 
-                textColor: color,
+                textColor: isGlass
+                  ? {
+                      light: '#FFFFFF',
+                      dark: '#F7F7F8',
+                    }
+                  : color,
 
                 maxLines: 1,
 
@@ -1211,7 +1307,12 @@ function smallRow(
                   weight: 'semibold',
                 },
 
-                textColor: color,
+                textColor: isGlass
+                  ? {
+                      light: 'rgba(255, 255, 255, 0.8)',
+                      dark: 'rgba(247, 247, 248, 0.7)',
+                    }
+                  : color,
 
                 maxLines: 1,
               },
@@ -1241,7 +1342,12 @@ function smallRow(
                   weight: 'medium',
                 },
 
-                textColor: color + 'B3',
+                textColor: isGlass
+                  ? {
+                      light: 'rgba(255, 255, 255, 0.7)',
+                      dark: 'rgba(247, 247, 248, 0.6)',
+                    }
+                  : color + 'B3',
 
                 maxLines: 1,
 
@@ -1262,15 +1368,14 @@ function smallRow(
 function buildSmall(
   title,
   data,
-  fromCache
+  fromCache,
+  COLORS,
+  isGlass
 ) {
 
-  return {
+  const widgetConfig = {
 
     type: 'widget',
-
-    backgroundColor:
-      COLORS.bg,
 
     padding: [
       10,
@@ -1295,7 +1400,8 @@ function buildSmall(
         '¥',
         data.fee.value,
         data.fee.unit,
-        data.fee.title
+        data.fee.title,
+        isGlass
       ),
 
       smallRow(
@@ -1304,7 +1410,8 @@ function buildSmall(
         '',
         data.flow.value,
         data.flow.unit,
-        data.flow.title
+        data.flow.title,
+        isGlass
       ),
 
       smallRow(
@@ -1313,11 +1420,23 @@ function buildSmall(
         '',
         data.voice.value,
         data.voice.unit,
-        data.voice.title
+        data.voice.title,
+        isGlass
       ),
 
     ],
   };
+
+
+  /*
+   * 透明模式不设背景，交给系统壁纸
+   */
+  if (COLORS.bg) {
+    widgetConfig.backgroundColor = COLORS.bg;
+  }
+
+
+  return widgetConfig;
 }
 
 
@@ -1548,15 +1667,13 @@ function buildLockScreen(
 
 function buildError(
   title,
-  message
+  message,
+  COLORS
 ) {
 
-  return {
+  const widgetConfig = {
 
     type: 'widget',
-
-    backgroundColor:
-      COLORS.bg,
 
     padding: 12,
 
@@ -1703,6 +1820,17 @@ function buildError(
 
     ],
   };
+
+
+  /*
+   * 透明模式不设背景，交给系统壁纸
+   */
+  if (COLORS.bg) {
+    widgetConfig.backgroundColor = COLORS.bg;
+  }
+
+
+  return widgetConfig;
 }
 
 
@@ -1714,6 +1842,17 @@ async function handleWidget(ctx) {
 
   const title =
     '中国联通';
+
+
+  /*
+   * 样式模式：glass（默认透明）| classic（经典纯色）
+   * 通过模块 compat_arguments → env WIDGET_STYLE 传入
+   */
+  const isGlass =
+    getStyleMode(ctx) === 'glass';
+
+  const COLORS =
+    getColors(isGlass);
 
 
   const result =
@@ -1731,7 +1870,8 @@ async function handleWidget(ctx) {
 
     return buildError(
       title,
-      '请打开联通 App，进入首页并点击余额位置'
+      '请打开联通 App，进入首页并点击余额位置',
+      COLORS
     );
   }
 
@@ -1744,7 +1884,8 @@ async function handleWidget(ctx) {
 
     return buildError(
       title,
-      '数据获取失败，请重新打开联通 App 查询一次'
+      '数据获取失败，请重新打开联通 App 查询一次',
+      COLORS
     );
   }
 
@@ -1779,7 +1920,9 @@ async function handleWidget(ctx) {
     return buildSmall(
       title,
       data,
-      false
+      false,
+      COLORS,
+      isGlass
     );
   }
 
@@ -1796,7 +1939,8 @@ async function handleWidget(ctx) {
     return buildMainWidget(
       title,
       data,
-      false
+      false,
+      COLORS
     );
   }
 
@@ -1804,7 +1948,9 @@ async function handleWidget(ctx) {
   return buildSmall(
     title,
     data,
-    false
+    false,
+    COLORS,
+    isGlass
   );
 }
 
