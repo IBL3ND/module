@@ -73,16 +73,15 @@ function saveRequest(ctx, appMethod, data, methodType) {
 
 function extractAnalyticsOpenid(url) {
   // 从 bigdata-behaviordata 的 data= 参数里解 base64 取 openid
+  // 注意：Egern 是 JavaScriptCore，没有 Node 的 Buffer，用 atob
   try {
     const m = url.match(/[?&]data=([^&]+)/);
     if (!m) return '';
-    const b64 = decodeURIComponent(m[1]);
-    // base64 可能带 URL 安全字符
-    const norm = b64.replace(/-/g, '+').replace(/_/g, '/');
-    const json = Buffer.from(norm, 'base64').toString('utf8');
-    const j = JSON.parse(json);
-    const props = j.properties || {};
-    return props.openid || '';
+    const b64 = decodeURIComponent(m[1]).replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64);
+    // openid 是 ASCII hex，直接正则提取，避免 UTF-8 解码问题
+    const om = bin.match(/"openid":"([0-9a-fA-F]+)"/);
+    return om ? om[1] : '';
   } catch (e) {
     return '';
   }
