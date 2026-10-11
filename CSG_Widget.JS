@@ -155,8 +155,37 @@ async function handleKeepAlive(ctx) {
 
 /* ---------- 小组件 ---------- */
 
+/* 透明/经典样式模式：glass（默认透明）| classic（经典纯色） */
+function getStyleMode(ctx) {
+  const value = String((ctx.env && ctx.env.WIDGET_STYLE) || "glass").trim().toLowerCase();
+  return value === "classic" ? "classic" : "glass";
+}
+
+function getColors(isGlass) {
+  return {
+    bg: isGlass ? undefined : { light: "#FFFFFF", dark: "#2C2C2E" },
+    border: isGlass
+      ? { light: "rgba(255, 255, 255, 0.2)", dark: "rgba(255, 255, 255, 0.12)" }
+      : { light: "#E5E5EA", dark: "#3A3A3C" },
+    title: isGlass
+      ? { light: "rgba(255, 255, 255, 0.8)", dark: "rgba(247, 247, 248, 0.7)" }
+      : { light: "#666666", dark: "#8E8E93" },
+    value: isGlass
+      ? { light: "#FFFFFF", dark: "#F7F7F8" }
+      : { light: "#1C1C1E", dark: "#FFFFFF" },
+    time: isGlass
+      ? { light: "rgba(255, 255, 255, 0.7)", dark: "rgba(247, 247, 248, 0.6)" }
+      : { light: "#999999", dark: "#666666" },
+    error: { light: "#FF3B30", dark: "#FF453A" },
+    capsuleBg: isGlass
+      ? { light: "rgba(255, 255, 255, 0.18)", dark: "rgba(255, 255, 255, 0.12)" }
+      : { light: "#F5F5F7", dark: "#3A3A3C" },
+    accent: { light: "#FF9500", dark: "#FF9F0A" },
+  };
+}
+
 /* 小尺寸专用：圆形图标 + 数值 + 说明 的横条 */
-function smallRow(color, symbol, glyph, value, unit, label) {
+function smallRow(color, symbol, glyph, value, unit, label, isGlass) {
   const iconChild = symbol
     ? {
         type: "image",
@@ -179,7 +208,9 @@ function smallRow(color, symbol, glyph, value, unit, label) {
     gap: 8,
     flex: 1,
     padding: [4, 8, 4, 8],
-    backgroundColor: { light: color + "1F", dark: color + "33" },
+    backgroundColor: isGlass
+      ? { light: "rgba(255, 255, 255, 0.18)", dark: "rgba(255, 255, 255, 0.12)" }
+      : { light: color + "1F", dark: color + "33" },
     borderRadius: 14,
     children: [
       {
@@ -190,7 +221,7 @@ function smallRow(color, symbol, glyph, value, unit, label) {
         width: 30,
         height: 30,
         borderRadius: 15,
-        backgroundColor: color,
+        backgroundColor: isGlass ? "rgba(0, 0, 0, 0.15)" : color,
         children: [iconChild],
       },
       {
@@ -204,8 +235,8 @@ function smallRow(color, symbol, glyph, value, unit, label) {
             alignItems: "center",
             gap: 3,
             children: [
-              { type: "text", text: String(value), font: { size: "title3", weight: "bold" }, textColor: color, maxLines: 1, minScale: 0.5 },
-              { type: "text", text: String(unit), font: { size: "caption1", weight: "semibold" }, textColor: color, maxLines: 1 },
+              { type: "text", text: String(value), font: { size: "title3", weight: "bold" }, textColor: isGlass ? { light: "#FFFFFF", dark: "#F7F7F8" } : color, maxLines: 1, minScale: 0.5 },
+              { type: "text", text: String(unit), font: { size: "caption1", weight: "semibold" }, textColor: isGlass ? { light: "rgba(255, 255, 255, 0.8)", dark: "rgba(247, 247, 248, 0.7)" } : color, maxLines: 1 },
               { type: "spacer" },
             ],
           },
@@ -214,7 +245,7 @@ function smallRow(color, symbol, glyph, value, unit, label) {
             direction: "row",
             alignItems: "center",
             children: [
-              { type: "text", text: String(label), font: { size: "caption2", weight: "medium" }, textColor: color + "B3", maxLines: 1, minScale: 0.7 },
+              { type: "text", text: String(label), font: { size: "caption2", weight: "medium" }, textColor: isGlass ? { light: "rgba(255, 255, 255, 0.7)", dark: "rgba(247, 247, 248, 0.6)" } : color + "B3", maxLines: 1, minScale: 0.7 },
               { type: "spacer" },
             ],
           },
@@ -304,16 +335,9 @@ async function handleWidget(ctx) {
     (ctx.env.Token || "").trim() ||
     (ctx.storage.get("csg_token") || "").trim();
 
-  const colors = {
-    bg:        { light: "#FFFFFF", dark: "#2C2C2E" },
-    border:    { light: "#E5E5EA", dark: "#3A3A3C" },
-    title:     { light: "#666666", dark: "#8E8E93" },
-    value:     { light: "#1C1C1E", dark: "#FFFFFF" },
-    time:      { light: "#999999", dark: "#666666" },
-    error:     { light: "#FF3B30", dark: "#FF453A" },
-    capsuleBg: { light: "#F5F5F7", dark: "#3A3A3C" },
-    accent:    { light: "#FF9500", dark: "#FF9F0A" },
-  };
+  const styleMode = getStyleMode(ctx);
+  const isGlass = styleMode === "glass";
+  const colors = getColors(isGlass);
 
   let data = {
     yst:   { title: "昨日用电", value: "--", unit: "度" },
@@ -435,24 +459,24 @@ async function handleWidget(ctx) {
 
   // ═══════════ 小尺寸专用布局（仅 systemSmall 生效，其他尺寸不受影响）═══════════
   if (isSmall) {
-    return {
+    const smallWidget = {
       type: "widget",
-      backgroundColor: colors.bg,
       padding: [10, 10, 10, 10],
       gap: 6,
       refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       children: [
-        smallRow("#E8651F", "sf-symbol:bolt.fill", "", data.yst.value, data.yst.unit, data.yst.title),
-        smallRow("#4DA6F0", "sf-symbol:calendar", "", data.total.value, data.total.unit, data.total.title),
-        smallRow("#55C759", null, "¥", data.bal.value, data.bal.unit, data.bal.title),
+        smallRow("#E8651F", "sf-symbol:bolt.fill", "", data.yst.value, data.yst.unit, data.yst.title, isGlass),
+        smallRow("#4DA6F0", "sf-symbol:calendar", "", data.total.value, data.total.unit, data.total.title, isGlass),
+        smallRow("#55C759", null, "¥", data.bal.value, data.bal.unit, data.bal.title, isGlass),
       ],
     };
+    if (colors.bg) smallWidget.backgroundColor = colors.bg;
+    return smallWidget;
   }
   // ═══════════ 小尺寸专用布局结束 ═══════════
 
-  return {
+  const mainWidget = {
     type: "widget",
-    backgroundColor: colors.bg,
     padding: isSmall ? [10, 12, 10, 12] : [10, 14, 10, 14],
     gap: isSmall ? 6 : 12,
     refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
@@ -520,6 +544,8 @@ async function handleWidget(ctx) {
       },
     ],
   };
+  if (colors.bg) mainWidget.backgroundColor = colors.bg;
+  return mainWidget;
 }
 
 /* ---------- Egern 入口：单文件三模式 ----------
