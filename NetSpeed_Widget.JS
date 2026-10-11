@@ -9,12 +9,14 @@ function getStyleMode(ctx) {
 
 function getColors(isGlass) {
   return {
-    bg: isGlass ? undefined : { light: '#FFFFFF', dark: '#2C2C2E' },
+    bg: isGlass
+      ? { light: 'rgba(255,255,255,0.25)', dark: 'rgba(0,0,0,0.25)' }
+      : { light: '#FFFFFF', dark: '#2C2C2E' },
     secondary: isGlass
-      ? { light: 'rgba(255,255,255,0.7)', dark: 'rgba(247,247,248,0.6)' }
+      ? { light: 'rgba(0,0,0,0.6)', dark: 'rgba(255,255,255,0.7)' }
       : { light: '#8E8E93', dark: '#8E8E93' },
     muted: isGlass
-      ? { light: 'rgba(255,255,255,0.8)', dark: 'rgba(247,247,248,0.7)' }
+      ? { light: 'rgba(0,0,0,0.45)', dark: 'rgba(255,255,255,0.55)' }
       : { light: '#6B6B6B', dark: '#A1A1A6' },
   };
 }
@@ -164,9 +166,7 @@ export default async function(ctx) {
     ]
   };
 
-  if (COLORS.bg) {
-    widgetConfig.backgroundColor = COLORS.bg;
-  }
+  widgetConfig.backgroundColor = COLORS.bg;
 
   return widgetConfig;
 }
