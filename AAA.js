@@ -6,41 +6,15 @@
  *   3. schedule 类型 → 定时保活
  *
  * 登录方式（两种，密码登录优先）：
- *   A. 密码登录（推荐）：在小组件环境变量里填
- *        CT_PHONE=手机号
- *        CT_PASSWORD=服务密码
- *        CT_DEVICE_ID=设备ID（可选，不填自动生成）
+ *   A. 密码登录（推荐）：在模块里填
+ *        手机号 + 服务密码
  *      脚本用电信 App 官方接口（RSA 加密）登录拿 token，
  *      token 失效时自动重新登录，全程不用手动干预。
- *   B. Cookie 模式（兼容旧版）：不填上面三个变量时，
+ *      设备 ID 由脚本在本机自动生成（16 位十六进制，真机格式）
+ *      并持久化保存，全程不经过任何第三方服务器。
+ *   B. Cookie 模式（兼容旧版）：不填上面三个值时，
  *      走原来的 e.dlife.cn 抓包逻辑（https://e.dlife.cn 登录一次）。
- *
- * 环境变量：
- *   CT_PHONE / CT_PASSWORD / CT_DEVICE_ID
- *   CT_LOGIN_URL
- *   CT_COOKIE
- *   CT_SHOW_USED_FLOW
- *   CT_FILTER_ORIENTATE_FLOW
- *   CT_TITLE
- *
- * 数据来源：
- *   密码登录：https://appgologin.189.cn:9031（登录）
- *             https://appfuwu.189.cn:9021/query/qryImportantData（查数据）
- *   Cookie 模式：https://e.dlife.cn/user/package_detail.do
- *                https://e.dlife.cn/user/balance.do
- *
- * 登录过期处理：
- *   密码登录：token 失效自动重登；只有"密码错误/账号异常"导致登录失败
- *   时才通知一次并显示错误页。断网时用缓存顶，标题栏显示"缓存 HH:mm"。
- *   Cookie 模式：服务器拒绝 cookie（非 200 / 非 JSON / 异常载荷）时视为
- *   登录过期，小组件显示"登录已过期"错误页（点小组件可直接跳登录页）
- *   并通知一次，不再静默展示旧数据；仅当"连不上服务器"（断网/超时）
- *   时才用缓存顶一下，此时标题栏会显示"缓存 HH:mm"以示区别。
- *
- * 保活模式（schedule 定时任务）：
- *   cron 每 20 分钟执行一次。密码登录模式下查一次数据接口
- *   （token 失效会自动重登）；cookie 模式下 ping 一次 package_detail.do。
- *   成功/失败都不通知不写缓存，下次小组件刷新会正常处理显示和过期提醒。
+ *      注意：e.dlife.cn 会话约 48 小时绝对过期，保活续不了命。
  */
 
 const URLS = {
@@ -203,7 +177,9 @@ async function fetchJson(ctx, url, cookie) {
 
 
 // ==================== 密码登录（电信 App 官方接口） ====================
-// 手机号 + 服务密码 → RSA 加密登录拿 token，token 失效自动重登。
+// 手机号 + 服务密码 + 已注册的 androidId → RSA 加密登录拿 token。
+// androidId 获取：https://telecom.nufe.ccwu.cc（短信验证注册，一次性）。
+// 注意：用随机设备 ID 可能被服务端拒绝，务必用注册来的真 androidId。
 // 纯 JS 实现 RSA（PKCS#1 v1.5），不依赖 WebView。
 
 const TOKEN_URLS = {
@@ -253,7 +229,6 @@ function rsaB64Encode(bytes) {
   return out;
 }
 
-// 最小 DER 解析器：只够读 X.509 RSA 公钥
 function rsaDerRead(bytes, pos) {
   const tag = bytes[pos];
   let len = bytes[pos + 1];
@@ -261,9 +236,7 @@ function rsaDerRead(bytes, pos) {
   if (len & 0x80) {
     const nBytes = len & 0x7f;
     len = 0;
-    for (let i = 0; i < nBytes; i++) {
-      len = len * 256 + bytes[off++];
-    }
+    for (let i = 0; i < nBytes; i++) len = len * 256 + bytes[off++];
   }
   return { tag, start: off, end: off + len, next: off + len };
 }
@@ -278,7 +251,7 @@ function rsaParsePublicKey(pem) {
   const alg = rsaDerRead(bytes, pos);
   pos = alg.next;
   const bitStr = rsaDerRead(bytes, pos);
-  pos = bitStr.start + 1; // 跳过 BIT STRING 的未使用 bit 数
+  pos = bitStr.start + 1;
   const inner = rsaDerRead(bytes, pos);
   pos = inner.start;
   const modTlv = rsaDerRead(bytes, pos);
@@ -291,7 +264,6 @@ function rsaParsePublicKey(pem) {
   };
   const n = toBigInt(bytes.slice(modTlv.start, modTlv.end));
   const e = toBigInt(bytes.slice(expTlv.start, expTlv.end));
-  // k 按模数实际位长算（DER INTEGER 可能有前导 0x00）
   const k = Math.ceil(n.toString(2).length / 8);
   return { n, e, k };
 }
@@ -308,23 +280,17 @@ function rsaModPow(base, exp, mod) {
   return result;
 }
 
-// PKCS#1 v1.5 type-2 填充后加密，返回 base64（与 JSEncrypt 输出一致）
 function rsaEncrypt(publicKeyPem, text) {
   const { n, e, k } = rsaParsePublicKey(publicKeyPem);
   const src = String(text);
   const msgBytes = [];
   for (let i = 0; i < src.length; i++) {
     const code = src.charCodeAt(i);
-    if (code < 0x80) {
-      msgBytes.push(code);
-    } else if (code < 0x800) {
-      msgBytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
-    } else {
-      msgBytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
-    }
+    if (code < 0x80) msgBytes.push(code);
+    else if (code < 0x800) msgBytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+    else msgBytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
   }
   if (msgBytes.length > k - 11) throw new Error('RSA: 明文过长');
-  // EM = 0x00 || 0x02 || PS(随机非零) || 0x00 || M
   const em = new Array(k).fill(0);
   em[1] = 0x02;
   const psLen = k - msgBytes.length - 3;
@@ -338,38 +304,47 @@ function rsaEncrypt(publicKeyPem, text) {
   let hex = '';
   for (const b of em) hex += b.toString(16).padStart(2, '0');
   const c = rsaModPow(BigInt('0x' + hex), e, n);
-  let cHex = c.toString(16).padStart(k * 2, '0');
+  const cHex = c.toString(16).padStart(k * 2, '0');
   const cBytes = [];
   for (let i = 0; i < cHex.length; i += 2) cBytes.push(parseInt(cHex.substr(i, 2), 16));
   return rsaB64Encode(cBytes);
 }
 
-// 手机号/密码的简单混淆（charCode+2），与官方 App 一致
 function transNumber(str, encode = true) {
   return [...String(str)]
     .map((c) => String.fromCharCode((c.charCodeAt(0) + (encode ? 2 : -2)) & 0xffff))
     .join('');
 }
 
-// 北京时间戳 yyyyMMddHHmmss（与设备时区无关）
 function beijingTimestamp() {
   const d = new Date(Date.now() + 8 * 3600 * 1000);
   const p = (n) => String(n).padStart(2, '0');
-  return (
-    d.getUTCFullYear() +
-    p(d.getUTCMonth() + 1) +
-    p(d.getUTCDate()) +
-    p(d.getUTCHours()) +
-    p(d.getUTCMinutes()) +
-    p(d.getUTCSeconds())
-  );
+  return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) +
+    p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds());
 }
 
-async function telecomLogin(ctx, phone, password) {
-  const deviceId = (ctx.env.CT_DEVICE_ID || '').trim();
+// 生成并持久化一个格式正确的 androidId（16 位十六进制，与真机一致）。
+// 存下来长期用，避免每次登录换 ID 被服务端当成新设备。
+// 全程本机生成，不经过任何第三方服务器。
+function getOrCreateDeviceId(ctx, overrideId) {
+  const manual = (overrideId || '').trim();
+  if (/^[0-9a-fA-F]{16}$/.test(manual)) return manual.toLowerCase();
+  let id = (ctx.storage.get('ct_device_id') || '').trim();
+  if (!/^[0-9a-f]{16}$/.test(id)) {
+    const hex = '0123456789abcdef';
+    id = '';
+    for (let i = 0; i < 16; i++) id += hex[Math.floor(Math.random() * 16)];
+    ctx.storage.set('ct_device_id', id);
+  }
+  return id;
+}
+
+async function telecomLogin(ctx, phone, password, deviceId) {
   const uuid = String(Math.floor(Math.random() * 9e15 + 1e15));
   const ts = beijingTimestamp();
-  const encryptText = `iPhone 14 15.4.0${deviceId || uuid.slice(0, 12)}${phone}${ts}${password}0$$$0.`;
+  // 设备 ID：优先用填入的真机 ID，否则用本机生成并持久化的 16 位十六进制 ID
+  const devId = getOrCreateDeviceId(ctx, deviceId);
+  const encryptText = `iPhone 14 15.4.0${devId}${phone}${ts}${password}0$$$0.`;
   const encrypted = rsaEncrypt(TELECOM_RSA_PUBLIC_KEY, encryptText);
 
   const body = {
@@ -382,7 +357,7 @@ async function telecomLogin(ctx, phone, password) {
         deviceUid: uuid.slice(0, 16),
         phoneNum: transNumber(phone),
         authentication: transNumber(password),
-        androidId: deviceId ? transNumber(deviceId) : '',
+        androidId: devId ? transNumber(devId) : '',
         loginAuthCipherAsymmertric: encrypted,
       },
       attach: 'iPhone',
@@ -406,30 +381,18 @@ async function telecomLogin(ctx, phone, password) {
       timeout: 15000,
     });
   } catch (e) {
-    // 连不上服务器：瞬时故障
     const err = new Error(`network: ${TOKEN_URLS.login}`);
     err.transient = true;
     throw err;
   }
-
-  if (!resp || resp.status !== 200) {
-    throw new Error(`HTTP ${resp ? resp.status : 'no-response'}: login`);
-  }
-
+  if (!resp || resp.status !== 200) throw new Error(`HTTP ${resp ? resp.status : 'no-response'}: login`);
   let data;
-  try {
-    data = await resp.json();
-  } catch (e) {
-    throw new Error('not-json: login');
-  }
-
+  try { data = await resp.json(); } catch (e) { throw new Error('not-json: login'); }
   if (data?.responseData?.resultCode !== '0000') {
-    // 密码错误 / 账号异常：登录失败（非瞬时故障）
     const err = new Error(data?.responseData?.resultDesc || '登录失败');
     err.loginFailed = true;
     throw err;
   }
-
   const r = data.responseData.data.loginSuccessResult || {};
   ctx.storage.set('ct_token', r.token || '');
   ctx.storage.set('ct_city_code', r.cityCode || '');
@@ -442,14 +405,10 @@ async function fetchImportantData(ctx, phone) {
   const cityCode = ctx.storage.get('ct_city_code') || '';
   const provinceCode = ctx.storage.get('ct_province_code') || '';
   const ts = beijingTimestamp();
-
   const body = {
     content: {
       fieldData: {
-        provinceCode,
-        cityCode,
-        shopId: '20002',
-        isChinatelecom: '0',
+        provinceCode, cityCode, shopId: '20002', isChinatelecom: '0',
         account: transNumber(phone),
       },
       attach: 'test',
@@ -465,7 +424,6 @@ async function fetchImportantData(ctx, phone) {
       token,
     },
   };
-
   let resp;
   try {
     resp = await ctx.http.post(TOKEN_URLS.data, {
@@ -478,41 +436,23 @@ async function fetchImportantData(ctx, phone) {
     err.transient = true;
     throw err;
   }
-
-  if (!resp || resp.status !== 200) {
-    throw new Error(`HTTP ${resp ? resp.status : 'no-response'}: data`);
-  }
-
+  if (!resp || resp.status !== 200) throw new Error(`HTTP ${resp ? resp.status : 'no-response'}: data`);
   let data;
-  try {
-    data = await resp.json();
-  } catch (e) {
-    throw new Error('not-json: data');
-  }
-
+  try { data = await resp.json(); } catch (e) { throw new Error('not-json: data'); }
   if (!data?.responseData) {
-    // token 失效：需要重新登录
     const err = new Error('token-expired');
     err.tokenExpired = true;
     throw err;
   }
-
   return data.responseData.data;
 }
 
-// 把 189.cn 接口数据映射成小组件统一的 ds 结构（与 parseTelecom 输出一致）
-// 流量数值 /1024 = MB（与 formatFlow 的换算一致）；
-// 通用/定向开关：接口原生区分 commonFlow（通用）和 totalAmount（全部），
-// 定向 = 全部 - 通用。
 function parseTokenData(apiData, opts) {
   const { showUsedFlow, showGeneralFlow, showDirectionalFlow } = opts;
-
   const num = (v) => {
     const n = parseFloat(v);
     return Number.isFinite(n) ? n : 0;
   };
-
-  // 话费（元）
   const balanceRaw = apiData?.balanceInfo?.indexBalanceDataInfo?.balance ?? apiData?.balance;
   const balanceNum = Number(balanceRaw);
   const fee = {
@@ -520,28 +460,20 @@ function parseTokenData(apiData, opts) {
     number: Number.isFinite(balanceNum) ? balanceNum.toFixed(2) : '0.00',
     unit: '元',
   };
-
-  // 流量
   const common = apiData?.flowInfo?.commonFlow || {};
   const total = apiData?.flowInfo?.totalAmount || {};
-  let usedRaw = 0;
-  let balanceRawFlow = 0;
+  let usedRaw = 0, balanceRawFlow = 0;
   if (showGeneralFlow && showDirectionalFlow) {
-    usedRaw = num(total.used);
-    balanceRawFlow = num(total.balance);
+    usedRaw = num(total.used); balanceRawFlow = num(total.balance);
   } else if (showGeneralFlow) {
-    usedRaw = num(common.used);
-    balanceRawFlow = num(common.balance);
+    usedRaw = num(common.used); balanceRawFlow = num(common.balance);
   } else if (showDirectionalFlow) {
     usedRaw = Math.max(0, num(total.used) - num(common.used));
     balanceRawFlow = Math.max(0, num(total.balance) - num(common.balance));
   }
-  // 两个开关都关：显示 0
   const totalRaw = usedRaw + balanceRawFlow;
-
   const balanceFlow = formatFlow(balanceRawFlow);
   const usedFlow = formatFlow(usedRaw);
-
   const flow = {
     title: '剩余流量',
     number: balanceFlow.amount,
@@ -549,19 +481,15 @@ function parseTokenData(apiData, opts) {
     percent: +((balanceRawFlow / (totalRaw || 1)) * 100).toFixed(2),
     color: FLOW_COLOR,
   };
-
   if (showUsedFlow) {
     flow.title = '已用流量';
     flow.number = usedFlow.amount;
     flow.unit = usedFlow.unit;
   }
-
-  // 语音（分钟）
   const vInfo = apiData?.voiceInfo?.voiceDataInfo || {};
   const voiceTotal = num(vInfo.total ?? apiData?.totalVoice);
   const voiceUsed = num(vInfo.used ?? apiData?.usedVoice);
   const voiceBalance = num(vInfo.balance ?? voiceTotal - voiceUsed);
-
   const voice = {
     title: '剩余语音',
     number: `${Math.round(voiceBalance)}`,
@@ -569,21 +497,16 @@ function parseTokenData(apiData, opts) {
     percent: +((voiceBalance / (voiceTotal || 1)) * 100).toFixed(2),
     color: VOICE_COLOR,
   };
-
   return { fee, flow, voice, updatedAt: Date.now() };
 }
 
-// 密码登录失败通知：同一个手机号只通知一次，登录成功后清除标记
 function notifyTokenLoginFailedOnce(ctx, phone) {
   const key = 'ct_token_login_notified';
   const marker = phone || 'none';
   if (ctx.storage.get(key) === marker) return;
   ctx.storage.set(key, marker);
   try {
-    ctx.notify({
-      title: '中国电信',
-      body: '密码登录失败，请检查手机号和服务密码是否正确',
-    });
+    ctx.notify({ title: '中国电信', body: '密码登录失败，请检查手机号、服务密码和 androidId 是否正确' });
   } catch (e) {}
 }
 
@@ -591,19 +514,11 @@ function clearTokenLoginFlag(ctx) {
   ctx.storage.delete('ct_token_login_notified');
 }
 
-// 登录失败冷却：密码错误后 30 秒内不再向服务端发登录请求，
-// 避免短时间内连续试错触发服务端的"认证错误超 10 次锁定 1 小时"。
-// 手机号或密码变了则清除冷却（用户修正了密码）。
 function loginCooldownActive(ctx, phone, password) {
   const key = `${phone}:${password}`;
   const failKey = ctx.storage.get('ct_login_fail_key') || '';
   const failTs = Number(ctx.storage.get('ct_login_fail_ts') || 0);
-
-  if (failKey && failKey === key) {
-    return Date.now() - failTs < 30 * 1000;
-  }
-
-  // 账号/密码变了：清除旧冷却记录
+  if (failKey && failKey === key) return Date.now() - failTs < 30 * 1000;
   ctx.storage.delete('ct_login_fail_key');
   ctx.storage.delete('ct_login_fail_ts');
   return false;
@@ -619,57 +534,42 @@ function clearLoginFailed(ctx) {
   ctx.storage.delete('ct_login_fail_ts');
 }
 
-// 密码登录模式的数据加载：token 失效自动重登；断网走缓存
-async function loadDataByToken(ctx, phone, password, settings) {
+async function loadDataByToken(ctx, phone, password, deviceId, settings) {
   const configured = true;
-
   try {
     let apiData;
     try {
       apiData = await fetchImportantData(ctx, phone);
     } catch (e) {
       if (e && e.tokenExpired) {
-        // token 失效：自动重新登录一次（冷却期内直接报错，不再撞服务端）
         if (loginCooldownActive(ctx, phone, password)) {
           const coolErr = new Error('密码多次错误，冷却中（30秒后再试）');
           coolErr.loginFailed = true;
           coolErr.coolingDown = true;
           throw coolErr;
         }
-        await telecomLogin(ctx, phone, password);
+        await telecomLogin(ctx, phone, password, deviceId);
         clearLoginFailed(ctx);
         apiData = await fetchImportantData(ctx, phone);
-      } else {
-        throw e;
-      }
+      } else throw e;
     }
-
     const ds = parseTokenData(apiData, settings);
     ctx.storage.setJSON('ct_datasource', ds);
     clearTokenLoginFlag(ctx);
-
     return { configured, ds, fromCache: false, authFailed: false };
   } catch (e) {
     if (e && e.transient) {
-      // 断网：用缓存顶
       const cached = ctx.storage.getJSON('ct_datasource');
       return { configured, ds: cached || null, fromCache: !!cached, authFailed: false };
     }
     if (e && e.loginFailed) {
-      // 密码错误 / 账号异常：记冷却 + 通知一次
       if (!e.coolingDown) markLoginFailed(ctx, phone, password);
       notifyTokenLoginFailedOnce(ctx, phone);
       return { configured, ds: null, fromCache: false, authFailed: 'token', authMessage: e.message };
     }
-    // 其他异常：有缓存用缓存顶一下并标过期，无缓存则报错
     const cached = ctx.storage.getJSON('ct_datasource');
-    return {
-      configured,
-      ds: cached || null,
-      fromCache: !!cached,
-      authFailed: cached ? false : 'token',
-      authMessage: e && e.message,
-    };
+    return { configured, ds: cached || null, fromCache: !!cached,
+      authFailed: cached ? false : 'token', authMessage: e && e.message };
   }
 }
 
@@ -984,12 +884,14 @@ async function loadData(ctx) {
   };
 
   // 密码登录优先：填了手机号 + 服务密码就走 App 官方接口（token 自动续期）；
+  // androidId 务必填写在 https://telecom.nufe.ccwu.cc 注册来的真设备 ID，
   // 否则走原来的 cookie 模式（兼容旧版）。
   const phone = (ctx.env.CT_PHONE || '').trim();
   const password = (ctx.env.CT_PASSWORD || '').trim();
+  const deviceId = (ctx.env.CT_DEVICE_ID || '').trim();
 
   if (phone && password) {
-    return loadDataByToken(ctx, phone, password, settings);
+    return loadDataByToken(ctx, phone, password, deviceId, settings);
   }
 
 
@@ -2287,8 +2189,6 @@ async function handleWidget(ctx) {
 
 
   // 登录失效：不再展示旧数据，直接提示处理
-  // authFailed === 'token'：密码登录模式（密码错误/账号异常）
-  // authFailed === true：cookie 模式（cookie 被服务器拒绝）
   if (authFailed) {
 
     if (authFailed === 'token') {
@@ -2297,7 +2197,7 @@ async function handleWidget(ctx) {
         title,
         authMessage
           ? `登录失败：${authMessage}`
-          : '登录失败：请检查模块里的手机号和服务密码'
+          : '登录失败：请检查模块里的手机号、服务密码和 androidId'
       );
     }
 
@@ -2393,6 +2293,12 @@ export default async function(ctx) {
 // Egern 定时任务的脚本超时被直接终止。
 // 保活只需要一次真实触达；成功/失败都不通知不写缓存，
 // 下次小组件刷新会正常处理显示和过期提醒。
+// 定时保活：轻量 ping 一次续 session。
+//
+// 注意：不要调完整 loadData——它最坏要串行发 5 个请求（每个 15s 超时），
+// 累计时长超过 Egern 定时任务的脚本超时会被直接终止。
+// 保活只需要一次真实触达；成功/失败都不通知不写缓存，
+// 下次小组件刷新会正常处理显示和过期提醒。
 async function handleKeepAlive(ctx) {
 
   const phone =
@@ -2401,10 +2307,11 @@ async function handleKeepAlive(ctx) {
   const password =
     (ctx.env.CT_PASSWORD || '').trim();
 
+  const deviceId =
+    (ctx.env.CT_DEVICE_ID || '').trim();
+
   if (phone && password) {
 
-    // 密码登录模式：查一次数据接口；token 失效时自动重登一次
-    // 冷却期内不发登录请求
     try {
 
       try {
@@ -2429,7 +2336,8 @@ async function handleKeepAlive(ctx) {
           await telecomLogin(
             ctx,
             phone,
-            password
+            password,
+            deviceId
           );
 
           clearLoginFailed(ctx);
