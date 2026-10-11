@@ -42,46 +42,47 @@ const FLOW_COLOR = '#FF6620';
 const VOICE_COLOR = '#78C100';
 
 
-function getStyleMode(ctx) {
-  const value = String(ctx.env?.WIDGET_STYLE || 'glass').trim().toLowerCase();
-  return value === 'classic' ? 'classic' : 'glass';
-}
+const COLORS = {
+  bg: {
+    light: '#FFFFFF',
+    dark: '#2C2C2E',
+  },
 
-function getColors(isGlass) {
-  return {
-    bg: isGlass ? undefined : { light: '#FFFFFF', dark: '#2C2C2E' },
+  border: {
+    light: '#E5E5EA',
+    dark: '#3A3A3C',
+  },
 
-    border: isGlass
-      ? { light: 'rgba(255, 255, 255, 0.2)', dark: 'rgba(255, 255, 255, 0.12)' }
-      : { light: '#E5E5EA', dark: '#3A3A3C' },
+  title: {
+    light: '#666666',
+    dark: '#8E8E93',
+  },
 
-    title: isGlass
-      ? { light: 'rgba(255, 255, 255, 0.8)', dark: 'rgba(247, 247, 248, 0.7)' }
-      : { light: '#666666', dark: '#8E8E93' },
+  value: {
+    light: '#1C1C1E',
+    dark: '#FFFFFF',
+  },
 
-    value: isGlass
-      ? { light: '#FFFFFF', dark: '#F7F7F8' }
-      : { light: '#1C1C1E', dark: '#FFFFFF' },
+  time: {
+    light: '#999999',
+    dark: '#666666',
+  },
 
-    time: isGlass
-      ? { light: 'rgba(255, 255, 255, 0.7)', dark: 'rgba(247, 247, 248, 0.6)' }
-      : { light: '#999999', dark: '#666666' },
+  error: {
+    light: '#FF3B30',
+    dark: '#FF453A',
+  },
 
-    error: {
-      light: '#FF3B30',
-      dark: '#FF453A',
-    },
+  capsuleBg: {
+    light: '#F5F5F7',
+    dark: '#3A3A3C',
+  },
 
-    capsuleBg: isGlass
-      ? { light: 'rgba(255, 255, 255, 0.18)', dark: 'rgba(255, 255, 255, 0.12)' }
-      : { light: '#F5F5F7', dark: '#3A3A3C' },
-
-    accent: {
-      light: '#FF6620',
-      dark: '#FF854D',
-    },
-  };
-}
+  accent: {
+    light: '#FF6620',
+    dark: '#FF854D',
+  },
+};
 
 
 function formatFlow(flow) {
@@ -655,8 +656,7 @@ function clearExpiredFlag(ctx) {
 function makeCapsule(
   title,
   value,
-  unit,
-  COLORS
+  unit
 ) {
 
   return {
@@ -776,8 +776,7 @@ function makeCapsule(
 function headerRow(
   title,
   ds,
-  fromCache,
-  COLORS
+  fromCache
 ) {
 
   const time =
@@ -897,13 +896,15 @@ function headerRow(
 function buildMainWidget(
   title,
   ds,
-  fromCache,
-  COLORS
+  fromCache
 ) {
 
-  const widgetConfig = {
+  return {
 
     type: 'widget',
+
+    backgroundColor:
+      COLORS.bg,
 
     padding: [
       10,
@@ -927,8 +928,7 @@ function buildMainWidget(
       headerRow(
         title,
         ds,
-        fromCache,
-        COLORS
+        fromCache
       ),
 
 
@@ -946,22 +946,19 @@ function buildMainWidget(
           makeCapsule(
             ds.fee.title,
             ds.fee.number,
-            ds.fee.unit,
-            COLORS
+            ds.fee.unit
           ),
 
           makeCapsule(
             ds.voice.title,
             ds.voice.number,
-            ds.voice.unit,
-            COLORS
+            ds.voice.unit
           ),
 
           makeCapsule(
             ds.flow.title,
             ds.flow.number,
-            ds.flow.unit,
-            COLORS
+            ds.flow.unit
           ),
         ],
       },
@@ -1000,12 +997,6 @@ function buildMainWidget(
       },
     ],
   };
-
-  if (COLORS.bg) {
-    widgetConfig.backgroundColor = COLORS.bg;
-  }
-
-  return widgetConfig;
 }
 
 /* 小尺寸专用：圆形图标 + 数值 + 说明 的横条 */
@@ -1015,8 +1006,7 @@ function smallRow(
   glyph,
   value,
   unit,
-  label,
-  isGlass
+  label
 ) {
 
   const iconChild =
@@ -1064,12 +1054,10 @@ function smallRow(
       8,
     ],
 
-    backgroundColor: isGlass
-      ? { light: 'rgba(255, 255, 255, 0.18)', dark: 'rgba(255, 255, 255, 0.12)' }
-      : {
-          light: color + '1F',
-          dark: color + '33',
-        },
+    backgroundColor: {
+      light: color + '1F',
+      dark: color + '33',
+    },
 
     borderRadius: 14,
 
@@ -1090,7 +1078,7 @@ function smallRow(
 
         borderRadius: 15,
 
-        backgroundColor: isGlass ? 'rgba(0, 0, 0, 0.15)' : color,
+        backgroundColor: color,
 
         children: [
           iconChild,
@@ -1127,7 +1115,7 @@ function smallRow(
                   weight: 'bold',
                 },
 
-                textColor: isGlass ? { light: '#FFFFFF', dark: '#F7F7F8' } : color,
+                textColor: color,
 
                 maxLines: 1,
 
@@ -1144,9 +1132,7 @@ function smallRow(
                   weight: 'semibold',
                 },
 
-                textColor: isGlass
-                  ? { light: 'rgba(255, 255, 255, 0.8)', dark: 'rgba(247, 247, 248, 0.7)' }
-                  : color,
+                textColor: color,
 
                 maxLines: 1,
               },
@@ -1176,9 +1162,7 @@ function smallRow(
                   weight: 'medium',
                 },
 
-                textColor: isGlass
-                  ? { light: 'rgba(255, 255, 255, 0.7)', dark: 'rgba(247, 247, 248, 0.6)' }
-                  : color + 'B3',
+                textColor: color + 'B3',
 
                 maxLines: 1,
 
@@ -1199,14 +1183,15 @@ function smallRow(
 function buildSmall(
   title,
   ds,
-  fromCache,
-  COLORS,
-  isGlass
+  fromCache
 ) {
 
-  const widgetConfig = {
+  return {
 
     type: 'widget',
+
+    backgroundColor:
+      COLORS.bg,
 
     padding: [
       10,
@@ -1231,8 +1216,7 @@ function buildSmall(
         '¥',
         ds.fee.number,
         ds.fee.unit,
-        ds.fee.title,
-        isGlass
+        ds.fee.title
       ),
 
       smallRow(
@@ -1241,8 +1225,7 @@ function buildSmall(
         '',
         ds.flow.number,
         ds.flow.unit,
-        ds.flow.title,
-        isGlass
+        ds.flow.title
       ),
 
       smallRow(
@@ -1251,17 +1234,10 @@ function buildSmall(
         '',
         ds.voice.number,
         ds.voice.unit,
-        ds.voice.title,
-        isGlass
+        ds.voice.title
       ),
     ],
   };
-
-  if (COLORS.bg) {
-    widgetConfig.backgroundColor = COLORS.bg;
-  }
-
-  return widgetConfig;
 }
 
 function buildLockScreen(
@@ -1487,13 +1463,15 @@ function buildLockScreen(
 function buildError(
   title,
   message,
-  url,
-  COLORS
+  url
 ) {
 
   const w = {
 
     type: 'widget',
+
+    backgroundColor:
+      COLORS.bg,
 
     padding: 14,
 
@@ -1629,10 +1607,6 @@ function buildError(
 
   if (url) {
     w.url = url;
-  }
-
-  if (COLORS.bg) {
-    w.backgroundColor = COLORS.bg;
   }
 
   return w;
@@ -1798,10 +1772,6 @@ async function handleWidget(ctx) {
     ).trim() ||
     '中国电信';
 
-  const styleMode = getStyleMode(ctx);
-  const isGlass = styleMode === 'glass';
-  const COLORS = getColors(isGlass);
-
 
   const {
     configured,
@@ -1816,8 +1786,7 @@ async function handleWidget(ctx) {
     return buildError(
       title,
       '未登录：在 Safari 打开 e.dlife.cn 登录一次',
-      URLS.login,
-      COLORS
+      URLS.login
     );
   }
 
@@ -1828,8 +1797,7 @@ async function handleWidget(ctx) {
     return buildError(
       title,
       '登录已过期：在 Safari 打开 e.dlife.cn 重新登录',
-      URLS.login,
-      COLORS
+      URLS.login
     );
   }
 
@@ -1838,9 +1806,7 @@ async function handleWidget(ctx) {
 
     return buildError(
       title,
-      '数据获取失败，请检查网络或重新登录',
-      null,
-      COLORS
+      '数据获取失败，请检查网络或重新登录'
     );
   }
 
@@ -1861,8 +1827,7 @@ async function handleWidget(ctx) {
     return buildMainWidget(
       title,
       ds,
-      fromCache,
-      COLORS
+      fromCache
     );
   }
 
@@ -1882,9 +1847,7 @@ async function handleWidget(ctx) {
   return buildSmall(
     title,
     ds,
-    fromCache,
-    COLORS,
-    isGlass
+    fromCache
   );
 }
 
