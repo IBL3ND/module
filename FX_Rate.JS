@@ -9,22 +9,24 @@ function getStyleMode(ctx) {
 
 function getColors(isGlass) {
   return {
-    bg: isGlass ? undefined : { light: "#FFFFFF", dark: "#2C2C2E" },
+    bg: isGlass
+      ? { light: "rgba(255,255,255,0.25)", dark: "rgba(0,0,0,0.25)" }
+      : { light: "#FFFFFF", dark: "#2C2C2E" },
     title: isGlass
-      ? { light: "#FFFFFF", dark: "#F7F7F8" }
+      ? { light: "#1A1A1A", dark: "#FFFFFF" }
       : { light: "#000000", dark: "#FFFFFF" },
     label: isGlass
-      ? { light: "#FFFFFF", dark: "#F7F7F8" }
+      ? { light: "#1A1A1A", dark: "#FFFFFF" }
       : { light: "#1C1C1E", dark: "#EBEBF5CC" },
     value: isGlass
-      ? { light: "#FFFFFF", dark: "#F7F7F8" }
+      ? { light: "#1A1A1A", dark: "#FFFFFF" }
       : { light: "#BF5900", dark: "#FFD60A" },
     secondary: isGlass
-      ? { light: "rgba(255,255,255,0.7)", dark: "rgba(247,247,248,0.6)" }
+      ? { light: "rgba(0,0,0,0.6)", dark: "rgba(255,255,255,0.7)" }
       : { light: "#86868B", dark: "#636366" },
     error: { light: "#FF3B30", dark: "#FF453A" },
     divider: isGlass
-      ? { light: "rgba(255,255,255,0.2)", dark: "rgba(255,255,255,0.15)" }
+      ? { light: "rgba(0,0,0,0.1)", dark: "rgba(255,255,255,0.2)" }
       : { light: "#00000010", dark: "#FFFFFF18" },
   };
 }
@@ -44,12 +46,9 @@ export default async function (ctx) {
     { code: "THB", label: "THB",        unit: 1,    flag: "🇹🇭" },
   ];
 
-  // 背景颜色：glass 模式不设（透明），classic 用纯色
-  const bgColor = COLORS.bg;
-
+  // 磨砂玻璃底：直接赋值
   function widgetWithBg(extra) {
-    const w = Object.assign({ type: "widget" }, extra);
-    if (bgColor) w.backgroundColor = bgColor;
+    const w = Object.assign({ type: "widget", backgroundColor: COLORS.bg }, extra);
     return w;
   }
 
