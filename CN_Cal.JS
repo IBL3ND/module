@@ -9,19 +9,21 @@ export default async function(ctx) {
   }
   function getColors(isGlass) {
     return {
-      bg: isGlass ? undefined : { light: '#FFFFFF', dark: '#1C1C1E' },
+      bg: isGlass
+        ? { light: 'rgba(255,255,255,0.25)', dark: 'rgba(0,0,0,0.25)' }
+        : { light: '#FFFFFF', dark: '#1C1C1E' },
       themeRed: { light: '#C83C3C', dark: '#C83C3C' },
       textRed: isGlass
-        ? { light: '#FF9E9E', dark: '#FF8A80' }
+        ? { light: '#D7000F', dark: '#FF9E9E' }
         : { light: '#C83C3C', dark: '#FF6B6B' },
       textMain: isGlass
-        ? { light: '#FFFFFF', dark: '#FFFFFF' }
+        ? { light: '#1A1A1A', dark: '#FFFFFF' }
         : { light: '#333333', dark: '#FFFFFF' },
       textSub: isGlass
-        ? { light: 'rgba(255,255,255,0.75)', dark: 'rgba(255,255,255,0.7)' }
+        ? { light: 'rgba(0,0,0,0.6)', dark: 'rgba(255,255,255,0.7)' }
         : { light: '#888888', dark: '#CCCCCC' },
       textFade: isGlass
-        ? { light: 'rgba(255,255,255,0.45)', dark: 'rgba(255,255,255,0.4)' }
+        ? { light: 'rgba(0,0,0,0.45)', dark: 'rgba(255,255,255,0.55)' }
         : { light: '#C7C7CC', dark: '#777777' },
     };
   }
@@ -169,7 +171,7 @@ export default async function(ctx) {
         }
       ]
     };
-    if (C.bg) smallWidget.backgroundColor = C.bg;
+    smallWidget.backgroundColor = C.bg;
     return smallWidget;
   }
 
@@ -354,6 +356,6 @@ export default async function(ctx) {
       }
     ]
   };
-  if (C.bg) mainWidget.backgroundColor = C.bg;
+  mainWidget.backgroundColor = C.bg;
   return mainWidget;
 }
