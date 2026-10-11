@@ -1,7 +1,30 @@
 /**
  * 全国彩票开奖结果 - Egern 小组件
  * 环境变量：名称填 彩票类型 值里填种类名称 双色球
+ * 小组件样式：WIDGET_STYLE=glass（默认透明）| classic（经典纯色）
  */
+
+// ── 小组件样式：glass（默认透明）| classic（经典纯色），由环境变量 WIDGET_STYLE 控制 ──
+function getStyleMode(ctx) {
+  const value = String(ctx.env?.WIDGET_STYLE || 'glass').trim().toLowerCase();
+  return value === 'classic' ? 'classic' : 'glass';
+}
+
+function getColors(isGlass) {
+  return {
+    bg:      isGlass ? undefined : { light: '#FFFFFF', dark: '#2C2C2E' },
+    text:    isGlass ? { light: '#FFFFFF', dark: '#FFFFFF' } : { light: '#111111', dark: '#FFFFFF' },
+    sub:     isGlass
+      ? { light: 'rgba(255,255,255,0.7)', dark: 'rgba(255,255,255,0.6)' }
+      : { light: '#8E8E93', dark: '#98989D' },
+    title:   isGlass ? { light: '#FFFFFF', dark: '#FFFFFF' } : { light: '#34C759', dark: '#30D158' },
+    date:    isGlass
+      ? { light: 'rgba(255,255,255,0.6)', dark: 'rgba(255,255,255,0.55)' }
+      : { light: '#C7C7CC', dark: '#636366' },
+    pool:    isGlass ? { light: '#FFFFFF', dark: '#FFFFFF' } : { light: '#FF9500', dark: '#FF9F0A' },
+  };
+}
+
 export default async function(ctx) {
   const LOTTERY_CONFIG = {
     '双色球': { index: 0, redCount: 6, blueCount: 1, redColor: '#FF3B30', blueColor: '#007AFF' },
@@ -18,14 +41,8 @@ export default async function(ctx) {
   const DEFAULT_LOTTERY = '七星彩';
   const API_URL = 'https://m.zhuying.com/api/lotapi/indexV2/1';
 
-  const C = {
-    bg:      { light: '#FFFFFF', dark: '#2C2C2E' },
-    text:    { light: '#111111', dark: '#FFFFFF' },
-    sub:     { light: '#8E8E93', dark: '#98989D' },
-    title:   { light: '#34C759', dark: '#30D158' },
-    date:    { light: '#C7C7CC', dark: '#636366' },
-    pool:    { light: '#FF9500', dark: '#FF9F0A' },
-  };
+  const isGlass = getStyleMode(ctx) === 'glass';
+  const C = getColors(isGlass);
 
   const lotteryNameInput = ctx.env['彩票类型'] || DEFAULT_LOTTERY;
   const lotteryConfig = LOTTERY_CONFIG[lotteryNameInput] || LOTTERY_CONFIG[DEFAULT_LOTTERY];
@@ -279,7 +296,7 @@ export default async function(ctx) {
     return {
       type: 'widget',
       refreshAfter: refreshTime,
-      backgroundColor: C.bg,
+      ...(C.bg ? { backgroundColor: C.bg } : {}),
       padding: 14,
       gap: 8,
       children: [
@@ -293,7 +310,7 @@ export default async function(ctx) {
   return {
     type: 'widget',
     refreshAfter: refreshTime,
-    backgroundColor: C.bg,
+    ...(C.bg ? { backgroundColor: C.bg } : {}),
     padding: 16,
     gap: 0,
     children: [
