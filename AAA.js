@@ -104,6 +104,15 @@ function handleCapture(ctx) {
   if (isNewOpenid) ctx.storage.set(STORE_OPENID, openid);
   saveRequest(ctx, appMethod, data, methodType);
 
+  // 调试：每次抓到都通知（带时间，确认脚本在跑）
+  const now = new Date();
+  const tstr = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+  ctx.notify(
+    '电信抓取',
+    `${tstr} ${isNewMethod ? '新接口' : '更新'}`,
+    `${appMethod.slice(0, 50)}\ndata长度: ${data.length}`
+  );
+
   if (isNewOpenid || isNewMethod) {
     const short = appMethod.length > 40 ? '…' + appMethod.slice(-37) : appMethod;
     ctx.notify(
@@ -130,17 +139,15 @@ function buildHeaders(openid, appMethod, methodType) {
   };
 }
 
-function replayRequest(ctx, openid, appMethod, reqInfo) {
-  return ctx.http.post(GATEWAY_URL, {
+async function replayRequest(ctx, openid, appMethod, reqInfo) {
+  const resp = await ctx.http.post(GATEWAY_URL, {
     headers: buildHeaders(openid, appMethod, reqInfo.methodType),
     body: JSON.stringify({ data: reqInfo.data }),
     timeout: 15000,
-  }).then(resp => {
-    if (!resp || resp.status !== 200) throw new Error(`HTTP ${resp ? resp.status : 'no-resp'}`);
-    const j = typeof resp.body === 'string' ? safeJsonParse(resp.body) : resp.body;
-    if (!j || j.success !== true) throw new Error('gateway error');
-    return j.data;
   });
+  const j = await resp.json();
+  if (!j || j.success !== true) throw new Error('gateway error');
+  return j.data;
 }
 
 /* ---------- 数据解析 ---------- */
