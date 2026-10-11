@@ -79,25 +79,31 @@ export default async function (ctx) {
   }
   function getColors(isGlass) {
     return {
-      bg: isGlass ? undefined : { light: "#FFFFFF", dark: "#1C1C1E" },
-      primary: isGlass ? { light: "#FFFFFF", dark: "#FFFFFF" } : { light: "#1A1A1A", dark: "#FFFFFF" },
+      bg: isGlass
+        ? { light: "rgba(255,255,255,0.25)", dark: "rgba(0,0,0,0.25)" }
+        : { light: "#FFFFFF", dark: "#1C1C1E" },
+      primary: isGlass
+        ? { light: "#1A1A1A", dark: "#FFFFFF" }
+        : { light: "#1A1A1A", dark: "#FFFFFF" },
       secondary: isGlass
-        ? { light: "rgba(255,255,255,0.75)", dark: "rgba(255,255,255,0.7)" }
+        ? { light: "rgba(0,0,0,0.6)", dark: "rgba(255,255,255,0.7)" }
         : { light: "#666666", dark: "#CCCCCC" },
       tertiary: isGlass
-        ? { light: "rgba(255,255,255,0.6)", dark: "rgba(255,255,255,0.55)" }
+        ? { light: "rgba(0,0,0,0.45)", dark: "rgba(255,255,255,0.55)" }
         : { light: "#999999", dark: "#888888" },
       card: isGlass
-        ? { light: "rgba(255,255,255,0.18)", dark: "rgba(255,255,255,0.12)" }
+        ? { light: "rgba(255,255,255,0.4)", dark: "rgba(255,255,255,0.18)" }
         : { light: "#F5F5F7", dark: "#2C2C2E" },
       cardBorder: isGlass
-        ? { light: "rgba(255,255,255,0.25)", dark: "rgba(255,255,255,0.18)" }
+        ? { light: "rgba(0,0,0,0.1)", dark: "rgba(255,255,255,0.2)" }
         : { light: "#E0E0E0", dark: "#3A3A3C" },
       p92: { light: "#FF9F0A", dark: "#FFB347" },
       p95: { light: "#FF6B35", dark: "#FF8A5C" },
       p98: { light: "#FF3B30", dark: "#FF6B6B" },
       diesel: { light: "#30D158", dark: "#5CD67D" },
-      trend: isGlass ? { light: "#FFFFFF", dark: "#FFFFFF" } : { light: "#2C2C2E", dark: "#FFFFFF" },
+      trend: isGlass
+        ? { light: "#1A1A1A", dark: "#FFFFFF" }
+        : { light: "#2C2C2E", dark: "#FFFFFF" },
     };
   }
   const isGlass = getStyleMode(ctx) === 'glass';
@@ -515,7 +521,7 @@ export default async function (ctx) {
         }
       ]
     };
-    if (COLORS.bg) smallWidget.backgroundColor = COLORS.bg;
+    smallWidget.backgroundColor = COLORS.bg;
     return smallWidget;
   }
 
@@ -581,6 +587,6 @@ export default async function (ctx) {
       }
     ]
   };
-  if (COLORS.bg) mainWidget.backgroundColor = COLORS.bg;
+  mainWidget.backgroundColor = COLORS.bg;
   return mainWidget;
 }
