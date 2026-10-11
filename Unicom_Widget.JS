@@ -53,7 +53,7 @@ const FLOW_DETAIL_URL =
  * 颜色
  *
  * WIDGET_STYLE 环境变量：
- *   glass   → 透明样式（默认）：不设背景色，文字用白色系
+ *   glass   → 磨砂玻璃（默认）：半透明磨砂底，深浅色自适应
  *   classic → 经典纯色：原来的白底 / 深色底
  * ========================================================= */
 
@@ -121,27 +121,30 @@ function getColors(isGlass) {
 
   return {
 
-    /* 透明模式：不设背景，交给系统壁纸 */
-    bg: undefined,
+    /* 磨砂玻璃：深浅色自适应，浅色黑字、深色白字 */
+    bg: {
+      light: 'rgba(255, 255, 255, 0.25)',
+      dark: 'rgba(0, 0, 0, 0.25)',
+    },
 
     border: {
-      light: 'rgba(255, 255, 255, 0.2)',
-      dark: 'rgba(255, 255, 255, 0.12)',
+      light: 'rgba(0, 0, 0, 0.1)',
+      dark: 'rgba(255, 255, 255, 0.2)',
     },
 
     title: {
-      light: 'rgba(255, 255, 255, 0.8)',
-      dark: 'rgba(247, 247, 248, 0.7)',
+      light: 'rgba(0, 0, 0, 0.6)',
+      dark: 'rgba(255, 255, 255, 0.7)',
     },
 
     value: {
-      light: '#FFFFFF',
-      dark: '#F7F7F8',
+      light: '#1A1A1A',
+      dark: '#FFFFFF',
     },
 
     time: {
-      light: 'rgba(255, 255, 255, 0.7)',
-      dark: 'rgba(247, 247, 248, 0.6)',
+      light: 'rgba(0, 0, 0, 0.45)',
+      dark: 'rgba(255, 255, 255, 0.55)',
     },
 
     error: {
@@ -150,13 +153,13 @@ function getColors(isGlass) {
     },
 
     capsuleBg: {
-      light: 'rgba(255, 255, 255, 0.18)',
-      dark: 'rgba(255, 255, 255, 0.12)',
+      light: 'rgba(255, 255, 255, 0.4)',
+      dark: 'rgba(255, 255, 255, 0.18)',
     },
 
     accent: {
-      light: '#FF6620',
-      dark: '#FF854D',
+      light: '#E60012',
+      dark: '#FF375F',
     },
 
   };
@@ -1142,12 +1145,7 @@ function buildMainWidget(
   };
 
 
-  /*
-   * 透明模式不设背景，交给系统壁纸
-   */
-  if (COLORS.bg) {
-    widgetConfig.backgroundColor = COLORS.bg;
-  }
+  widgetConfig.backgroundColor = COLORS.bg;
 
 
   return widgetConfig;
@@ -1218,8 +1216,8 @@ function smallRow(
 
     backgroundColor: isGlass
       ? {
-          light: 'rgba(255, 255, 255, 0.18)',
-          dark: 'rgba(255, 255, 255, 0.12)',
+          light: 'rgba(255, 255, 255, 0.4)',
+          dark: 'rgba(255, 255, 255, 0.18)',
         }
       : {
           light: color + '1F',
@@ -1245,9 +1243,12 @@ function smallRow(
 
         borderRadius: 15,
 
-        /* 玻璃模式下去掉实色大圆底，改用半透明暗底 */
+        /* 玻璃模式下图标圆底用半透明暗底，保证白字图标深浅色都可读 */
         backgroundColor: isGlass ?
-          'rgba(0, 0, 0, 0.15)' :
+          {
+            light: 'rgba(0, 0, 0, 0.35)',
+            dark: 'rgba(0, 0, 0, 0.15)',
+          } :
           color,
 
         children: [
@@ -1287,8 +1288,8 @@ function smallRow(
 
                 textColor: isGlass
                   ? {
-                      light: '#FFFFFF',
-                      dark: '#F7F7F8',
+                      light: '#1A1A1A',
+                      dark: '#FFFFFF',
                     }
                   : color,
 
@@ -1309,8 +1310,8 @@ function smallRow(
 
                 textColor: isGlass
                   ? {
-                      light: 'rgba(255, 255, 255, 0.8)',
-                      dark: 'rgba(247, 247, 248, 0.7)',
+                      light: 'rgba(0, 0, 0, 0.6)',
+                      dark: 'rgba(255, 255, 255, 0.7)',
                     }
                   : color,
 
@@ -1344,8 +1345,8 @@ function smallRow(
 
                 textColor: isGlass
                   ? {
-                      light: 'rgba(255, 255, 255, 0.7)',
-                      dark: 'rgba(247, 247, 248, 0.6)',
+                      light: 'rgba(0, 0, 0, 0.45)',
+                      dark: 'rgba(255, 255, 255, 0.55)',
                     }
                   : color + 'B3',
 
@@ -1428,12 +1429,7 @@ function buildSmall(
   };
 
 
-  /*
-   * 透明模式不设背景，交给系统壁纸
-   */
-  if (COLORS.bg) {
-    widgetConfig.backgroundColor = COLORS.bg;
-  }
+  widgetConfig.backgroundColor = COLORS.bg;
 
 
   return widgetConfig;
@@ -1822,12 +1818,7 @@ function buildError(
   };
 
 
-  /*
-   * 透明模式不设背景，交给系统壁纸
-   */
-  if (COLORS.bg) {
-    widgetConfig.backgroundColor = COLORS.bg;
-  }
+  widgetConfig.backgroundColor = COLORS.bg;
 
 
   return widgetConfig;
