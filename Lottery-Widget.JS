@@ -1,10 +1,10 @@
 /**
  * 全国彩票开奖结果 - Egern 小组件
  * 环境变量：名称填 彩票类型 值里填种类名称 双色球
- * 小组件样式：WIDGET_STYLE=glass（默认透明）| classic（经典纯色）
+ * 小组件样式：WIDGET_STYLE=glass（默认磨砂玻璃，深浅色自适应）| classic（经典纯色）
  */
 
-// ── 小组件样式：glass（默认透明）| classic（经典纯色），由环境变量 WIDGET_STYLE 控制 ──
+// ── 小组件样式：glass（默认磨砂玻璃，深浅色自适应）| classic（经典纯色），由环境变量 WIDGET_STYLE 控制 ──
 function getStyleMode(ctx) {
   const value = String(ctx.env?.WIDGET_STYLE || 'glass').trim().toLowerCase();
   return value === 'classic' ? 'classic' : 'glass';
@@ -12,16 +12,24 @@ function getStyleMode(ctx) {
 
 function getColors(isGlass) {
   return {
-    bg:      isGlass ? undefined : { light: '#FFFFFF', dark: '#2C2C2E' },
-    text:    isGlass ? { light: '#FFFFFF', dark: '#FFFFFF' } : { light: '#111111', dark: '#FFFFFF' },
+    bg:      isGlass
+      ? { light: 'rgba(255,255,255,0.25)', dark: 'rgba(0,0,0,0.25)' }
+      : { light: '#FFFFFF', dark: '#2C2C2E' },
+    text:    isGlass
+      ? { light: '#1A1A1A', dark: '#FFFFFF' }
+      : { light: '#111111', dark: '#FFFFFF' },
     sub:     isGlass
-      ? { light: 'rgba(255,255,255,0.7)', dark: 'rgba(255,255,255,0.6)' }
+      ? { light: 'rgba(0,0,0,0.6)', dark: 'rgba(255,255,255,0.7)' }
       : { light: '#8E8E93', dark: '#98989D' },
-    title:   isGlass ? { light: '#FFFFFF', dark: '#FFFFFF' } : { light: '#34C759', dark: '#30D158' },
+    title:   isGlass
+      ? { light: '#1A1A1A', dark: '#FFFFFF' }
+      : { light: '#34C759', dark: '#30D158' },
     date:    isGlass
-      ? { light: 'rgba(255,255,255,0.6)', dark: 'rgba(255,255,255,0.55)' }
+      ? { light: 'rgba(0,0,0,0.45)', dark: 'rgba(255,255,255,0.55)' }
       : { light: '#C7C7CC', dark: '#636366' },
-    pool:    isGlass ? { light: '#FFFFFF', dark: '#FFFFFF' } : { light: '#FF9500', dark: '#FF9F0A' },
+    pool:    isGlass
+      ? { light: '#1A1A1A', dark: '#FFFFFF' }
+      : { light: '#FF9500', dark: '#FF9F0A' },
   };
 }
 
@@ -174,7 +182,9 @@ export default async function(ctx) {
     justifyContent: 'center',
     width: ballSize,
     height: ballSize,
-    backgroundColor: { light: color, dark: color },
+    backgroundColor: isGlass
+      ? { light: 'rgba(0,0,0,0.45)', dark: 'rgba(0,0,0,0.35)' }
+      : color,
     borderRadius: ballSize / 2,
     children: [
       text(String(num).padStart(2, '0'), {
@@ -296,7 +306,7 @@ export default async function(ctx) {
     return {
       type: 'widget',
       refreshAfter: refreshTime,
-      ...(C.bg ? { backgroundColor: C.bg } : {}),
+      backgroundColor: C.bg,
       padding: 14,
       gap: 8,
       children: [
@@ -310,7 +320,7 @@ export default async function(ctx) {
   return {
     type: 'widget',
     refreshAfter: refreshTime,
-    ...(C.bg ? { backgroundColor: C.bg } : {}),
+    backgroundColor: C.bg,
     padding: 16,
     gap: 0,
     children: [
