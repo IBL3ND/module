@@ -1,29 +1,7 @@
 // NetSpeed 小组件
 // 测试网络下载速度
-// 样式：WIDGET_STYLE=glass（默认透明）| classic（经典纯色）
-
-function getStyleMode(ctx) {
-  const v = String((ctx.env && ctx.env.WIDGET_STYLE) || 'glass').trim().toLowerCase();
-  return v === 'classic' ? 'classic' : 'glass';
-}
-
-function getColors(isGlass) {
-  return {
-    bg: isGlass
-      ? { light: 'rgba(255,255,255,0.25)', dark: 'rgba(0,0,0,0.25)' }
-      : { light: '#FFFFFF', dark: '#2C2C2E' },
-    secondary: isGlass
-      ? { light: 'rgba(0,0,0,0.6)', dark: 'rgba(255,255,255,0.7)' }
-      : { light: '#8E8E93', dark: '#8E8E93' },
-    muted: isGlass
-      ? { light: 'rgba(0,0,0,0.45)', dark: 'rgba(255,255,255,0.55)' }
-      : { light: '#6B6B6B', dark: '#A1A1A6' },
-  };
-}
 
 export default async function(ctx) {
-  const isGlass = getStyleMode(ctx) === 'glass';
-  const COLORS = getColors(isGlass);
   const MB = 3;
   const BYTES = MB * 1024 * 1024;
   const SPEED_TEST_URL = `https://speed.cloudflare.com/__down?bytes=${BYTES}`;
@@ -77,10 +55,15 @@ export default async function(ctx) {
   
   const isSmall = ctx.widgetFamily === 'systemSmall';
 
-  const widgetConfig = {
+  return {
     type: 'widget',
     padding: isSmall ? 12 : 16,
     gap: isSmall ? 8 : 12,
+
+    backgroundColor: { 
+      light: '#FFFFFF', 
+      dark: '#2C2C2E' 
+    },
 
     children: [
 
@@ -107,7 +90,7 @@ export default async function(ctx) {
             type: 'text',
             text: `↻ ${timeStr}`,
             font: { size: 'caption2' },
-            textColor: COLORS.secondary
+            textColor: { light: '#8E8E93', dark: '#8E8E93' }
           }
         ]
       },
@@ -152,22 +135,18 @@ export default async function(ctx) {
             type: 'text',
             text: `${speedData.mBs} MB/s`,
             font: { size: isSmall ? 'caption2' : 'caption1' },
-            textColor: COLORS.muted
+            textColor: { light: '#6B6B6B', dark: '#A1A1A6' }
           },
           { type: 'spacer' },
           {
             type: 'text',
             text: `${speedData.duration}s`,
             font: { size: isSmall ? 'caption2' : 'caption1' },
-            textColor: COLORS.muted
+            textColor: { light: '#6B6B6B', dark: '#A1A1A6' }
           }
         ]
       }
     ]
   };
-
-  widgetConfig.backgroundColor = COLORS.bg;
-
-  return widgetConfig;
 }
 
