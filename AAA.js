@@ -77,7 +77,8 @@ function extractAnalyticsOpenid(url) {
   try {
     const m = url.match(/[?&]data=([^&]+)/);
     if (!m) return '';
-    const b64 = decodeURIComponent(m[1]).replace(/-/g, '+').replace(/_/g, '/');
+    // base64 的 + 在 URL query 里会被转成空格，先换回来；再处理 URL-safe 字符
+    const b64 = decodeURIComponent(m[1]).replace(/ /g, '+').replace(/-/g, '+').replace(/_/g, '/');
     const bin = atob(b64);
     // openid 是 ASCII hex，直接正则提取，避免 UTF-8 解码问题
     const om = bin.match(/"openid":"([0-9a-fA-F]+)"/);
