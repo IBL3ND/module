@@ -95,9 +95,11 @@ function handleCapture(ctx) {
   // 埋点域名：提取电信内部 openid
   if (url.indexOf('bigdata-behaviordata.189.cn') >= 0) {
     const aOpenid = extractAnalyticsOpenid(url);
+    const now2 = new Date();
+    const t2 = `${now2.getHours()}:${now2.getMinutes()}:${now2.getSeconds()}`;
+    ctx.notify('电信埋点', `${t2} 脚本已触发`, aOpenid ? `openid: ${aOpenid.slice(0, 24)}…` : '未提取到 openid');
     if (aOpenid && ctx.storage.get(STORE_OPENID2) !== aOpenid) {
       ctx.storage.set(STORE_OPENID2, aOpenid);
-      ctx.notify('电信小组件', '已抓取埋点 openid', aOpenid.slice(0, 20) + '…');
     }
     return;
   }
