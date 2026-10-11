@@ -174,7 +174,7 @@ export default async function(ctx) {
     justifyContent: 'center',
     width: ballSize,
     height: ballSize,
-    backgroundColor: color,
+    backgroundColor: { light: color, dark: color },
     borderRadius: ballSize / 2,
     children: [
       text(String(num).padStart(2, '0'), {
