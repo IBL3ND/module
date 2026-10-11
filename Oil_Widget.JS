@@ -72,20 +72,36 @@ export default async function (ctx) {
   const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
   const refreshTime = new Date(Date.now() + 6*60*60*1000).toISOString();
 
-  const backgroundColor = { light: "#FFFFFF", dark: "#1C1C1E" };
-
-  const COLORS = {
-    primary: { light: "#1A1A1A", dark: "#FFFFFF" },
-    secondary: { light: "#666666", dark: "#CCCCCC" },
-    tertiary: { light: "#999999", dark: "#888888" },
-    card: { light: "#F5F5F7", dark: "#2C2C2E" },
-    cardBorder: { light: "#E0E0E0", dark: "#3A3A3C" },
-    p92: { light: "#FF9F0A", dark: "#FFB347" },
-    p95: { light: "#FF6B35", dark: "#FF8A5C" },
-    p98: { light: "#FF3B30", dark: "#FF6B6B" },
-    diesel: { light: "#30D158", dark: "#5CD67D" },
-    trend: { light: "#2C2C2E", dark: "#FFFFFF" },
-  };
+  // --- 小组件样式：glass（默认透明）| classic（经典纯色）---
+  function getStyleMode(c) {
+    const v = String(c.env?.WIDGET_STYLE || 'glass').trim().toLowerCase();
+    return v === 'classic' ? 'classic' : 'glass';
+  }
+  function getColors(isGlass) {
+    return {
+      bg: isGlass ? undefined : { light: "#FFFFFF", dark: "#1C1C1E" },
+      primary: isGlass ? { light: "#FFFFFF", dark: "#FFFFFF" } : { light: "#1A1A1A", dark: "#FFFFFF" },
+      secondary: isGlass
+        ? { light: "rgba(255,255,255,0.75)", dark: "rgba(255,255,255,0.7)" }
+        : { light: "#666666", dark: "#CCCCCC" },
+      tertiary: isGlass
+        ? { light: "rgba(255,255,255,0.6)", dark: "rgba(255,255,255,0.55)" }
+        : { light: "#999999", dark: "#888888" },
+      card: isGlass
+        ? { light: "rgba(255,255,255,0.18)", dark: "rgba(255,255,255,0.12)" }
+        : { light: "#F5F5F7", dark: "#2C2C2E" },
+      cardBorder: isGlass
+        ? { light: "rgba(255,255,255,0.25)", dark: "rgba(255,255,255,0.18)" }
+        : { light: "#E0E0E0", dark: "#3A3A3C" },
+      p92: { light: "#FF9F0A", dark: "#FFB347" },
+      p95: { light: "#FF6B35", dark: "#FF8A5C" },
+      p98: { light: "#FF3B30", dark: "#FF6B6B" },
+      diesel: { light: "#30D158", dark: "#5CD67D" },
+      trend: isGlass ? { light: "#FFFFFF", dark: "#FFFFFF" } : { light: "#2C2C2E", dark: "#FFFFFF" },
+    };
+  }
+  const isGlass = getStyleMode(ctx) === 'glass';
+  const COLORS = getColors(isGlass);
 
   const CACHE_KEY = `qiyoujiage_oil_${regionParam}`;
   let prices = {p92:null, p95:null, p98:null, diesel:null};
@@ -431,11 +447,10 @@ export default async function (ctx) {
     const infoText = fetchError ? errorMsg : "";
     const infoColor = COLORS.p98;
 
-    return {
+    const smallWidget = {
       type:"widget",
       padding:[8,8,8,8],
       gap:4,
-      backgroundColor: backgroundColor,
       refreshAfter:refreshTime,
       children:[
         {
@@ -500,13 +515,14 @@ export default async function (ctx) {
         }
       ]
     };
+    if (COLORS.bg) smallWidget.backgroundColor = COLORS.bg;
+    return smallWidget;
   }
 
-  return {
+  const mainWidget = {
     type:"widget",
     padding:[10,8,10,8],
     gap:5,
-    backgroundColor: backgroundColor,
     refreshAfter:refreshTime,
     children:[
       {
@@ -564,5 +580,7 @@ export default async function (ctx) {
         ]
       }
     ]
-  }
+  };
+  if (COLORS.bg) mainWidget.backgroundColor = COLORS.bg;
+  return mainWidget;
 }
