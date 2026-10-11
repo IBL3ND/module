@@ -75,8 +75,20 @@ function handleCapture(ctx) {
   const headers = req.headers || {};
   const url = req.url || '';
 
+  // 诊断：确认脚本跑起来了
+  const diagKey = 'wx_diag_' + Date.now();
+  if (!ctx.storage.get('wx_diag_done')) {
+    ctx.storage.set('wx_diag_done', '1');
+    const hkeys = Object.keys(headers).join(',');
+    ctx.notify(
+      '电信抓取诊断',
+      `URL: ${url.slice(0, 60)}`,
+      `headers: ${hkeys.slice(0, 100)}\nbody类型: ${typeof req.body}`
+    );
+  }
+
   // 只处理网关请求
-  if (url.indexOf('/xcxApiService/api/gateway') < 0) return;
+  if (url.indexOf('/xcxApiService/api/gateway') < 0 && url.indexOf('wcmp.189.cn') < 0) return;
 
   // 取 openid（header 名大小写不敏感）
   let openid = '';
