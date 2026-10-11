@@ -232,11 +232,25 @@ function extractAuthFromRequest(ctx) {
   const req = ctx.request || {};
   const url = req.url || '';
 
-  // 诊断：记录拦截到的 URL（只通知一次）
+  // 诊断：记录请求结构（每个 URL 只通知一次）
   try {
-    if (!ctx.storage.get('ct_diag_notified')) {
-      ctx.storage.set('ct_diag_notified', '1');
-      ctx.notify({ title: '中国电信诊断', body: `拦截到: ${url.slice(0, 80)} | body类型: ${typeof req.body}` });
+    const diagKey = 'ct_diag_' + url.slice(0, 60).replace(/[^a-zA-Z0-9]/g, '_');
+    if (!ctx.storage.get(diagKey)) {
+      ctx.storage.set(diagKey, '1');
+      let info = `URL: ${url.slice(0, 60)}`;
+      info += ` | method: ${req.method || '?'}`;
+      let body = null;
+      try { body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body; } catch (e) {}
+      if (body && typeof body === 'object') {
+        const keys = Object.keys(body).join(',');
+        info += ` | body keys: ${keys.slice(0, 50)}`;
+        const hi = body.headerInfos || {};
+        info += ` | has token: ${!!hi.token} (len ${String(hi.token || '').length})`;
+        info += ` | code: ${hi.code || '?'}`;
+      } else {
+        info += ` | body: ${typeof req.body}`;
+      }
+      ctx.notify({ title: '中国电信诊断', body: info.slice(0, 200) });
     }
   } catch (e) {}
 
