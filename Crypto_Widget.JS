@@ -149,7 +149,7 @@ export default async function(ctx) {
   // 全部获取失败：显示错误页，并安排自动重试（之前这里没有 refreshAfter，会一直卡住）
   if (dataSource.length === 0) {
     return {
-      type: "widget", padding: 16, backgroundColor: theme.bg,
+      type: "widget", padding: 16, 
       refreshAfter: refreshAfter(RETRY_MS),
       children: [{
         type: "stack", direction: "column", alignItems: "center", gap: 8,
@@ -191,10 +191,14 @@ export default async function(ctx) {
         },
         { type: "spacer", length: 8 },
         {
-          type: "stack", width: 70, height: 26, alignItems: "center", justifyContent: "center", borderRadius: 4, backgroundColor: color,
+          type: "stack", width: 70, height: 26, alignItems: "center", justifyContent: "center", borderRadius: 4,
+          backgroundColor: isUp ? { light: "#00AA0015", dark: "#30D15825" } : { light: "#FF000015", dark: "#FF453A25" },
+          borderWidth: 1,
+          borderColor: isUp ? { light: "#00AA0050", dark: "#30D15860" } : { light: "#FF000050", dark: "#FF453A60" },
           children: [{
             type: "text", text: `${isUp ? "+" : ""}${coin.change.toFixed(2)}%`,
-            font: { size: 11, weight: "semibold" }, textColor: { light: "#FFFFFF", dark: "#FFFFFF" },
+            font: { size: 11, weight: "semibold" },
+            textColor: isUp ? { light: "#008800", dark: "#4CD964" } : { light: "#CC0000", dark: "#FF6B62" },
             textAlign: "center", maxLines: 1, minScale: 0.6
           }]
         }
@@ -278,7 +282,7 @@ export default async function(ctx) {
       return {
         type: "stack", direction: "row", alignItems: "center", flex: 1, gap: 6,
         padding: [4, 8, 4, 8], borderRadius: 12,
-        backgroundColor: { light: "#F5F5F7", dark: "#3A3A3C" },
+        backgroundColor: { light: "#FFFFFF15", dark: "#FFFFFF10" },
         url: `https://www.binance.com/zh-CN/price/${coin.symbol}`,
         children: [
           {
@@ -327,7 +331,7 @@ export default async function(ctx) {
     };
 
     return {
-      type: "widget", padding: 10, gap: 6, backgroundColor: theme.bg,
+      type: "widget", padding: 10, gap: 6, 
       url: `https://www.binance.com/zh-CN/price/${dataSource[0].symbol}`,
       refreshAfter: refreshAfter(REFRESH_MS),
       children: [...dataSource.slice(0, 3).map(smallCard), ...(hasFailure ? [statusLine()] : [])]
@@ -337,7 +341,7 @@ export default async function(ctx) {
 
   if (widgetFamily === "systemMedium") {
     return {
-      type: "widget", padding: 12, backgroundColor: theme.bg,
+      type: "widget", padding: 12, 
       refreshAfter: refreshAfter(REFRESH_MS),
       children: [
         ...dataSource.slice(0, 3).flatMap((coin, i) => [renderRow(coin), i < 2 ? { type: "spacer", length: 6 } : null]).filter(Boolean),
@@ -347,7 +351,7 @@ export default async function(ctx) {
   }
 
   return {
-    type: "widget", padding: 12, backgroundColor: theme.bg,
+    type: "widget", padding: 12, 
     refreshAfter: refreshAfter(REFRESH_MS),
     children: [
       ...dataSource.slice(0, 8).flatMap((coin, i) => [
