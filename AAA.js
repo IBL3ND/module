@@ -48,6 +48,7 @@ function safeJsonParse(s) {
 /* ---------- 存储 ---------- */
 
 const STORE_OPENID = 'wx_openid';
+const STORE_OPENID2 = 'wx_openid_analytics'; // 埋点里的电信内部 openid（备用）
 const STORE_REQS = 'wx_requests'; // {appMethod: {data, methodType, ts}}
 
 function getStoredOpenid(ctx) {
@@ -70,10 +71,37 @@ function saveRequest(ctx, appMethod, data, methodType) {
 
 /* ---------- http_request 自动抓取 ---------- */
 
+function extractAnalyticsOpenid(url) {
+  // 从 bigdata-behaviordata 的 data= 参数里解 base64 取 openid
+  try {
+    const m = url.match(/[?&]data=([^&]+)/);
+    if (!m) return '';
+    const b64 = decodeURIComponent(m[1]);
+    // base64 可能带 URL 安全字符
+    const norm = b64.replace(/-/g, '+').replace(/_/g, '/');
+    const json = Buffer.from(norm, 'base64').toString('utf8');
+    const j = JSON.parse(json);
+    const props = j.properties || {};
+    return props.openid || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 function handleCapture(ctx) {
   const req = ctx.request || {};
   const headers = req.headers || {};
   const url = req.url || '';
+
+  // 埋点域名：提取电信内部 openid
+  if (url.indexOf('bigdata-behaviordata.189.cn') >= 0) {
+    const aOpenid = extractAnalyticsOpenid(url);
+    if (aOpenid && ctx.storage.get(STORE_OPENID2) !== aOpenid) {
+      ctx.storage.set(STORE_OPENID2, aOpenid);
+      ctx.notify('电信小组件', '已抓取埋点 openid', aOpenid.slice(0, 20) + '…');
+    }
+    return;
+  }
 
   // 只处理网关请求
   if (url.indexOf('/xcxApiService/api/gateway') < 0 && url.indexOf('wcmp.189.cn') < 0) return;
@@ -203,29 +231,12 @@ function parseFlowVoice(data, showGeneral, showDirectional) {
   return result;
 }
 
-function loadData(ctx) {
-  const openid = getStoredOpenid(ctx);
-  if (!openid) {
-    return Promise.resolve({
-      error: 'no_auth',
-      message: '请先打开电信微信小程序\n点一点话费/流量页面\n回来刷新小组件',
-    });
-  }
-
-  const reqs = getStoredRequests(ctx);
+async function tryReplayWithOpenid(ctx, openid, reqs) {
   const methods = Object.keys(reqs);
-  if (methods.length === 0) {
-    return Promise.resolve({
-      error: 'no_auth',
-      message: '已抓到 openid\n请在小程序里点一下\n话费和流量页面',
-    });
-  }
-
-  const showGeneral = ctx.env.CT_SHOW_GENERAL_FLOW !== 'false';
-  const showDirectional = ctx.env.CT_SHOW_DIRECTIONAL_FLOW !== 'false';
-
   const result = { balance: null, flowKB: 0, voice: 0, updatedAt: Date.now() };
   let okCount = 0;
+  const showGeneral = ctx.env.CT_SHOW_GENERAL_FLOW !== 'false';
+  const showDirectional = ctx.env.CT_SHOW_DIRECTIONAL_FLOW !== 'false';
 
   const tasks = methods.map(m => {
     return replayRequest(ctx, openid, m, reqs[m]).then(data => {
@@ -243,19 +254,53 @@ function loadData(ctx) {
         result.voiceUsed = fv.voiceUsed;
         result.voiceTotal = fv.voiceTotal;
       }
-    }).catch(e => {
-      // 单个接口失败不影响其他
-    });
+    }).catch(e => {});
   });
 
-  return Promise.all(tasks).then(() => {
+  await Promise.all(tasks);
+  return { result, okCount };
+}
+
+function loadData(ctx) {
+  const openid = getStoredOpenid(ctx);
+  const openid2 = ctx.storage.get(STORE_OPENID2) || '';
+  const reqs = getStoredRequests(ctx);
+  const methods = Object.keys(reqs);
+
+  if (methods.length === 0) {
+    return Promise.resolve({
+      error: 'no_auth',
+      message: openid ? '已抓到 openid\n请在小程序里点一下\n话费和流量页面' : '请先打开电信微信小程序\n点一点话费/流量页面\n回来刷新小组件',
+    });
+  }
+
+  // 先试网关 openid，不行再试埋点 openid
+  const candidates = [];
+  if (openid) candidates.push(openid);
+  if (openid2 && openid2 !== openid) candidates.push(openid2);
+
+  if (candidates.length === 0) {
+    return Promise.resolve({
+      error: 'no_auth',
+      message: '请先打开电信微信小程序\n点一点话费/流量页面\n回来刷新小组件',
+    });
+  }
+
+  let chain = Promise.resolve(null);
+  for (const oid of candidates) {
+    chain = chain.then(prev => {
+      if (prev && prev.okCount > 0) return prev;
+      return tryReplayWithOpenid(ctx, oid, reqs);
+    });
+  }
+
+  return chain.then(({ result, okCount }) => {
     if (okCount === 0) {
       return {
         error: 'auth_expired',
         message: '凭证已失效\n请重新打开电信小程序\n点一点页面后刷新',
       };
     }
-    // 缓存
     try {
       ctx.storage.set('ct_cache', JSON.stringify(result));
       ctx.storage.set('ct_cache_time', String(Date.now()));
