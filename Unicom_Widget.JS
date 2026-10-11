@@ -53,7 +53,7 @@ const FLOW_DETAIL_URL =
  * 颜色
  *
  * WIDGET_STYLE 环境变量：
- *   glass   → 磨砂玻璃（默认）：半透明磨砂底，深浅色自适应
+ *   glass   → 透明（默认）：不设背景，真透明，白字
  *   classic → 经典纯色：原来的白底 / 深色底
  * ========================================================= */
 
@@ -111,8 +111,8 @@ function getColors(isGlass) {
       },
 
       accent: {
-        light: '#E60012',
-        dark: '#FF375F',
+        light: '#FF6620',
+        dark: '#FF854D',
       },
 
     };
@@ -121,30 +121,27 @@ function getColors(isGlass) {
 
   return {
 
-    /* 磨砂玻璃：深浅色自适应，浅色黑字、深色白字 */
-    bg: {
-      light: 'rgba(255, 255, 255, 0.25)',
-      dark: 'rgba(0, 0, 0, 0.25)',
-    },
+    /* 玻璃模式：真透明 + 白字（与电信版一致） */
+    bg: undefined,
 
     border: {
-      light: 'rgba(0, 0, 0, 0.1)',
-      dark: 'rgba(255, 255, 255, 0.2)',
+      light: 'rgba(255, 255, 255, 0.2)',
+      dark: 'rgba(255, 255, 255, 0.12)',
     },
 
     title: {
-      light: 'rgba(0, 0, 0, 0.6)',
-      dark: 'rgba(255, 255, 255, 0.7)',
+      light: 'rgba(255, 255, 255, 0.8)',
+      dark: 'rgba(247, 247, 248, 0.7)',
     },
 
     value: {
-      light: '#1A1A1A',
-      dark: '#FFFFFF',
+      light: '#FFFFFF',
+      dark: '#F7F7F8',
     },
 
     time: {
-      light: 'rgba(0, 0, 0, 0.45)',
-      dark: 'rgba(255, 255, 255, 0.55)',
+      light: 'rgba(255, 255, 255, 0.7)',
+      dark: 'rgba(247, 247, 248, 0.6)',
     },
 
     error: {
@@ -153,13 +150,13 @@ function getColors(isGlass) {
     },
 
     capsuleBg: {
-      light: 'rgba(255, 255, 255, 0.4)',
-      dark: 'rgba(255, 255, 255, 0.18)',
+      light: 'rgba(255, 255, 255, 0.18)',
+      dark: 'rgba(255, 255, 255, 0.12)',
     },
 
     accent: {
-      light: '#E60012',
-      dark: '#FF375F',
+      light: '#FF6620',
+      dark: '#FF854D',
     },
 
   };
@@ -1145,7 +1142,9 @@ function buildMainWidget(
   };
 
 
-  widgetConfig.backgroundColor = COLORS.bg;
+  if (COLORS.bg) {
+    widgetConfig.backgroundColor = COLORS.bg;
+  }
 
 
   return widgetConfig;
@@ -1215,10 +1214,7 @@ function smallRow(
     ],
 
     backgroundColor: isGlass
-      ? {
-          light: 'rgba(255, 255, 255, 0.4)',
-          dark: 'rgba(255, 255, 255, 0.18)',
-        }
+      ? { light: 'rgba(255, 255, 255, 0.18)', dark: 'rgba(255, 255, 255, 0.12)' }
       : {
           light: color + '1F',
           dark: color + '33',
@@ -1243,13 +1239,7 @@ function smallRow(
 
         borderRadius: 15,
 
-        /* 玻璃模式下图标圆底用半透明暗底，保证白字图标深浅色都可读 */
-        backgroundColor: isGlass ?
-          {
-            light: 'rgba(0, 0, 0, 0.35)',
-            dark: 'rgba(0, 0, 0, 0.15)',
-          } :
-          color,
+        backgroundColor: isGlass ? 'rgba(0, 0, 0, 0.15)' : color,
 
         children: [
           iconChild,
@@ -1286,12 +1276,7 @@ function smallRow(
                   weight: 'bold',
                 },
 
-                textColor: isGlass
-                  ? {
-                      light: '#1A1A1A',
-                      dark: '#FFFFFF',
-                    }
-                  : color,
+                textColor: isGlass ? { light: '#FFFFFF', dark: '#F7F7F8' } : color,
 
                 maxLines: 1,
 
@@ -1309,10 +1294,7 @@ function smallRow(
                 },
 
                 textColor: isGlass
-                  ? {
-                      light: 'rgba(0, 0, 0, 0.6)',
-                      dark: 'rgba(255, 255, 255, 0.7)',
-                    }
+                  ? { light: 'rgba(255, 255, 255, 0.8)', dark: 'rgba(247, 247, 248, 0.7)' }
                   : color,
 
                 maxLines: 1,
@@ -1344,10 +1326,7 @@ function smallRow(
                 },
 
                 textColor: isGlass
-                  ? {
-                      light: 'rgba(0, 0, 0, 0.45)',
-                      dark: 'rgba(255, 255, 255, 0.55)',
-                    }
+                  ? { light: 'rgba(255, 255, 255, 0.7)', dark: 'rgba(247, 247, 248, 0.6)' }
                   : color + 'B3',
 
                 maxLines: 1,
@@ -1429,7 +1408,9 @@ function buildSmall(
   };
 
 
-  widgetConfig.backgroundColor = COLORS.bg;
+  if (COLORS.bg) {
+    widgetConfig.backgroundColor = COLORS.bg;
+  }
 
 
   return widgetConfig;
@@ -1818,7 +1799,9 @@ function buildError(
   };
 
 
-  widgetConfig.backgroundColor = COLORS.bg;
+  if (COLORS.bg) {
+    widgetConfig.backgroundColor = COLORS.bg;
+  }
 
 
   return widgetConfig;
