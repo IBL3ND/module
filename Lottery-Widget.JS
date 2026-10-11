@@ -18,8 +18,9 @@ export default async function(ctx) {
   const DEFAULT_LOTTERY = '七星彩';
   const API_URL = 'https://m.zhuying.com/api/lotapi/indexV2/1';
 
+  // 透明模式：不设 backgroundColor，透出壁纸；文字用原版自适应色
+  // （浅色模式深字、深色模式白字，画廊白底和桌面壁纸都可读）
   const C = {
-    bg:      { light: '#FFFFFF', dark: '#2C2C2E' },
     text:    { light: '#111111', dark: '#FFFFFF' },
     sub:     { light: '#8E8E93', dark: '#98989D' },
     title:   { light: '#34C759', dark: '#30D158' },
@@ -151,22 +152,44 @@ export default async function(ctx) {
   const ballGap = totalBalls > 7 ? 6 : 8;
   const fontSize = totalBalls > 7 ? 15 : 17;
 
-  const ball = (num, color) => ({
-    type: 'stack',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: ballSize,
-    height: ballSize,
-    backgroundColor: color,
-    borderRadius: ballSize / 2,
-    children: [
-      text(String(num).padStart(2, '0'), {
-        size: fontSize,
-        weight: 'bold',
-        color: { light: '#FFFFFF', dark: '#FFFFFF' }
-      })
-    ]
-  });
+  // 球配色（照抄节日倒计时胶囊配方）：低 alpha 底 + 同色系深浅自适应文字，不用白字
+  const getBallColors = (color) => {
+    // 根据主色生成深浅文字色
+    const textMap = {
+      '#FF3B30': { light: '#D43028', dark: '#FF6B62' }, // 红
+      '#007AFF': { light: '#0066CC', dark: '#66B3FF' }, // 蓝
+      '#34C759': { light: '#2E8B57', dark: '#4CD964' }, // 绿
+      '#FF9500': { light: '#D47D00', dark: '#FFB340' }, // 橙
+    };
+    const textColor = textMap[color] || { light: '#333333', dark: '#CCCCCC' };
+    return {
+      bg: { light: color + '15', dark: color + '25' },
+      border: { light: color + '50', dark: color + '60' },
+      text: textColor,
+    };
+  };
+
+  const ball = (num, color) => {
+    const bc = getBallColors(color);
+    return {
+      type: 'stack',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: ballSize,
+      height: ballSize,
+      backgroundColor: bc.bg,
+      borderRadius: ballSize / 2,
+      borderWidth: 1,
+      borderColor: bc.border,
+      children: [
+        text(String(num).padStart(2, '0'), {
+          size: fontSize,
+          weight: 'bold',
+          color: bc.text
+        })
+      ]
+    };
+  };
 
   const issueNum = data?.issue ? data.issue.substring(4) : '---';
   
@@ -275,11 +298,15 @@ export default async function(ctx) {
 
   const refreshTime = new Date(Date.now() + 60 * 1000).toISOString();
 
+  // 组装 widget：不设 backgroundColor，真透明透出壁纸
+  const buildWidget = (extra) => ({
+    type: 'widget',
+    refreshAfter: refreshTime,
+    ...extra,
+  });
+
   if (ctx.widgetFamily === 'systemSmall') {
-    return {
-      type: 'widget',
-      refreshAfter: refreshTime,
-      backgroundColor: C.bg,
+    return buildWidget({
       padding: 14,
       gap: 8,
       children: [
@@ -287,13 +314,10 @@ export default async function(ctx) {
         { type: 'spacer', length: 6 },
         data && data.openCodeArr ? ballsRow : content
       ]
-    };
+    });
   }
 
-  return {
-    type: 'widget',
-    refreshAfter: refreshTime,
-    backgroundColor: C.bg,
+  return buildWidget({
     padding: 16,
     gap: 0,
     children: [
@@ -301,6 +325,5 @@ export default async function(ctx) {
       { type: 'spacer', length: 8 },
       content
     ]
-  };
+  });
 }
-
