@@ -26,12 +26,15 @@ export default async function (ctx) {
   const env = ctx.env || {};
   const widgetFamily = ctx.widgetFamily || 'systemMedium';
 
+  const isGlass = getStyleMode(ctx) === 'glass';
+  const COLORS = getColors(isGlass);
+
   const apiKey     = (env.KEY || '').trim();
   const apiHostRaw = (env.API_HOST || '').trim();
   const location   = (env.LOCATION || '北京').trim();
 
-  if (!apiKey)     return renderError('缺少 KEY 环境变量');
-  if (!apiHostRaw) return renderError('缺少 API_HOST 环境变量');
+  if (!apiKey)     return renderError('缺少 KEY 环境变量', COLORS);
+  if (!apiHostRaw) return renderError('缺少 API_HOST 环境变量', COLORS);
 
   const apiHost = normalizeHost(apiHostRaw);
 
@@ -48,29 +51,50 @@ export default async function (ctx) {
       return renderAccessory(now, city, widgetFamily);
     }
     if (widgetFamily === 'systemSmall') {
-      return renderSmall(now, city);
+      return renderSmall(now, city, COLORS);
     }
-    return renderMedium(now, air, city);
+    return renderMedium(now, air, city, COLORS, isGlass);
 
   } catch (e) {
     console.error(e);
-    return renderError(`请求失败：${e.message.slice(0, 60)}`);
+    return renderError(`请求失败：${e.message.slice(0, 60)}`, COLORS);
   }
 }
 
-function renderMedium(now, air, city) {
+/* ---------- 透明/经典双模式 ---------- */
+
+function getStyleMode(ctx) {
+  const value = String((ctx.env && ctx.env.WIDGET_STYLE) || 'glass').trim().toLowerCase();
+  return value === 'classic' ? 'classic' : 'glass';
+}
+
+function getColors(isGlass) {
+  return {
+    bg: isGlass ? undefined : { light: '#FFFFFF', dark: '#2C2C2E' },
+    cardBg: isGlass
+      ? { light: 'rgba(255, 255, 255, 0.18)', dark: 'rgba(255, 255, 255, 0.12)' }
+      : { light: '#F2F2F7', dark: '#3A3A3C' },
+    textPrimary: isGlass
+      ? { light: '#FFFFFF', dark: '#F7F7F8' }
+      : { light: '#1C1C1E', dark: '#F2F2F7' },
+    textSecondary: isGlass
+      ? { light: 'rgba(255, 255, 255, 0.8)', dark: 'rgba(247, 247, 248, 0.7)' }
+      : { light: '#6E6E73', dark: '#AEAEB2' },
+    textTertiary: isGlass
+      ? { light: 'rgba(255, 255, 255, 0.7)', dark: 'rgba(247, 247, 248, 0.6)' }
+      : { light: '#8E8E93', dark: '#636366' },
+  };
+}
+
+function renderMedium(now, air, city, COLORS, isGlass) {
   const { icon, color: iconColor } = getWeatherStyle(now.icon);
   const aqiStyle = getAQIStyle(air?.aqi);
 
   const time = new Date();
   const timeStr = `${time.getMonth() + 1}-${time.getDate()} ${time.getHours()}:${String(time.getMinutes()).padStart(2, '0')}`;
 
-  const bg = { light: '#FFFFFF', dark: '#2C2C2E' };
-  const cardBg = { light: '#F2F2F7', dark: '#3A3A3C' };
-
-  return {
+  const widgetConfig = {
     type: 'widget',
-    backgroundColor: bg,
     padding: 14,
     gap: 10,
     children: [
@@ -89,7 +113,7 @@ function renderMedium(now, air, city) {
             type: 'text',
             text: timeStr,
             font: { size: 11 },
-            textColor: { light: '#8E8E93', dark: '#636366' }
+            textColor: COLORS.textTertiary
           }
         ]
       },
@@ -112,7 +136,7 @@ function renderMedium(now, air, city) {
             type: 'text',
             text: `${now.temp}°`,
             font: { size: 46, weight: 'bold' },
-            textColor: { light: '#1C1C1E', dark: '#F2F2F7' },
+            textColor: COLORS.textPrimary,
             textAlign: 'center',
             minScale: 0.7
           },
@@ -126,20 +150,21 @@ function renderMedium(now, air, city) {
         direction: 'row',
         gap: 8,
         children: [
-          infoCard('drop.fill',    '湿度', `${now.humidity}%`,        '#007AFF', cardBg),
-          infoCard('wind',         '风向', `${now.windDir} ${now.windScale}级`, '#5856D6', cardBg),
-          infoCard('gauge.medium', '风速', `${now.windSpeed}km/h`,    '#FF9500', cardBg)
+          infoCard('drop.fill',    '湿度', `${now.humidity}%`,        '#007AFF', COLORS.cardBg, COLORS),
+          infoCard('wind',         '风向', `${now.windDir} ${now.windScale}级`, '#5856D6', COLORS.cardBg, COLORS),
+          infoCard('gauge.medium', '风速', `${now.windSpeed}km/h`,    '#FF9500', COLORS.cardBg, COLORS)
         ]
       }
     ]
   };
+  if (COLORS.bg) widgetConfig.backgroundColor = COLORS.bg;
+  return widgetConfig;
 }
 
-function renderSmall(now, city) {
+function renderSmall(now, city, COLORS) {
   const { icon, color: iconColor } = getWeatherStyle(now.icon);
-  return {
+  const widgetConfig = {
     type: 'widget',
-    backgroundColor: { light: '#FFFFFF', dark: '#2C2C2E' },
     padding: 14,
     gap: 8,
     children: [
@@ -155,16 +180,18 @@ function renderSmall(now, city) {
         type: 'text',
         text: `${now.temp}°`,
         font: { size: 36, weight: 'bold' },
-        textColor: { light: '#1C1C1E', dark: '#F2F2F7' }
+        textColor: COLORS.textPrimary
       },
       {
         type: 'text',
         text: now.text,
         font: { size: 13 },
-        textColor: { light: '#6E6E73', dark: '#AEAEB2' }
+        textColor: COLORS.textSecondary
       }
     ]
   };
+  if (COLORS.bg) widgetConfig.backgroundColor = COLORS.bg;
+  return widgetConfig;
 }
 
 function renderAccessory(now, city, family) {
@@ -220,7 +247,7 @@ function capsuleTagLarge(text, textColor, bgColor) {
   };
 }
 
-function infoCard(_sfIcon, label, value, _iconColor, cardBg) {
+function infoCard(_sfIcon, label, value, _iconColor, cardBg, COLORS) {
   return {
     type: 'stack',
     direction: 'column',
@@ -235,13 +262,13 @@ function infoCard(_sfIcon, label, value, _iconColor, cardBg) {
         type: 'text',
         text: label,
         font: { size: 10 },
-        textColor: { light: '#8E8E93', dark: '#636366' }
+        textColor: COLORS.textTertiary
       },
       {
         type: 'text',
         text: value,
         font: { size: 13, weight: 'semibold' },
-        textColor: { light: '#1C1C1E', dark: '#F2F2F7' },
+        textColor: COLORS.textPrimary,
         maxLines: 1,
         minScale: 0.7
       }
@@ -284,10 +311,10 @@ function getAQIStyle(val) {
   return { text: '中度', color: { light: '#FF3B30', dark: '#FF453A' }, bg: { light: '#FFF0EE', dark: '#3A1F1F' } };
 }
 
-function renderError(msg) {
-  return {
+function renderError(msg, COLORS) {
+  const c = COLORS || { textPrimary: { light: '#1C1C1E', dark: '#F2F2F7' } };
+  const widgetConfig = {
     type: 'widget',
-    backgroundColor: { light: '#FFFFFF', dark: '#2C2C2E' },
     padding: 16,
     children: [{
       type: 'stack',
@@ -302,6 +329,8 @@ function renderError(msg) {
       }]
     }]
   };
+  if (c.bg) widgetConfig.backgroundColor = c.bg;
+  return widgetConfig;
 }
 
 
