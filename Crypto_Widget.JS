@@ -34,7 +34,7 @@
  * ════════════════════════════════════════════════════
  */
 
-// ── 小组件样式：glass（默认透明）| classic（经典纯色），由环境变量 WIDGET_STYLE 控制 ──
+// ── 小组件样式：glass（默认磨砂玻璃，深浅色自适应）| classic（经典纯色），由环境变量 WIDGET_STYLE 控制 ──
 function getStyleMode(ctx) {
   const value = String(ctx.env?.WIDGET_STYLE || 'glass').trim().toLowerCase();
   return value === 'classic' ? 'classic' : 'glass';
@@ -42,13 +42,17 @@ function getStyleMode(ctx) {
 
 function getColors(isGlass) {
   return {
-    bg: isGlass ? undefined : { light: "#FFFFFF", dark: "#2C2C2E" },
-    text: isGlass ? { light: "#FFFFFF", dark: "#FFFFFF" } : { light: "#000000", dark: "#FFFFFF" },
+    bg: isGlass
+      ? { light: 'rgba(255,255,255,0.25)', dark: 'rgba(0,0,0,0.25)' }
+      : { light: "#FFFFFF", dark: "#2C2C2E" },
+    text: isGlass
+      ? { light: '#1A1A1A', dark: '#FFFFFF' }
+      : { light: "#000000", dark: "#FFFFFF" },
     textSecondary: isGlass
-      ? { light: "rgba(255,255,255,0.8)", dark: "rgba(255,255,255,0.7)" }
+      ? { light: 'rgba(0,0,0,0.6)', dark: 'rgba(255,255,255,0.7)' }
       : { light: "#666666", dark: "#AAAAAA" },
     cardBg: isGlass
-      ? { light: "rgba(255,255,255,0.18)", dark: "rgba(255,255,255,0.12)" }
+      ? { light: 'rgba(255,255,255,0.4)', dark: 'rgba(255,255,255,0.18)' }
       : { light: "#F5F5F7", dark: "#3A3A3C" },
     up: { light: "#00AA00", dark: "#30D158" },
     down: { light: "#FF0000", dark: "#FF453A" }
@@ -166,7 +170,7 @@ export default async function(ctx) {
   if (dataSource.length === 0) {
     return {
       type: "widget", padding: 16,
-      ...(theme.bg ? { backgroundColor: theme.bg } : {}),
+      backgroundColor: theme.bg,
       refreshAfter: refreshAfter(RETRY_MS),
       children: [{
         type: "stack", direction: "column", alignItems: "center", gap: 8,
@@ -345,7 +349,7 @@ export default async function(ctx) {
 
     return {
       type: "widget", padding: 10, gap: 6,
-      ...(theme.bg ? { backgroundColor: theme.bg } : {}),
+      backgroundColor: theme.bg,
       url: `https://www.binance.com/zh-CN/price/${dataSource[0].symbol}`,
       refreshAfter: refreshAfter(REFRESH_MS),
       children: [...dataSource.slice(0, 3).map(smallCard), ...(hasFailure ? [statusLine()] : [])]
@@ -356,7 +360,7 @@ export default async function(ctx) {
   if (widgetFamily === "systemMedium") {
     return {
       type: "widget", padding: 12,
-      ...(theme.bg ? { backgroundColor: theme.bg } : {}),
+      backgroundColor: theme.bg,
       refreshAfter: refreshAfter(REFRESH_MS),
       children: [
         ...dataSource.slice(0, 3).flatMap((coin, i) => [renderRow(coin), i < 2 ? { type: "spacer", length: 6 } : null]).filter(Boolean),
@@ -367,7 +371,7 @@ export default async function(ctx) {
 
   return {
     type: "widget", padding: 12,
-    ...(theme.bg ? { backgroundColor: theme.bg } : {}),
+    backgroundColor: theme.bg,
     refreshAfter: refreshAfter(REFRESH_MS),
     children: [
       ...dataSource.slice(0, 8).flatMap((coin, i) => [
