@@ -856,6 +856,26 @@ async function tryCookie(
 }
 
 
+async function loadDataByAppToken(ctx, settings) {
+  const configured = true;
+  try {
+    const apiData = await fetchImportantData(ctx, '');
+    const ds = parseTokenData(apiData, settings);
+    ctx.storage.setJSON('ct_datasource', ds);
+    return { configured, ds, fromCache: false, authFailed: false };
+  } catch (e) {
+    if (e && e.transient) {
+      const cached = ctx.storage.getJSON('ct_datasource');
+      return { configured, ds: cached || null, fromCache: !!cached, authFailed: false };
+    }
+    const cached = ctx.storage.getJSON('ct_datasource');
+    return {
+      configured, ds: cached || null, fromCache: !!cached,
+      authFailed: cached ? false : 'apptoken',
+    };
+  }
+}
+
 async function loadData(ctx) {
 
   const envCookie =
@@ -894,6 +914,13 @@ async function loadData(ctx) {
 
   if (phone && password) {
     return loadDataByToken(ctx, phone, password, deviceId, settings);
+  }
+
+  // App 抓包模式：有用 App 抓到的 token，直接用它查数据；
+  // token 失效时提示打开 App 刷新（无法自动重登，因为没密码）。
+  const appToken = ctx.storage.get('ct_token') || '';
+  if (appToken) {
+    return loadDataByAppToken(ctx, settings);
   }
 
 
@@ -2161,6 +2188,42 @@ async function handleCapture(ctx) {
 }
 
 
+/* App 抓包：电信 App 打开后会调 189.cn 接口，请求体 headerInfos 里带 token。
+   在此捕获 token 存入存储，小组件直接用，不用填密码。
+   注意：如果 App 有证书锁定导致抓不到，需要另想办法。 */
+function getTokenFromBody(bodyText) {
+  if (!bodyText) return null;
+  const m = String(bodyText).match(/"token"\s*:\s*"([^"]{10,})"/);
+  return m ? m[1] : null;
+}
+
+async function handleAppCapture(ctx) {
+  const req = ctx.request || {};
+  const url = req.url || '';
+  if (!url.includes('189.cn')) return;
+
+  let bodyText = '';
+  if (typeof req.body === 'string') bodyText = req.body;
+  else if (req.body) {
+    try { bodyText = JSON.stringify(req.body); } catch (e) {}
+  }
+
+  const token = getTokenFromBody(bodyText);
+  if (token && ctx.storage.get('ct_token') !== token) {
+    ctx.storage.set('ct_token', token);
+    const cc = bodyText.match(/"cityCode"\s*:\s*"([^"]+)"/);
+    const pc = bodyText.match(/"provinceCode"\s*:\s*"([^"]+)"/);
+    if (cc && cc[1]) ctx.storage.set('ct_city_code', cc[1]);
+    if (pc && pc[1]) ctx.storage.set('ct_province_code', pc[1]);
+    clearTokenLoginFlag(ctx);
+    clearLoginFailed(ctx);
+    try {
+      ctx.notify({ title: '中国电信', body: '已从 App 抓取到登录凭证，小组件将自动更新' });
+    } catch (e) {}
+  }
+}
+
+
 async function handleWidget(ctx) {
 
   const title =
@@ -2199,7 +2262,15 @@ async function handleWidget(ctx) {
         title,
         authMessage
           ? `登录失败：${authMessage}`
-          : '登录失败：请检查模块里的手机号、服务密码和 androidId'
+          : '登录失败：请检查模块里的手机号、服务密码是否正确'
+      );
+    }
+
+    if (authFailed === 'apptoken') {
+
+      return buildError(
+        title,
+        '凭证已过期：打开电信 App 刷新一下即可'
       );
     }
 
@@ -2269,6 +2340,9 @@ export default async function(ctx) {
     ctx.request.url
   ) {
 
+    const url = ctx.request.url || '';
+    // 189.cn → App token 抓取；e.dlife.cn → 网页 cookie 抓取
+    if (url.includes('189.cn')) return handleAppCapture(ctx);
     return handleCapture(ctx);
   }
 
