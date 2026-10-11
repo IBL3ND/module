@@ -68,23 +68,13 @@ export default async function (ctx) {
 
  const colors = getColors(isGlass);
 
- const bgGradient = isGlass ? undefined : {
-  type: "linear",
-  colors: [
-   { light: "#FFFFFF", dark: "#2C2C2E" },
-   { light: "#FFFFFF", dark: "#2C2C2E" },
-  ],
-  stops: [0, 1],
-  startPoint: { x: 0, y: 0 },
-  endPoint: { x: 0, y: 1 },
- };
-
  if (!slots.length) {
   const emptyConfig = {
    type: "widget",
    padding: 16,
    gap: 12,
    refreshAfter: refreshTime,
+   backgroundColor: colors.bg,
    children: [
     {
      type: "stack",
@@ -98,7 +88,6 @@ export default async function (ctx) {
     },
    ],
   };
-  if (bgGradient) emptyConfig.backgroundGradient = bgGradient;
   return emptyConfig;
  }
 
@@ -120,6 +109,7 @@ export default async function (ctx) {
   padding: isMediumThree ? 6 : (isCompact ? 8 : 12),
   gap: isMediumThree ? 4 : (isCompact ? 5 : 8),
   refreshAfter: refreshTime,
+  backgroundColor: colors.bg,
   children: [
    {
     type: "stack",
@@ -142,7 +132,6 @@ export default async function (ctx) {
    },
   ],
  };
- if (bgGradient) widgetConfig.backgroundGradient = bgGradient;
  return widgetConfig;
 }
 
@@ -157,14 +146,17 @@ function getStyleMode(ctx) {
 
 function getColors(isGlass) {
  return {
+  bg: isGlass
+   ? { light: "rgba(255, 255, 255, 0.25)", dark: "rgba(0, 0, 0, 0.25)" }
+   : { light: "#FFFFFF", dark: "#2C2C2E" },
   textPrimary: isGlass
-   ? { light: "#FFFFFF", dark: "#F7F7F8" }
+   ? { light: "#1A1A1A", dark: "#FFFFFF" }
    : { light: "#000000", dark: "#FFFFFF" },
   textSecondary: isGlass
-   ? { light: "rgba(255, 255, 255, 0.8)", dark: "rgba(247, 247, 248, 0.7)" }
+   ? { light: "rgba(0, 0, 0, 0.6)", dark: "rgba(255, 255, 255, 0.7)" }
    : { light: "#555555", dark: "#EBEBF5" },
   textTertiary: isGlass
-   ? { light: "rgba(255, 255, 255, 0.7)", dark: "rgba(247, 247, 248, 0.6)" }
+   ? { light: "rgba(0, 0, 0, 0.45)", dark: "rgba(255, 255, 255, 0.55)" }
    : { light: "#888888", dark: "#8E8E93" },
   accentBlue: { light: "#007AFF", dark: "#0A84FF" },
   accentGreen: { light: "#34C759", dark: "#30D158" },
@@ -172,13 +164,13 @@ function getColors(isGlass) {
   accentRed: { light: "#FF3B30", dark: "#FF453A" },
   accentPurple: { light: "#5856D6", dark: "#5856D6" },
   divider: isGlass
-   ? { light: "rgba(255, 255, 255, 0.2)", dark: "rgba(255, 255, 255, 0.12)" }
+   ? { light: "rgba(0, 0, 0, 0.1)", dark: "rgba(255, 255, 255, 0.2)" }
    : { light: "#E5E5EA", dark: "#48484A" },
   cardBg: isGlass
-   ? { light: "rgba(255, 255, 255, 0.18)", dark: "rgba(255, 255, 255, 0.12)" }
+   ? { light: "rgba(255, 255, 255, 0.4)", dark: "rgba(255, 255, 255, 0.18)" }
    : { light: "#FFFFFF", dark: "#2B2B2D" },
   trackBg: isGlass
-   ? { light: "rgba(255, 255, 255, 0.25)", dark: "rgba(255, 255, 255, 0.18)" }
+   ? { light: "rgba(0, 0, 0, 0.12)", dark: "rgba(255, 255, 255, 0.2)" }
    : { light: "#E8E8EA", dark: "#48484A" },
  };
 }
