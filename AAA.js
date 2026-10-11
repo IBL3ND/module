@@ -1,313 +1,268 @@
 /*
  * 中国电信小组件
- * 同一个文件，三种用法：
- *   1. generic 类型 → iOS 小组件
- *   2. http_request 类型 → 登录捕获（cookie 模式用）
- *   3. schedule 类型 → 定时保活
- *
- * 登录方式（两种，密码登录优先）：
- *   A. 密码登录（推荐）：在模块里填
- *        手机号 + 服务密码
- *      脚本用电信 App 官方接口（RSA 加密）登录拿 token，
- *      token 失效时自动重新登录，全程不用手动干预。
- *      设备 ID 由脚本在本机自动生成（16 位十六进制，真机格式）
- *      并持久化保存，全程不经过任何第三方服务器。
- *   B. Cookie 模式（兼容旧版）：不填上面三个值时，
- *      走原来的 e.dlife.cn 抓包逻辑（https://e.dlife.cn 登录一次）。
- *      注意：e.dlife.cn 会话约 48 小时绝对过期，保活续不了命。
+ * 数据接口（用户 2026-10-11 抓包提供）：
+ *   POST https://appfuwusz.189.cn:443/query/queryMainDataArea
+ * 模块里填写抓包得到的 token / userId / 手机号 / 省市代码即可，
+ * 不用密码，不经过第三方。
  */
-
-const URLS = {
-  login: 'https://e.dlife.cn/index.do',
-  detail: 'https://e.dlife.cn/user/package_detail.do',
-  balance: 'https://e.dlife.cn/user/balance.do',
-};
-
 
 const FLOW_COLOR = '#FF6620';
 const VOICE_COLOR = '#78C100';
 
+const FEE_ICON = 'yensign.circle.fill';
+const FEE_ICON_COLOR = '#FF9500';
+const FLOW_ICON = 'antenna.radiowaves.left.and.right';
+const VOICE_ICON = 'phone.circle.fill';
 
-const COLORS = {
-  bg: {
-    light: '#FFFFFF',
-    dark: '#2C2C2E',
-  },
-
-  border: {
-    light: '#E5E5EA',
-    dark: '#3A3A3C',
-  },
-
-  title: {
-    light: '#666666',
-    dark: '#8E8E93',
-  },
-
-  value: {
-    light: '#1C1C1E',
-    dark: '#FFFFFF',
-  },
-
-  time: {
-    light: '#999999',
-    dark: '#666666',
-  },
-
-  error: {
-    light: '#FF3B30',
-    dark: '#FF453A',
-  },
-
-  capsuleBg: {
-    light: '#F5F5F7',
-    dark: '#3A3A3C',
-  },
-
-  accent: {
-    light: '#FF6620',
-    dark: '#FF854D',
-  },
-};
-
+/* ---------- 工具函数 ---------- */
 
 function formatFlow(flow) {
   const remain = flow / 1024;
-
-  if (remain < 1024) {
-    return {
-      amount: remain.toFixed(2),
-      unit: 'MB',
-    };
-  }
-
-  return {
-    amount: (remain / 1024).toFixed(2),
-    unit: 'GB',
-  };
+  if (remain < 1024) return { amount: remain.toFixed(2), unit: 'MB' };
+  return { amount: (remain / 1024).toFixed(2), unit: 'GB' };
 }
-
 
 function pad2(n) {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
-
 function fmtTime(ts) {
   const d = new Date(ts);
-
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
+/* ---------- 渲染层（Widget DSL） ---------- */
 
-async function refreshCookie(ctx) {
-  const loginUrl =
-    (ctx.env.CT_LOGIN_URL || '').trim() ||
-    ctx.storage.get('ct_login_url') ||
-    '';
-
-  if (!loginUrl) {
-    return ctx.storage.get('ct_cookie') || '';
-  }
-
-  const url =
-    (loginUrl.match(/(http.+)&sign/) || [])[1] ||
-    loginUrl;
-
-  const resp = await ctx.http.get(url, {
-    redirect: 'manual',
-    timeout: 15000,
-    credentials: 'omit',
-  });
-
-  const setCookies =
-    (resp.headers &&
-      resp.headers.getAll &&
-      resp.headers.getAll('set-cookie')) ||
-    [];
-
-  const pairs = setCookies
-    .map((c) => String(c).split(';')[0].trim())
-    .filter(Boolean);
-
-  if (pairs.length > 0) {
-    ctx.storage.set(
-      'ct_cookie',
-      pairs.join('; ')
-    );
-  }
-
-  return ctx.storage.get('ct_cookie') || '';
-}
-
-
-async function fetchJson(ctx, url, cookie) {
-  let resp;
-  try {
-    resp = await ctx.http.get(url, {
-      headers: {
-        Cookie: cookie,
+function statCard(icon, color, size, data) {
+  return {
+    type: 'stack',
+    direction: 'column',
+    alignItems: 'center',
+    gap: 2,
+    flex: 1,
+    children: [
+      {
+        type: 'image',
+        src: `sf-symbol:${icon}`,
+        width: size,
+        height: size,
+        color,
       },
-
-      timeout: 15000,
-
-      credentials: 'omit',
-    });
-  } catch (e) {
-    // 连服务器都没连上（断网/DNS/超时）：瞬时故障，可以用缓存顶
-    const err = new Error(`network: ${url}`);
-    err.transient = true;
-    throw err;
-  }
-
-  if (!resp || resp.status !== 200) {
-    // 服务器有响应但拒绝了（302 跳登录/401/403 等）：cookie 已失效
-    throw new Error(
-      `HTTP ${resp ? resp.status : 'no-response'}: ${url}`
-    );
-  }
-
-  try {
-    return await resp.json();
-  } catch (e) {
-    // 200 但不是 JSON（通常是被踢到登录页，拿回 HTML）：cookie 已失效
-    throw new Error(`not-json: ${url}`);
-  }
-}
-
-
-// ==================== 密码登录（电信 App 官方接口） ====================
-// 手机号 + 服务密码 + 已注册的 androidId → RSA 加密登录拿 token。
-// androidId 获取：https://telecom.nufe.ccwu.cc（短信验证注册，一次性）。
-// 注意：用随机设备 ID 可能被服务端拒绝，务必用注册来的真 androidId。
-// 纯 JS 实现 RSA（PKCS#1 v1.5），不依赖 WebView。
-
-const TOKEN_URLS = {
-  login: 'https://appgologin.189.cn:9031/login/client/userLoginNormal',
-  data: 'https://appfuwu.189.cn:9021/query/qryImportantData',
-};
-
-const TELECOM_RSA_PUBLIC_KEY = [
-  '-----BEGIN PUBLIC KEY-----',
-  'MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDBkLT15ThVgz6/NOl6s8GNPofd',
-  'WzWbCkWnkaAm7O2LjkM1H7dMvzkiqdxU02jamGRHLX/ZNMCXHnPcW/sDhiFCBN18',
-  'qFvy8g6VYb9QtroI09e176s+ZCtiv7hbin2cCTj99iUpnEloZm19lwHyo69u5UMi',
-  'PMpq0/XKBO8lYhN/gwIDAQAB',
-  '-----END PUBLIC KEY-----',
-].join('\n');
-
-const RSA_B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-function rsaB64Decode(b64) {
-  const clean = String(b64).replace(/[^A-Za-z0-9+/=]/g, '');
-  const out = [];
-  for (let i = 0; i < clean.length; i += 4) {
-    const c1 = RSA_B64.indexOf(clean[i]);
-    const c2 = RSA_B64.indexOf(clean[i + 1]);
-    const c3 = clean[i + 2] === '=' ? 0 : RSA_B64.indexOf(clean[i + 2]);
-    const c4 = clean[i + 3] === '=' ? 0 : RSA_B64.indexOf(clean[i + 3]);
-    const n = (c1 << 18) | (c2 << 12) | (c3 << 6) | c4;
-    out.push((n >> 16) & 0xff);
-    if (clean[i + 2] !== '=') out.push((n >> 8) & 0xff);
-    if (clean[i + 3] !== '=') out.push(n & 0xff);
-  }
-  return out;
-}
-
-function rsaB64Encode(bytes) {
-  let out = '';
-  for (let i = 0; i < bytes.length; i += 3) {
-    const b1 = bytes[i];
-    const b2 = i + 1 < bytes.length ? bytes[i + 1] : 0;
-    const b3 = i + 2 < bytes.length ? bytes[i + 2] : 0;
-    const n = (b1 << 16) | (b2 << 8) | b3;
-    out += RSA_B64[(n >> 18) & 0x3f];
-    out += RSA_B64[(n >> 12) & 0x3f];
-    out += i + 1 < bytes.length ? RSA_B64[(n >> 6) & 0x3f] : '=';
-    out += i + 2 < bytes.length ? RSA_B64[n & 0x3f] : '=';
-  }
-  return out;
-}
-
-function rsaDerRead(bytes, pos) {
-  const tag = bytes[pos];
-  let len = bytes[pos + 1];
-  let off = pos + 2;
-  if (len & 0x80) {
-    const nBytes = len & 0x7f;
-    len = 0;
-    for (let i = 0; i < nBytes; i++) len = len * 256 + bytes[off++];
-  }
-  return { tag, start: off, end: off + len, next: off + len };
-}
-
-function rsaParsePublicKey(pem) {
-  const b64 = String(pem)
-    .replace(/-----BEGIN PUBLIC KEY-----/g, '')
-    .replace(/-----END PUBLIC KEY-----/g, '');
-  const bytes = rsaB64Decode(b64);
-  const outer = rsaDerRead(bytes, 0);
-  let pos = outer.start;
-  const alg = rsaDerRead(bytes, pos);
-  pos = alg.next;
-  const bitStr = rsaDerRead(bytes, pos);
-  pos = bitStr.start + 1;
-  const inner = rsaDerRead(bytes, pos);
-  pos = inner.start;
-  const modTlv = rsaDerRead(bytes, pos);
-  pos = modTlv.next;
-  const expTlv = rsaDerRead(bytes, pos);
-  const toBigInt = (arr) => {
-    let hex = '';
-    for (const b of arr) hex += b.toString(16).padStart(2, '0');
-    return BigInt('0x' + hex);
+      {
+        type: 'text',
+        text: `${data.number} ${data.unit}`,
+        font: { size: 'subheadline', weight: 'semibold' },
+        textAlign: 'center',
+        maxLines: 1,
+        minScale: 0.6,
+      },
+      {
+        type: 'text',
+        text: data.title,
+        font: { size: 'caption2' },
+        textAlign: 'center',
+        opacity: 0.6,
+      },
+    ],
   };
-  const n = toBigInt(bytes.slice(modTlv.start, modTlv.end));
-  const e = toBigInt(bytes.slice(expTlv.start, expTlv.end));
-  const k = Math.ceil(n.toString(2).length / 8);
-  return { n, e, k };
 }
 
-function rsaModPow(base, exp, mod) {
-  let result = 1n;
-  let b = base % mod;
-  let e = exp;
-  while (e > 0n) {
-    if (e & 1n) result = (result * b) % mod;
-    b = (b * b) % mod;
-    e >>= 1n;
-  }
-  return result;
+function headerRow(title, ds, fromCache) {
+  const t = ds && ds.updatedAt ? fmtTime(ds.updatedAt) : '--:--';
+  return {
+    type: 'stack',
+    direction: 'row',
+    alignItems: 'center',
+    children: [
+      { type: 'text', text: title, font: { size: 'footnote', weight: 'semibold' } },
+      { type: 'spacer' },
+      {
+        type: 'text',
+        text: fromCache ? `缓存 ${t}` : `更新 ${t}`,
+        font: { size: 'caption2' },
+        opacity: 0.55,
+      },
+    ],
+  };
 }
 
-function rsaEncrypt(publicKeyPem, text) {
-  const { n, e, k } = rsaParsePublicKey(publicKeyPem);
-  const src = String(text);
-  const msgBytes = [];
-  for (let i = 0; i < src.length; i++) {
-    const code = src.charCodeAt(i);
-    if (code < 0x80) msgBytes.push(code);
-    else if (code < 0x800) msgBytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
-    else msgBytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+function buildSmall(title, ds, fromCache) {
+  return {
+    type: 'widget',
+    padding: 14,
+    gap: 8,
+    refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    children: [
+      headerRow(title, ds, fromCache),
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        children: [
+          { type: 'text', text: ds.fee.title, font: { size: 'footnote' }, opacity: 0.65 },
+          { type: 'spacer' },
+          {
+            type: 'text',
+            text: ds.fee.number,
+            font: { size: 'title2', weight: 'bold' },
+            maxLines: 1,
+            minScale: 0.7,
+          },
+          {
+            type: 'text',
+            text: ` ${ds.fee.unit}`,
+            font: { size: 'footnote' },
+            opacity: 0.65,
+          },
+        ],
+      },
+      {
+        type: 'stack',
+        direction: 'row',
+        gap: 10,
+        children: [statCard(FLOW_ICON, ds.flow.color, 58, ds.flow), statCard(VOICE_ICON, ds.voice.color, 58, ds.voice)],
+      },
+    ],
+  };
+}
+
+function buildMedium(title, ds, fromCache, ctx) {
+  const style = String((ctx && ctx.env && ctx.env.CT_WIDGET_STYLE) || 'glass').toLowerCase();
+  const cardBg =
+    style === 'classic'
+      ? { light: '#F2F2F7', dark: '#1C1C1E' }
+      : { light: 'rgba(255,255,255,0.18)', dark: 'rgba(255,255,255,0.08)' };
+  const card = (children) => ({
+    type: 'stack',
+    direction: 'column',
+    alignItems: 'center',
+    flex: 1,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: cardBg,
+    children,
+  });
+  return {
+    type: 'widget',
+    padding: 12,
+    gap: 8,
+    refreshAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    children: [
+      headerRow(title, ds, fromCache),
+      {
+        type: 'stack',
+        direction: 'row',
+        gap: 8,
+        children: [
+          card(statCard(FEE_ICON, FEE_ICON_COLOR, 62, ds.fee).children),
+          card(statCard(FLOW_ICON, ds.flow.color, 62, ds.flow).children),
+          card(statCard(VOICE_ICON, ds.voice.color, 62, ds.voice).children),
+        ],
+      },
+    ],
+  };
+}
+
+function buildLockScreen(title, ds, family) {
+  if (family === 'accessoryCircular' || family === 'accessoryInline') {
+    return {
+      type: 'widget',
+      children: [
+        {
+          type: 'text',
+          text: `¥${ds.fee.number}`,
+          font: { size: 'body', weight: 'semibold' },
+          textAlign: 'center',
+        },
+      ],
+    };
   }
-  if (msgBytes.length > k - 11) throw new Error('RSA: 明文过长');
-  const em = new Array(k).fill(0);
-  em[1] = 0x02;
-  const psLen = k - msgBytes.length - 3;
-  for (let i = 0; i < psLen; i++) {
-    let r = 0;
-    while (r === 0) r = Math.floor(Math.random() * 256);
-    em[2 + i] = r;
+  return {
+    type: 'widget',
+    padding: 8,
+    gap: 4,
+    children: [
+      { type: 'text', text: title, font: { size: 'caption2', weight: 'semibold' } },
+      {
+        type: 'text',
+        text: `¥${ds.fee.number} · ${ds.flow.number}${ds.flow.unit} · ${ds.voice.number}分`,
+        font: { size: 'footnote' },
+        maxLines: 1,
+        minScale: 0.6,
+      },
+    ],
+  };
+}
+
+function buildError(title, message, url) {
+  const w = {
+    type: 'widget',
+    padding: 14,
+    gap: 6,
+    children: [
+      { type: 'text', text: title, font: { size: 'footnote', weight: 'semibold' } },
+      {
+        type: 'image',
+        src: 'sf-symbol:exclamationmark.triangle',
+        width: 22,
+        height: 22,
+        color: '#FF9500',
+      },
+      { type: 'text', text: message, font: { size: 'caption1' }, opacity: 0.7 },
+    ],
+  };
+  if (url) w.url = url;
+  return w;
+}
+
+/* ---------- 数据层（待用户提供抓包接口后填入） ---------- */
+
+// 数据接口（用户 2026-10-11 自行抓包提供）：
+//   POST https://appfuwusz.189.cn:443/query/queryMainDataArea
+// 认证靠 headerInfos.token（App 登录后颁发）；timestamp 每次现算。
+// 返回的 customerInsightData 为 base64(JSON)，含全部汇总（流量单位 KB）。
+
+const TELECOM_API = 'https://appfuwusz.189.cn:443/query/queryMainDataArea';
+
+/* ---------- App 自动抓取（request 脚本模式） ---------- */
+
+// 打开电信 App 时，Egern 拦截 189.cn 请求，从请求体里提取认证信息存下来，
+// 小组件直接用，无需手动填写。对标联通的 cookie 自动捕获。
+function extractAuthFromRequest(ctx) {
+  const req = ctx.request || {};
+  const url = req.url || '';
+  if (!url.includes('189.cn')) return false;
+
+  let body = null;
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+  } catch (e) { return false; }
+  if (!body) return false;
+
+  const hi = body.headerInfos || {};
+  const fd = (body.content && body.content.fieldData) || {};
+  const token = hi.token || '';
+  if (!token || token.length < 10) return false;
+
+  let updated = false;
+  const save = (k, v) => {
+    if (v && ctx.storage.get(k) !== v) { ctx.storage.set(k, v); updated = true; }
+  };
+  save('ct_token', token);
+  save('ct_broad_token', hi.broadToken || '');
+  save('ct_user_id', fd.userId || '');
+  save('ct_province_code', hi.provinceCode || fd.provinceCode || '');
+  save('ct_city_code', fd.cityCode || '');
+  save('ct_enc_phone', hi.userLoginName || '');
+  // account 可能是 base64(transNumber(phone))，也可能是明文转码，直接存
+  save('ct_account', fd.account || '');
+
+  if (updated) {
+    try {
+      ctx.notify({ title: '中国电信', body: '已自动抓取登录凭证，小组件将自动更新' });
+    } catch (e) {}
   }
-  em[2 + psLen] = 0x00;
-  for (let i = 0; i < msgBytes.length; i++) em[3 + psLen + i] = msgBytes[i];
-  let hex = '';
-  for (const b of em) hex += b.toString(16).padStart(2, '0');
-  const c = rsaModPow(BigInt('0x' + hex), e, n);
-  const cHex = c.toString(16).padStart(k * 2, '0');
-  const cBytes = [];
-  for (let i = 0; i < cHex.length; i += 2) cBytes.push(parseInt(cHex.substr(i, 2), 16));
-  return rsaB64Encode(cBytes);
+  return true;
 }
 
 function transNumber(str, encode = true) {
@@ -319,179 +274,180 @@ function transNumber(str, encode = true) {
 function beijingTimestamp() {
   const d = new Date(Date.now() + 8 * 3600 * 1000);
   const p = (n) => String(n).padStart(2, '0');
-  return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) +
-    p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds());
+  return (
+    d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) +
+    p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds())
+  );
 }
 
-// 生成并持久化一个格式正确的 androidId（16 位十六进制，与真机一致）。
-// 存下来长期用，避免每次登录换 ID 被服务端当成新设备。
-// 全程本机生成，不经过任何第三方服务器。
-function getOrCreateDeviceId(ctx, overrideId) {
-  const manual = (overrideId || '').trim();
-  if (/^[0-9a-fA-F]{16}$/.test(manual)) return manual.toLowerCase();
-  let id = (ctx.storage.get('ct_device_id') || '').trim();
-  if (!/^[0-9a-f]{16}$/.test(id)) {
-    const hex = '0123456789abcdef';
-    id = '';
-    for (let i = 0; i < 16; i++) id += hex[Math.floor(Math.random() * 16)];
-    ctx.storage.set('ct_device_id', id);
+function b64DecodeToString(b64) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const clean = String(b64).replace(/[^A-Za-z0-9+/=]/g, '');
+  const bytes = [];
+  for (let i = 0; i < clean.length; i += 4) {
+    const c1 = chars.indexOf(clean[i]);
+    const c2 = chars.indexOf(clean[i + 1]);
+    const c3 = clean[i + 2] === '=' ? 0 : chars.indexOf(clean[i + 2]);
+    const c4 = clean[i + 3] === '=' ? 0 : chars.indexOf(clean[i + 3]);
+    const n = (c1 << 18) | (c2 << 12) | (c3 << 6) | c4;
+    bytes.push((n >> 16) & 0xff);
+    if (clean[i + 2] !== '=') bytes.push((n >> 8) & 0xff);
+    if (clean[i + 3] !== '=') bytes.push(n & 0xff);
   }
-  return id;
+  // UTF-8 解码
+  let out = '';
+  for (let i = 0; i < bytes.length; ) {
+    const b = bytes[i];
+    if (b < 0x80) { out += String.fromCharCode(b); i++; }
+    else if ((b & 0xe0) === 0xc0) {
+      out += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i + 1] & 0x3f)); i += 2;
+    } else {
+      out += String.fromCharCode(
+        ((b & 0x0f) << 12) | ((bytes[i + 1] & 0x3f) << 6) | (bytes[i + 2] & 0x3f)
+      ); i += 3;
+    }
+  }
+  return out;
 }
 
-async function telecomLogin(ctx, phone, password, deviceId) {
-  const uuid = String(Math.floor(Math.random() * 9e15 + 1e15));
-  const ts = beijingTimestamp();
-  // 设备 ID：优先用填入的真机 ID，否则用本机生成并持久化的 16 位十六进制 ID
-  const devId = getOrCreateDeviceId(ctx, deviceId);
-  const encryptText = `iPhone 14 15.4.0${devId}${phone}${ts}${password}0$$$0.`;
-  const encrypted = rsaEncrypt(TELECOM_RSA_PUBLIC_KEY, encryptText);
+function b64Encode(str) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const bytes = [];
+  for (const ch of String(str)) {
+    const code = ch.charCodeAt(0);
+    if (code < 0x80) bytes.push(code);
+    else if (code < 0x800) bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+    else bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+  }
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b1 = bytes[i], b2 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const b3 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    const n = (b1 << 16) | (b2 << 8) | b3;
+    out += chars[(n >> 18) & 0x3f] + chars[(n >> 12) & 0x3f];
+    out += i + 1 < bytes.length ? chars[(n >> 6) & 0x3f] : '=';
+    out += i + 2 < bytes.length ? chars[n & 0x3f] : '=';
+  }
+  return out;
+}
 
+async function fetchTelecomData(ctx, settings) {
+  // 优先用自动抓取存下的，env 手动填写做兜底
+  const token = (ctx.env.CT_TOKEN || '').trim() || ctx.storage.get('ct_token') || '';
+  const userId = (ctx.env.CT_USER_ID || '').trim() || ctx.storage.get('ct_user_id') || '';
+  const phone = (ctx.env.CT_PHONE || '').trim();
+  const provinceCode = (ctx.env.CT_PROVINCE_CODE || '').trim() || ctx.storage.get('ct_province_code') || '';
+  const cityCode = (ctx.env.CT_CITY_CODE || '').trim() || ctx.storage.get('ct_city_code') || '';
+  // encPhone：优先用抓到的 userLoginName，否则用手机号现算
+  const encPhone = ctx.storage.get('ct_enc_phone') || (phone ? transNumber(phone) : '');
+  if (!token || !userId) {
+    const err = new Error('打开电信 App 自动抓取登录凭证');
+    err.needCapture = true;
+    throw err;
+  }
+
+  const ts = beijingTimestamp();
+  // encPhone 已在上面确定（抓取优先，手机号兜底）
   const body = {
     content: {
       fieldData: {
-        loginType: '4',
-        accountType: '',
-        isChinatelecom: '',
-        systemVersion: '15.4.0',
-        deviceUid: uuid.slice(0, 16),
-        phoneNum: transNumber(phone),
-        authentication: transNumber(password),
-        androidId: devId ? transNumber(devId) : '',
-        loginAuthCipherAsymmertric: encrypted,
+        isNewUser: '0',
+        netType: '0',
+        isPremiumEdition: '0',
+        scene: '',
+        provinceCode,
+        searchType: '1',
+        cityCode,
+        userId,
+        shopId: '20004',
+        isChinatelecom: '0',
+        isShowFlowInformationWidget: '0',
+        account: ctx.storage.get('ct_account') || b64Encode(encPhone),
+        phoneType: '69',
+        accessAuth: '1',
       },
       attach: 'iPhone',
     },
     headerInfos: {
-      code: 'userLoginNormal',
-      clientType: '#12.2.0#channel50#iPhone 14 Pro#',
+      broadAccount: '',
+      clientType: '#13.4.0#channel50#iPhone 15 Pro Max#',
+      fixedLineToken: '',
+      userLoginName: encPhone,
       timestamp: ts,
-      shopId: '20002',
-      source: '110003',
-      sourcePassword: 'Sid98s',
-      userLoginName: transNumber(phone),
-    },
-  };
-
-  let resp;
-  try {
-    resp = await ctx.http.post(TOKEN_URLS.login, {
-      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-      body: JSON.stringify(body),
-      timeout: 15000,
-    });
-  } catch (e) {
-    const err = new Error(`network: ${TOKEN_URLS.login}`);
-    err.transient = true;
-    throw err;
-  }
-  if (!resp || resp.status !== 200) throw new Error(`HTTP ${resp ? resp.status : 'no-response'}: login`);
-  let data;
-  try { data = await resp.json(); } catch (e) { throw new Error('not-json: login'); }
-  if (data?.responseData?.resultCode !== '0000') {
-    const code = data?.responseData?.resultCode || 'unknown';
-    const desc = data?.responseData?.resultDesc || '登录失败';
-    const err = new Error(`[${code}] ${desc}`);
-    err.loginFailed = true;
-    throw err;
-  }
-  const r = data.responseData.data.loginSuccessResult || {};
-  ctx.storage.set('ct_token', r.token || '');
-  ctx.storage.set('ct_city_code', r.cityCode || '');
-  ctx.storage.set('ct_province_code', r.provinceCode || '');
-  return r;
-}
-
-async function fetchImportantData(ctx, phone) {
-  const token = ctx.storage.get('ct_token') || '';
-  const cityCode = ctx.storage.get('ct_city_code') || '';
-  const provinceCode = ctx.storage.get('ct_province_code') || '';
-  const ts = beijingTimestamp();
-  const body = {
-    content: {
-      fieldData: {
-        provinceCode, cityCode, shopId: '20002', isChinatelecom: '0',
-        account: transNumber(phone),
-      },
-      attach: 'test',
-    },
-    headerInfos: {
-      code: 'qryImportantData',
-      clientType: '#12.2.0#channel50#iPhone 14 Pro#',
-      timestamp: ts,
-      shopId: '20002',
-      source: '110003',
-      sourcePassword: 'Sid98s',
-      userLoginName: transNumber(phone),
+      broadToken: '',
+      fixedLineAccount: '',
+      provinceCode,
+      source: '120002',
+      code: 'queryMainDataArea',
+      sourcePassword: 'TiqmIZ',
       token,
+      shopId: '20004',
     },
   };
+
   let resp;
   try {
-    resp = await ctx.http.post(TOKEN_URLS.data, {
+    resp = await ctx.http.post(TELECOM_API, {
       headers: { 'Content-Type': 'application/json; charset=UTF-8' },
       body: JSON.stringify(body),
       timeout: 15000,
     });
   } catch (e) {
-    const err = new Error(`network: ${TOKEN_URLS.data}`);
+    const err = new Error('网络请求失败');
     err.transient = true;
     throw err;
   }
-  if (!resp || resp.status !== 200) throw new Error(`HTTP ${resp ? resp.status : 'no-response'}: data`);
+  if (!resp || resp.status !== 200) {
+    throw new Error(`HTTP ${resp ? resp.status : '无响应'}`);
+  }
   let data;
-  try { data = await resp.json(); } catch (e) { throw new Error('not-json: data'); }
-  if (!data?.responseData) {
-    const err = new Error('token-expired');
-    err.tokenExpired = true;
+  try { data = await resp.json(); } catch (e) { throw new Error('返回非 JSON'); }
+  const rd = data && data.responseData;
+  if (!rd || rd.resultCode !== '0000') {
+    const err = new Error(`[${(rd && rd.resultCode) || 'unknown'}] ${(rd && rd.resultDesc) || '接口返回异常'}`);
+    // token 失效时 resultCode 非 0000，提示重新抓取
+    err.authFailed = true;
     throw err;
   }
-  return data.responseData.data;
-}
 
-function parseTokenData(apiData, opts) {
-  const { showUsedFlow, showGeneralFlow, showDirectionalFlow } = opts;
+  // customerInsightData: base64(JSON)，流量单位 KB
+  let insight = {};
+  try {
+    insight = JSON.parse(b64DecodeToString(rd.data.customerInsightData || ''));
+  } catch (e) {}
   const num = (v) => {
     const n = parseFloat(v);
     return Number.isFinite(n) ? n : 0;
   };
-  const balanceRaw = apiData?.balanceInfo?.indexBalanceDataInfo?.balance ?? apiData?.balance;
-  const balanceNum = Number(balanceRaw);
+
+  // 话费：优先 otherData.balance
+  const balanceStr = (rd.data.otherData && rd.data.otherData.balance) || insight.balance || '0';
   const fee = {
     title: '剩余话费',
-    number: Number.isFinite(balanceNum) ? balanceNum.toFixed(2) : '0.00',
+    number: num(balanceStr).toFixed(2),
     unit: '元',
   };
-  const common = apiData?.flowInfo?.commonFlow || {};
-  const total = apiData?.flowInfo?.totalAmount || {};
-  let usedRaw = 0, balanceRawFlow = 0;
-  if (showGeneralFlow && showDirectionalFlow) {
-    usedRaw = num(total.used); balanceRawFlow = num(total.balance);
-  } else if (showGeneralFlow) {
-    usedRaw = num(common.used); balanceRawFlow = num(common.balance);
-  } else if (showDirectionalFlow) {
-    usedRaw = Math.max(0, num(total.used) - num(common.used));
-    balanceRawFlow = Math.max(0, num(total.balance) - num(common.balance));
-  }
-  const totalRaw = usedRaw + balanceRawFlow;
-  const balanceFlow = formatFlow(balanceRawFlow);
-  const usedFlow = formatFlow(usedRaw);
+
+  // 流量：KB → MB
+  const flowTotalKB = num(insight.flowTotal);
+  const flowUsedKB = num(insight.flowUsed);
+  const flowBalanceKB = Math.max(0, flowTotalKB - flowUsedKB);
+  const flowBalanceMB = flowBalanceKB / 1024;
+  const flowUsedMB = flowUsedKB / 1024;
+  const flowTotalMB = flowTotalKB / 1024;
+  const balanceFlow = formatFlow(flowBalanceMB);
+  const usedFlow = formatFlow(flowUsedMB);
   const flow = {
-    title: '剩余流量',
-    number: balanceFlow.amount,
-    unit: balanceFlow.unit,
-    percent: +((balanceRawFlow / (totalRaw || 1)) * 100).toFixed(2),
+    title: settings.showUsedFlow ? '已用流量' : '剩余流量',
+    number: settings.showUsedFlow ? usedFlow.amount : balanceFlow.amount,
+    unit: settings.showUsedFlow ? usedFlow.unit : balanceFlow.unit,
+    percent: +((flowBalanceKB / (flowTotalKB || 1)) * 100).toFixed(2),
     color: FLOW_COLOR,
   };
-  if (showUsedFlow) {
-    flow.title = '已用流量';
-    flow.number = usedFlow.amount;
-    flow.unit = usedFlow.unit;
-  }
-  const vInfo = apiData?.voiceInfo?.voiceDataInfo || {};
-  const voiceTotal = num(vInfo.total ?? apiData?.totalVoice);
-  const voiceUsed = num(vInfo.used ?? apiData?.usedVoice);
-  const voiceBalance = num(vInfo.balance ?? voiceTotal - voiceUsed);
+
+  // 语音
+  const voiceTotal = num(insight.voiceTotal);
+  const voiceBalance = num(insight.voiceBalance);
   const voice = {
     title: '剩余语音',
     number: `${Math.round(voiceBalance)}`,
@@ -499,1955 +455,89 @@ function parseTokenData(apiData, opts) {
     percent: +((voiceBalance / (voiceTotal || 1)) * 100).toFixed(2),
     color: VOICE_COLOR,
   };
+
   return { fee, flow, voice, updatedAt: Date.now() };
 }
 
-function notifyTokenLoginFailedOnce(ctx, phone) {
-  const key = 'ct_token_login_notified';
-  const marker = phone || 'none';
-  if (ctx.storage.get(key) === marker) return;
-  ctx.storage.set(key, marker);
-  try {
-    ctx.notify({ title: '中国电信', body: '密码登录失败，请检查手机号、服务密码是否正确' });
-  } catch (e) {}
-}
-
-function clearTokenLoginFlag(ctx) {
-  ctx.storage.delete('ct_token_login_notified');
-}
-
-function loginCooldownActive(ctx, phone, password) {
-  const key = `${phone}:${password}`;
-  const failKey = ctx.storage.get('ct_login_fail_key') || '';
-  const failTs = Number(ctx.storage.get('ct_login_fail_ts') || 0);
-  if (failKey && failKey === key) return Date.now() - failTs < 30 * 1000;
-  ctx.storage.delete('ct_login_fail_key');
-  ctx.storage.delete('ct_login_fail_ts');
-  return false;
-}
-
-function markLoginFailed(ctx, phone, password) {
-  ctx.storage.set('ct_login_fail_key', `${phone}:${password}`);
-  ctx.storage.set('ct_login_fail_ts', String(Date.now()));
-}
-
-function clearLoginFailed(ctx) {
-  ctx.storage.delete('ct_login_fail_key');
-  ctx.storage.delete('ct_login_fail_ts');
-}
-
-async function loadDataByToken(ctx, phone, password, deviceId, settings) {
-  const configured = true;
-  try {
-    let apiData;
-    try {
-      apiData = await fetchImportantData(ctx, phone);
-    } catch (e) {
-      if (e && e.tokenExpired) {
-        if (loginCooldownActive(ctx, phone, password)) {
-          const coolErr = new Error('密码多次错误，冷却中（30秒后再试）');
-          coolErr.loginFailed = true;
-          coolErr.coolingDown = true;
-          throw coolErr;
-        }
-        await telecomLogin(ctx, phone, password, deviceId);
-        clearLoginFailed(ctx);
-        apiData = await fetchImportantData(ctx, phone);
-      } else throw e;
-    }
-    const ds = parseTokenData(apiData, settings);
-    ctx.storage.setJSON('ct_datasource', ds);
-    clearTokenLoginFlag(ctx);
-    return { configured, ds, fromCache: false, authFailed: false };
-  } catch (e) {
-    if (e && e.transient) {
-      const cached = ctx.storage.getJSON('ct_datasource');
-      return { configured, ds: cached || null, fromCache: !!cached, authFailed: false };
-    }
-    if (e && e.loginFailed) {
-      if (!e.coolingDown) markLoginFailed(ctx, phone, password);
-      notifyTokenLoginFailedOnce(ctx, phone);
-      return { configured, ds: null, fromCache: false, authFailed: 'token', authMessage: e.message };
-    }
-    const cached = ctx.storage.getJSON('ct_datasource');
-    return { configured, ds: cached || null, fromCache: !!cached,
-      authFailed: cached ? false : 'token', authMessage: e && e.message };
-  }
-}
-
-
-function parseTelecom(detail, balance, opts) {
-  const {
-    showUsedFlow,
-    showGeneralFlow,
-    showDirectionalFlow,
-  } = opts;
-
-  let totalFlowAmount = 0;
-  let totalBalanceFlowAmount = 0;
-  let totalUsedFlowAmount = 0;
-
-  let totalVoiceAmount = 0;
-  let totalBalanceVoiceAmount = 0;
-
-  let isUnlimitedFlow = false;
-
-  for (const data of detail?.items || []) {
-
-    if (data.offerType === 19) {
-      continue;
-    }
-
-    for (const item of data.items || []) {
-
-
-      if (item.unitTypeId == 3) {
-
-        // 定向判断：资源名含"定向"即为定向流量，其余为通用流量
-        const isDirectional =
-          /定向/.test(
-            item.ratableResourcename || ''
-          );
-
-        const directionAllowed =
-          isDirectional ?
-            showDirectionalFlow :
-            showGeneralFlow;
-
-        if (
-          !(
-            item.usageAmount == 0 &&
-            item.balanceAmount == 0
-          )
-        ) {
-
-          const skip =
-            item.balanceAmount == '999999999999' ||
-            !directionAllowed;
-
-          if (!skip) {
-
-            totalFlowAmount +=
-              parseFloat(
-                item.ratableAmount
-              ) || 0;
-
-            totalBalanceFlowAmount +=
-              parseFloat(
-                item.balanceAmount
-              ) || 0;
-          }
-        }
-
-        // 已用流量同样按开关过滤，保证"只显示通用"时已用也是通用的
-        if (directionAllowed) {
-
-          totalUsedFlowAmount +=
-            parseFloat(
-              item.usageAmount
-            ) || 0;
-        }
-
-        if (
-          data.offerType == 21 &&
-          item.ratableAmount == '0'
-        ) {
-          isUnlimitedFlow = true;
-        }
-
-      }
-
-
-      else if (
-        !detail.voiceBalance &&
-        item.unitTypeId == 1
-      ) {
-
-        totalVoiceAmount +=
-          parseInt(
-            item.ratableAmount,
-            10
-          ) || 0;
-
-        totalBalanceVoiceAmount +=
-          parseInt(
-            item.balanceAmount,
-            10
-          ) || 0;
-      }
-    }
-  }
-
-
-  if (
-    detail.voiceAmount &&
-    detail.voiceBalance
-  ) {
-
-    totalVoiceAmount =
-      detail.voiceAmount;
-
-    totalBalanceVoiceAmount =
-      detail.voiceBalance;
-  }
-
-
-  const balanceFlow =
-    formatFlow(
-      totalBalanceFlowAmount
-    );
-
-  const usedFlow =
-    formatFlow(
-      totalUsedFlowAmount
-    );
-
-
-  const flow = {
-
-    title:
-      '剩余流量',
-
-    number:
-      balanceFlow.amount,
-
-    unit:
-      balanceFlow.unit,
-
-    percent:
-      +(
-        (
-          totalBalanceFlowAmount /
-          (totalFlowAmount || 1)
-        ) *
-        100
-      ).toFixed(2),
-
-    color:
-      FLOW_COLOR,
-  };
-
-
-  if (showUsedFlow) {
-
-    flow.title =
-      '已用流量';
-
-    flow.number =
-      usedFlow.amount;
-
-    flow.unit =
-      usedFlow.unit;
-  }
-
-
-  if (isUnlimitedFlow) {
-
-    flow.title =
-      '已用流量';
-
-    flow.number =
-      usedFlow.amount;
-
-    flow.unit =
-      usedFlow.unit;
-  }
-
-
-  const voice = {
-
-    title:
-      '剩余语音',
-
-    number:
-      `${totalBalanceVoiceAmount}`,
-
-    unit:
-      '分钟',
-
-    percent:
-      +(
-        (
-          totalBalanceVoiceAmount /
-          (totalVoiceAmount || 1)
-        ) *
-        100
-      ).toFixed(2),
-
-    color:
-      VOICE_COLOR,
-  };
-
-
-  const feeNum =
-    Number(
-      balance?.totalBalanceAvailable
-    );
-
-  const fee = {
-
-    title:
-      '剩余话费',
-
-    number:
-      Number.isFinite(feeNum)
-        ? (feeNum / 100).toFixed(2)
-        : '0.00',
-
-    unit:
-      '元',
-  };
-
-
-  return {
-
-    fee,
-
-    flow,
-
-    voice,
-
-    updatedAt:
-      Date.now(),
-  };
-}
-
-
-async function tryCookie(
-  ctx,
-  cookie,
-  settings
-) {
-
-  const detail =
-    await fetchJson(
-      ctx,
-      URLS.detail,
-      cookie
-    );
-
-  const balance =
-    await fetchJson(
-      ctx,
-      URLS.balance,
-      cookie
-    );
-
-  // 200 + JSON 但不是套餐数据（比如返回了错误码对象）：视为登录失效
-  for (const [name, data] of [['detail', detail], ['balance', balance]]) {
-    if (!data || typeof data !== 'object' || Array.isArray(data)) {
-      throw new Error(`bad-payload: ${name}`);
-    }
-  }
-
-  const ds =
-    parseTelecom(
-      detail,
-      balance,
-      settings
-    );
-
-  ctx.storage.setJSON(
-    'ct_datasource',
-    ds
-  );
-
-  return ds;
-}
-
-
-async function loadDataByAppToken(ctx, settings) {
-  const configured = true;
-  try {
-    const apiData = await fetchImportantData(ctx, '');
-    const ds = parseTokenData(apiData, settings);
-    ctx.storage.setJSON('ct_datasource', ds);
-    return { configured, ds, fromCache: false, authFailed: false };
-  } catch (e) {
-    if (e && e.transient) {
-      const cached = ctx.storage.getJSON('ct_datasource');
-      return { configured, ds: cached || null, fromCache: !!cached, authFailed: false };
-    }
-    const cached = ctx.storage.getJSON('ct_datasource');
-    return {
-      configured, ds: cached || null, fromCache: !!cached,
-      authFailed: cached ? false : 'apptoken',
-    };
-  }
-}
-
-async function loadData(ctx) {
-
-  const envCookie =
-    (ctx.env.CT_COOKIE || '').trim();
-
-  const loginUrl =
-    (ctx.env.CT_LOGIN_URL || '').trim() ||
-    ctx.storage.get('ct_login_url') ||
-    '';
-
-  const settings = {
-
-    showUsedFlow:
-      ctx.env.CT_SHOW_USED_FLOW ===
-      'true',
-
-    // 模块开关：通用流量 / 定向流量显示控制（默认都显示，即原来的"全部流量"）
-    showGeneralFlow:
-      ctx.env.CT_SHOW_GENERAL_FLOW !==
-      'false',
-
-    // 兼容旧版 CT_FILTER_ORIENTATE_FLOW=true（等价于定向流量开关关闭）
-    showDirectionalFlow:
-      ctx.env.CT_SHOW_DIRECTIONAL_FLOW !==
-      'false' &&
-      ctx.env.CT_FILTER_ORIENTATE_FLOW !==
-      'true',
-  };
-
-  // 密码登录优先：填了手机号 + 服务密码就走 App 官方接口（token 自动续期）；
-  // androidId 务必填写在 https://telecom.nufe.ccwu.cc 注册来的真设备 ID，
-  // 否则走原来的 cookie 模式（兼容旧版）。
-  const phone = (ctx.env.CT_PHONE || '').trim();
-  const password = (ctx.env.CT_PASSWORD || '').trim();
-  const deviceId = (ctx.env.CT_DEVICE_ID || '').trim();
-
-  if (phone && password) {
-    return loadDataByToken(ctx, phone, password, deviceId, settings);
-  }
-
-  // App 抓包模式：有用 App 抓到的 token，直接用它查数据；
-  // token 失效时提示打开 App 刷新（无法自动重登，因为没密码）。
-  const appToken = ctx.storage.get('ct_token') || '';
-  if (appToken) {
-    return loadDataByAppToken(ctx, settings);
-  }
-
-
-  const storedCookie =
-    ctx.storage.get('ct_cookie') ||
-    '';
-
-  const configured =
-    !!(
-      envCookie ||
-      loginUrl ||
-      storedCookie
-    );
-
-
-  const firstCookie =
-    envCookie ||
-    storedCookie;
-
-  // authFailed：服务器明确拒绝了 cookie（非 200 / 非 JSON / 异常载荷），
-  // 与"连不上服务器"（transient，走缓存）区分开
-  let authFailed = false;
-
-  if (firstCookie) {
-
-    try {
-
-      const ds =
-        await tryCookie(
-          ctx,
-          firstCookie,
-          settings
-        );
-
-      clearExpiredFlag(ctx);
-
-      return {
-
-        configured,
-
-        ds,
-
-        fromCache: false,
-
-        authFailed: false,
-      };
-
-    } catch (e) {
-
-      if (!(e && e.transient)) {
-        authFailed = true;
-      }
-    }
-  }
-
-
-  if (
-    !envCookie &&
-    loginUrl
-  ) {
-
-    try {
-
-      const fresh =
-        await refreshCookie(ctx);
-
-      if (
-        fresh &&
-        fresh !== firstCookie
-      ) {
-
-        try {
-
-          const ds =
-            await tryCookie(
-              ctx,
-              fresh,
-              settings
-            );
-
-          clearExpiredFlag(ctx);
-
-          return {
-
-            configured,
-
-            ds,
-
-            fromCache: false,
-
-            authFailed: false,
-          };
-
-        } catch (e2) {
-
-          if (!(e2 && e2.transient)) {
-            authFailed = true;
-          }
-        }
-      }
-
-    } catch (e) {
-    }
-  }
-
-
-  const cached =
-    ctx.storage.getJSON(
-      'ct_datasource'
-    );
-
-  if (authFailed) {
-    // cookie 被服务器拒绝且刷新无果：登录已过期，通知一次（同个 cookie 只通知一次）
-    notifyExpiredOnce(ctx, firstCookie);
-  }
-
-  return {
-
-    configured,
-
-    ds:
-      cached || null,
-
-    fromCache:
-      !!cached,
-
-    authFailed,
-  };
-}
-
-
-// 登录过期通知：同一个失效 cookie 只通知一次，成功刷新后清除标记
-function notifyExpiredOnce(ctx, cookie) {
-  const key = 'ct_expired_notified';
-  const marker = cookie || 'none';
-
-  if (ctx.storage.get(key) === marker) {
-    return;
-  }
-
-  ctx.storage.set(key, marker);
-
-  try {
-    ctx.notify({
-      title: '中国电信',
-      body: '登录已过期，请在 Safari 重新登录 e.dlife.cn',
-    });
-  } catch (e) {
-  }
-}
-
-
-function clearExpiredFlag(ctx) {
-  ctx.storage.delete('ct_expired_notified');
-}
-
-
-function makeCapsule(
-  title,
-  value,
-  unit
-) {
-
-  return {
-
-    type: 'stack',
-
-    direction: 'column',
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    flex: 1,
-
-    padding: [
-      8,
-      8,
-      8,
-      8,
-    ],
-
-    backgroundColor:
-      COLORS.capsuleBg,
-
-    borderRadius: 14,
-
-    borderWidth: 1,
-
-    borderColor:
-      COLORS.border,
-
-    children: [
-
-      {
-        type: 'text',
-
-        text:
-          title,
-
-        font: {
-          size: 'caption2',
-          weight: 'medium',
-        },
-
-        textColor:
-          COLORS.title,
-
-        textAlign:
-          'center',
-
-        maxLines: 1,
-
-        minScale:
-          0.7,
-      },
-
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        justifyContent:
-          'center',
-
-        gap: 3,
-
-        children: [
-
-          {
-            type: 'text',
-
-            text:
-              String(value),
-
-            font: {
-              size: 'title2',
-              weight: 'semibold',
-            },
-
-            textColor:
-              COLORS.value,
-
-            textAlign:
-              'center',
-
-            maxLines: 1,
-
-            minScale:
-              0.65,
-          },
-
-          {
-            type: 'text',
-
-            text:
-              unit,
-
-            font: {
-              size: 'caption2',
-              weight: 'regular',
-            },
-
-            textColor:
-              COLORS.title,
-
-            maxLines: 1,
-          },
-        ],
-      },
-    ],
-  };
-}
-
-
-function headerRow(
-  title,
-  ds,
-  fromCache
-) {
-
-  const time =
-    ds &&
-    ds.updatedAt
-      ? fmtTime(ds.updatedAt)
-      : '--:--';
-
-  return {
-
-    type: 'stack',
-
-    direction: 'row',
-
-    alignItems: 'center',
-
-    children: [
-
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        gap: 7,
-
-        children: [
-
-          {
-            type: 'image',
-
-            src:
-              'sf-symbol:antenna.radiowaves.left.and.right',
-
-            color:
-              COLORS.accent,
-
-            width: 18,
-
-            height: 18,
-          },
-
-          {
-            type: 'text',
-
-            text:
-              title,
-
-            font: {
-              size: 'headline',
-              weight: 'semibold',
-            },
-
-            textColor:
-              COLORS.value,
-
-            maxLines: 1,
-
-            minScale:
-              0.75,
-          },
-        ],
-      },
-
-      {
-        type: 'spacer',
-      },
-
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        gap: 5,
-
-        children: [
-
-          {
-            type: 'image',
-
-            src:
-              'sf-symbol:arrow.clockwise',
-
-            color:
-              COLORS.time,
-
-            width: 12,
-
-            height: 12,
-          },
-
-          {
-            type: 'text',
-
-            text:
-              fromCache ? `缓存 ${time}` : time,
-
-            font: {
-              size: 'caption2',
-            },
-
-            textColor:
-              COLORS.time,
-
-            maxLines: 1,
-          },
-        ],
-      },
-    ],
-  };
-}
-
-
-function buildMainWidget(
-  title,
-  ds,
-  fromCache
-) {
-
-  return {
-
-    type: 'widget',
-
-    backgroundColor:
-      COLORS.bg,
-
-    padding: [
-      10,
-      14,
-      10,
-      14,
-    ],
-
-    gap: 12,
-
-    refreshAfter:
-      new Date(
-        Date.now() +
-        60 * 60 * 1000
-      ).toISOString(),
-
-    children: [
-
-      /* 顶部 */
-
-      headerRow(
-        title,
-        ds,
-        fromCache
-      ),
-
-
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        gap: 9,
-
-        children: [
-
-          makeCapsule(
-            ds.fee.title,
-            ds.fee.number,
-            ds.fee.unit
-          ),
-
-          makeCapsule(
-            ds.voice.title,
-            ds.voice.number,
-            ds.voice.unit
-          ),
-
-          makeCapsule(
-            ds.flow.title,
-            ds.flow.number,
-            ds.flow.unit
-          ),
-        ],
-      },
-
-
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        children: [
-
-          {
-            type: 'spacer',
-          },
-
-          {
-            type: 'stack',
-
-            width: 48,
-
-            height: 4,
-
-            borderRadius: 2,
-
-            backgroundColor:
-              COLORS.border,
-          },
-
-          {
-            type: 'spacer',
-          },
-        ],
-      },
-    ],
-  };
-}
-
-/* 小尺寸专用：圆形图标 + 数值 + 说明 的横条 */
-function smallRow(
-  color,
-  symbol,
-  glyph,
-  value,
-  unit,
-  label
-) {
-
-  const iconChild =
-    symbol
-      ? {
-          type: 'image',
-
-          src: symbol,
-
-          color: '#FFFFFF',
-
-          width: 16,
-
-          height: 16,
-        }
-      : {
-          type: 'text',
-
-          text: glyph,
-
-          font: {
-            size: 'headline',
-            weight: 'bold',
-          },
-
-          textColor: '#FFFFFF',
-        };
-
-  return {
-
-    type: 'stack',
-
-    direction: 'row',
-
-    alignItems: 'center',
-
-    gap: 8,
-
-    flex: 1,
-
-    padding: [
-      4,
-      8,
-      4,
-      8,
-    ],
-
-    backgroundColor: {
-      light: color + '1F',
-      dark: color + '33',
-    },
-
-    borderRadius: 14,
-
-    children: [
-
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        justifyContent: 'center',
-
-        width: 30,
-
-        height: 30,
-
-        borderRadius: 15,
-
-        backgroundColor: color,
-
-        children: [
-          iconChild,
-        ],
-      },
-
-      {
-        type: 'stack',
-
-        direction: 'column',
-
-        flex: 1,
-
-        children: [
-
-          {
-            type: 'stack',
-
-            direction: 'row',
-
-            alignItems: 'center',
-
-            gap: 3,
-
-            children: [
-
-              {
-                type: 'text',
-
-                text: String(value),
-
-                font: {
-                  size: 'title3',
-                  weight: 'bold',
-                },
-
-                textColor: color,
-
-                maxLines: 1,
-
-                minScale: 0.5,
-              },
-
-              {
-                type: 'text',
-
-                text: String(unit),
-
-                font: {
-                  size: 'caption1',
-                  weight: 'semibold',
-                },
-
-                textColor: color,
-
-                maxLines: 1,
-              },
-
-              {
-                type: 'spacer',
-              },
-            ],
-          },
-
-          {
-            type: 'stack',
-
-            direction: 'row',
-
-            alignItems: 'center',
-
-            children: [
-
-              {
-                type: 'text',
-
-                text: String(label),
-
-                font: {
-                  size: 'caption2',
-                  weight: 'medium',
-                },
-
-                textColor: color + 'B3',
-
-                maxLines: 1,
-
-                minScale: 0.7,
-              },
-
-              {
-                type: 'spacer',
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-}
-
-function buildSmall(
-  title,
-  ds,
-  fromCache
-) {
-
-  return {
-
-    type: 'widget',
-
-    backgroundColor:
-      COLORS.bg,
-
-    padding: [
-      10,
-      10,
-      10,
-      10,
-    ],
-
-    gap: 6,
-
-    refreshAfter:
-      new Date(
-        Date.now() +
-        60 * 60 * 1000
-      ).toISOString(),
-
-    children: [
-
-      smallRow(
-        '#E8651F',
-        null,
-        '¥',
-        ds.fee.number,
-        ds.fee.unit,
-        ds.fee.title
-      ),
-
-      smallRow(
-        '#4DA6F0',
-        'sf-symbol:antenna.radiowaves.left.and.right',
-        '',
-        ds.flow.number,
-        ds.flow.unit,
-        ds.flow.title
-      ),
-
-      smallRow(
-        '#55C759',
-        'sf-symbol:phone.and.waveform.fill',
-        '',
-        ds.voice.number,
-        ds.voice.unit,
-        ds.voice.title
-      ),
-    ],
-  };
-}
-
-function buildLockScreen(
-  title,
-  ds,
-  family
-) {
-
-  /*
-   * 锁屏组件背景是透明的，文字颜色交给系统处理，
-   * 只有次要文字用半透明白色
-   */
-  const SUB = {
-    light: '#FFFFFFB3',
-    dark: '#FFFFFFB3',
-  };
-
-
-  /*
-   * 单行：话费 · 流量
-   */
-  if (
-    family ===
-      'accessoryInline'
-  ) {
-
-    return {
-
-      type: 'widget',
-
-      children: [
-
-        {
-          type: 'text',
-
-          text:
-            `${title} ${ds.fee.number}${ds.fee.unit} · ` +
-            `${ds.flow.number}${ds.flow.unit}`,
-
-          font: {
-            size: 'caption1',
-            weight: 'medium',
-          },
-
-          maxLines: 1,
-
-          minScale:
-            0.5,
-        },
-      ],
-    };
-  }
-
-
-  /*
-   * 圆形：只显示剩余流量
-   */
-  if (
-    family ===
-      'accessoryCircular'
-  ) {
-
-    return {
-
-      type: 'widget',
-
-      padding: 2,
-
-      children: [
-
-        {
-          type: 'spacer',
-        },
-
-        {
-          type: 'text',
-
-          text:
-            `${ds.flow.number}`,
-
-          font: {
-            size: 'headline',
-            weight: 'bold',
-          },
-
-          textAlign:
-            'center',
-
-          maxLines: 1,
-
-          minScale:
-            0.5,
-        },
-
-        {
-          type: 'text',
-
-          text:
-            ds.flow.unit,
-
-          font: {
-            size: 'caption2',
-          },
-
-          textColor: SUB,
-
-          textAlign:
-            'center',
-
-          maxLines: 1,
-        },
-
-        {
-          type: 'spacer',
-        },
-      ],
-    };
-  }
-
-
-  /*
-   * 矩形：三行，左边说明，右边数值
-   */
-  const line = (
-    label,
-    value,
-    unit
-  ) => ({
-
-    type: 'stack',
-
-    direction: 'row',
-
-    alignItems: 'center',
-
-    gap: 4,
-
-    children: [
-
-      {
-        type: 'text',
-
-        text: label,
-
-        font: {
-          size: 'caption2',
-          weight: 'medium',
-        },
-
-        textColor: SUB,
-
-        maxLines: 1,
-      },
-
-      {
-        type: 'spacer',
-      },
-
-      {
-        type: 'text',
-
-        text: String(value),
-
-        font: {
-          size: 'caption1',
-          weight: 'bold',
-        },
-
-        maxLines: 1,
-
-        minScale: 0.6,
-      },
-
-      {
-        type: 'text',
-
-        text: String(unit),
-
-        font: {
-          size: 'caption2',
-        },
-
-        textColor: SUB,
-
-        maxLines: 1,
-      },
-    ],
-  });
-
-
-  return {
-
-    type: 'widget',
-
-    padding: 2,
-
-    gap: 2,
-
-    children: [
-
-      line(
-        '话费',
-        ds.fee.number,
-        ds.fee.unit
-      ),
-
-      line(
-        '流量',
-        ds.flow.number,
-        ds.flow.unit
-      ),
-
-      line(
-        '语音',
-        ds.voice.number,
-        ds.voice.unit
-      ),
-    ],
-  };
-}
-
-
-function buildError(
-  title,
-  message,
-  url
-) {
-
-  const w = {
-
-    type: 'widget',
-
-    backgroundColor:
-      COLORS.bg,
-
-    padding: 14,
-
-    gap: 9,
-
-    children: [
-
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        gap: 6,
-
-        children: [
-
-          {
-            type: 'image',
-
-            src:
-              'sf-symbol:exclamationmark.triangle.fill',
-
-            color:
-              COLORS.error,
-
-            width: 14,
-
-            height: 14,
-          },
-
-          {
-            type: 'text',
-
-            text:
-              title,
-
-            font: {
-              size: 'headline',
-              weight: 'bold',
-            },
-
-            textColor:
-              COLORS.error,
-
-            maxLines: 1,
-          },
-        ],
-      },
-
-      {
-        type: 'text',
-
-        text:
-          message,
-
-        font: {
-          size: 'caption1',
-        },
-
-        textColor:
-          COLORS.title,
-
-        maxLines: 3,
-      },
-
-      {
-        type: 'stack',
-
-        direction: 'row',
-
-        alignItems: 'center',
-
-        gap: 5,
-
-        padding: [
-          6,
-          10,
-          6,
-          10,
-        ],
-
-        backgroundColor:
-          COLORS.capsuleBg,
-
-        borderRadius: 10,
-
-        borderWidth: 1,
-
-        borderColor:
-          COLORS.border,
-
-        children: [
-
-          {
-            type: 'image',
-
-            src:
-              'sf-symbol:phone.circle',
-
-            color:
-              COLORS.time,
-
-            width: 12,
-
-            height: 12,
-          },
-
-          {
-            type: 'text',
-
-            text:
-              '请在 Safari 登录电信账号',
-
-            font: {
-              size: 'caption2',
-            },
-
-            textColor:
-              COLORS.time,
-
-            maxLines: 1,
-
-            minScale:
-              0.7,
-          },
-        ],
-      },
-    ],
-  };
-
-
-  if (url) {
-    w.url = url;
-  }
-
-  return w;
-}
-
-
-function getReqCookie(headers) {
-
-  if (!headers) {
-    return '';
-  }
-
-  if (
-    typeof headers.get ===
-    'function'
-  ) {
-
-    return (
-      headers.get('cookie') ||
-      headers.get('Cookie') ||
-      ''
-    );
-  }
-
-  for (
-    const k of Object.keys(headers)
-  ) {
-
-    if (
-      String(k).toLowerCase() ===
-      'cookie'
-    ) {
-
-      return headers[k] || '';
-    }
-  }
-
-  return '';
-}
-
-
-async function handleCapture(ctx) {
-
-  const req =
-    ctx.request || {};
-
-  const url =
-    req.url || '';
-
-  if (
-    !url.includes(
-      'e.dlife.cn'
-    )
-  ) {
-    return;
-  }
-
-
-  if (
-    url.includes(
-      '/user/loginMiddle'
-    )
-  ) {
-
-    const loginUrl =
-      (
-        url.match(
-          /(http.+)&sign/
-        ) || []
-      )[1] ||
-      url;
-
-
-    if (
-      loginUrl &&
-      ctx.storage.get(
-        'ct_login_url'
-      ) !== loginUrl
-    ) {
-
-      ctx.storage.set(
-        'ct_login_url',
-        loginUrl
-      );
-    }
-
-
-    ctx.storage.set(
-      'ct_login_ts',
-      String(Date.now())
-    );
-
-    return;
-  }
-
-
-  const cookie =
-    String(
-      getReqCookie(
-        req.headers
-      ) || ''
-    ).trim();
-
-
-  if (
-    !cookie ||
-    ctx.storage.get(
-      'ct_cookie'
-    ) === cookie
-  ) {
-    return;
-  }
-
-
-  ctx.storage.set(
-    'ct_cookie',
-    cookie
-  );
-
-  const ts =
-    Number(
-      ctx.storage.get(
-        'ct_login_ts'
-      ) || 0
-    );
-
-
-  if (
-    Date.now() - ts <
-    10 * 60 * 1000
-  ) {
-
-    ctx.storage.delete(
-      'ct_login_ts'
-    );
-
-
-    ctx.notify({
-
-      title:
-        '中国电信',
-
-      body:
-        '登录成功，小组件将自动更新',
-
-      action: {
-        type: 'clipboard',
-
-        text:
-          cookie,
-      },
-    });
-  }
-}
-
-
-/* App 抓包：电信 App 打开后会调 189.cn 接口，请求体 headerInfos 里带 token。
-   在此捕获 token 存入存储，小组件直接用，不用填密码。
-   注意：如果 App 有证书锁定导致抓不到，需要另想办法。 */
-function getTokenFromBody(bodyText) {
-  if (!bodyText) return null;
-  const m = String(bodyText).match(/"token"\s*:\s*"([^"]{10,})"/);
-  return m ? m[1] : null;
-}
-
-async function handleAppCapture(ctx) {
-  const req = ctx.request || {};
-  const url = req.url || '';
-  if (!url.includes('189.cn')) return;
-
-  let bodyText = '';
-  if (typeof req.body === 'string') bodyText = req.body;
-  else if (req.body) {
-    try { bodyText = JSON.stringify(req.body); } catch (e) {}
-  }
-
-  const token = getTokenFromBody(bodyText);
-  if (token && ctx.storage.get('ct_token') !== token) {
-    ctx.storage.set('ct_token', token);
-    const cc = bodyText.match(/"cityCode"\s*:\s*"([^"]+)"/);
-    const pc = bodyText.match(/"provinceCode"\s*:\s*"([^"]+)"/);
-    if (cc && cc[1]) ctx.storage.set('ct_city_code', cc[1]);
-    if (pc && pc[1]) ctx.storage.set('ct_province_code', pc[1]);
-    clearTokenLoginFlag(ctx);
-    clearLoginFailed(ctx);
-    try {
-      ctx.notify({ title: '中国电信', body: '已从 App 抓取到登录凭证，小组件将自动更新' });
-    } catch (e) {}
-  }
-}
-
+/* ---------- 小组件（generic 脚本模式） ---------- */
 
 async function handleWidget(ctx) {
+  const title = (ctx.env.CT_TITLE || '中国电信').trim() || '中国电信';
+  const settings = {
+    showUsedFlow: ctx.env.CT_SHOW_USED_FLOW === 'true',
+    showGeneralFlow: ctx.env.CT_SHOW_GENERAL_FLOW !== 'false',
+    showDirectionalFlow:
+      ctx.env.CT_SHOW_DIRECTIONAL_FLOW !== 'false' &&
+      ctx.env.CT_FILTER_ORIENTATE_FLOW !== 'true',
+  };
 
-  const title =
-    (
-      ctx.env.CT_TITLE ||
-      '中国电信'
-    ).trim() ||
-    '中国电信';
-
-
-  const {
-    configured,
-    ds,
-    fromCache,
-    authFailed,
-    authMessage,
-  } =
-    await loadData(ctx);
-
-  if (!configured) {
-
-    return buildError(
-      title,
-      '未登录：在 Safari 打开 e.dlife.cn 登录一次',
-      URLS.login
-    );
+  let ds = null;
+  let errMsg = '';
+  let authFailed = false;
+  try {
+    ds = await fetchTelecomData(ctx, settings);
+    if (ds) ds.updatedAt = Date.now();
+    ctx.storage.setJSON('ct_datasource', ds);
+  } catch (e) {
+    errMsg = (e && e.message) || '数据获取失败';
+    authFailed = !!(e && e.authFailed);
   }
-
-
-  // 登录失效：不再展示旧数据，直接提示处理
-  if (authFailed) {
-
-    if (authFailed === 'token') {
-
-      return buildError(
-        title,
-        authMessage
-          ? `登录失败：${authMessage}`
-          : '登录失败：请检查模块里的手机号、服务密码是否正确'
-      );
-    }
-
-    if (authFailed === 'apptoken') {
-
-      return buildError(
-        title,
-        '凭证已过期：打开电信 App 刷新一下即可'
-      );
-    }
-
-    return buildError(
-      title,
-      '登录已过期：在 Safari 打开 e.dlife.cn 重新登录',
-      URLS.login
-    );
-  }
-
 
   if (!ds) {
-
-    return buildError(
-      title,
-      '数据获取失败，请检查网络或重新登录'
-    );
+    if (authFailed) {
+      // token 失效：不再显示旧数据，提示重新抓取
+      return buildError(title, `登录已过期：${errMsg}，请重新抓包更新 token`);
+    }
+    const cached = ctx.storage.getJSON('ct_datasource');
+    if (cached) {
+      return buildWidget(title, cached, true, ctx);
+    }
+    if (errMsg === '打开电信 App 自动抓取登录凭证') {
+      return buildError(title, '未抓取到凭证：打开电信 App 刷新一下');
+    }
+    return buildError(title, `数据获取失败：${errMsg}`);
   }
-
-
-  const family =
-    ctx.widgetFamily ||
-    'systemSmall';
-
-  if (
-    family ===
-      'systemMedium' ||
-    family ===
-      'systemLarge' ||
-    family ===
-      'systemExtraLarge'
-  ) {
-
-    return buildMainWidget(
-      title,
-      ds,
-      fromCache
-    );
-  }
-
-  if (
-    family.startsWith(
-      'accessory'
-    )
-  ) {
-
-    return buildLockScreen(
-      title,
-      ds,
-      family
-    );
-  }
-
-  return buildSmall(
-    title,
-    ds,
-    fromCache
-  );
+  return buildWidget(title, ds, false, ctx);
 }
 
-
-export default async function(ctx) {
-
-
-  if (
-    ctx.request &&
-    ctx.request.url
-  ) {
-
-    const url = ctx.request.url || '';
-    // 189.cn → App token 抓取；e.dlife.cn → 网页 cookie 抓取
-    if (url.includes('189.cn')) return handleAppCapture(ctx);
-    return handleCapture(ctx);
+function buildWidget(title, ds, fromCache, ctx) {
+  const family = ctx.widgetFamily || 'systemSmall';
+  if (family === 'systemMedium' || family === 'systemLarge' || family === 'systemExtraLarge') {
+    return buildMedium(title, ds, fromCache, ctx);
   }
-
-
-  // 保活模式：schedule 定时任务（ctx.cron 存在）或 Env CT_KEEPALIVE=true。
-  // 定时查一次接口，利用服务端 session 滑动过期机制续命；
-  // 若已过期，loadData 内部会按"登录已过期"处理并通知一次。
-  if (
-    ctx.cron ||
-    (ctx.env && ctx.env.CT_KEEPALIVE === 'true')
-  ) {
-
-    return handleKeepAlive(ctx);
+  if (family.startsWith('accessory')) {
+    return buildLockScreen(title, ds, family);
   }
-
-
-  return handleWidget(ctx);
+  return buildSmall(title, ds, fromCache);
 }
 
+/* ---------- 保活（待接口确定后填入） ---------- */
 
-// 定时保活：轻量 ping 一次。
-//
-// 注意：不要调完整 loadData——串行多个请求累积时长可能超过
-// Egern 定时任务的脚本超时被直接终止。
-// 保活只需要一次真实触达；成功/失败都不通知不写缓存，
-// 下次小组件刷新会正常处理显示和过期提醒。
-// 定时保活：轻量 ping 一次续 session。
-//
-// 注意：不要调完整 loadData——它最坏要串行发 5 个请求（每个 15s 超时），
-// 累计时长超过 Egern 定时任务的脚本超时会被直接终止。
-// 保活只需要一次真实触达；成功/失败都不通知不写缓存，
-// 下次小组件刷新会正常处理显示和过期提醒。
 async function handleKeepAlive(ctx) {
+  // 轻量保活：只调一次 queryMainDataArea（10s 超时），不断网不通知。
+  // 注意：保活用的是抓包的 token，若服务端是绝对过期则续不了命，
+  // 只能延长"不活跃过期"类会话的寿命。
+  const token = (ctx.env.CT_TOKEN || '').trim();
+  if (!token) return;
+  try {
+    await fetchTelecomData(ctx, {
+      showUsedFlow: false,
+      showGeneralFlow: true,
+      showDirectionalFlow: true,
+    });
+  } catch (e) {}
+}
 
-  const phone =
-    (ctx.env.CT_PHONE || '').trim();
+/* ---------- 入口 ---------- */
 
-  const password =
-    (ctx.env.CT_PASSWORD || '').trim();
-
-  const deviceId =
-    (ctx.env.CT_DEVICE_ID || '').trim();
-
-  if (phone && password) {
-
-    try {
-
-      try {
-
-        await fetchImportantData(
-          ctx,
-          phone
-        );
-
-      } catch (e) {
-
-        if (
-          e &&
-          e.tokenExpired &&
-          !loginCooldownActive(
-            ctx,
-            phone,
-            password
-          )
-        ) {
-
-          await telecomLogin(
-            ctx,
-            phone,
-            password,
-            deviceId
-          );
-
-          clearLoginFailed(ctx);
-
-          await fetchImportantData(
-            ctx,
-            phone
-          );
-        }
-      }
-
-    } catch (e) {}
-
+export default async function (ctx) {
+  // request 脚本 → App 自动抓取；schedule → 保活；generic → 小组件
+  if (ctx.request && ctx.request.url) {
+    extractAuthFromRequest(ctx);
     return;
   }
-
-  const cookie =
-    (ctx.env.CT_COOKIE || '').trim() ||
-    ctx.storage.get('ct_cookie') ||
-    '';
-
-  if (!cookie) return;
-
-  try {
-
-    await ctx.http.get(URLS.detail, {
-      headers: {
-        Cookie: cookie,
-      },
-
-      timeout: 10000,
-
-      credentials: 'omit',
-    });
-
-  } catch (e) {}
+  if (ctx.cron || (ctx.env && ctx.env.CT_KEEPALIVE === 'true')) {
+    return handleKeepAlive(ctx);
+  }
+  return handleWidget(ctx);
 }
