@@ -97,7 +97,10 @@ function handleCapture(ctx) {
     const aOpenid = extractAnalyticsOpenid(url);
     const now2 = new Date();
     const t2 = `${now2.getHours()}:${now2.getMinutes()}:${now2.getSeconds()}`;
-    ctx.notify('电信埋点', `${t2} 脚本已触发`, aOpenid ? `openid: ${aOpenid.slice(0, 24)}…` : '未提取到 openid');
+    ctx.notify({
+      title: '电信埋点',
+      body: `${t2} 脚本已触发\n${aOpenid ? `openid: ${aOpenid.slice(0, 24)}…` : '未提取到 openid'}`,
+    });
     if (aOpenid && ctx.storage.get(STORE_OPENID2) !== aOpenid) {
       ctx.storage.set(STORE_OPENID2, aOpenid);
     }
@@ -136,19 +139,17 @@ function handleCapture(ctx) {
   // 调试：每次抓到都通知（带时间，确认脚本在跑）
   const now = new Date();
   const tstr = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-  ctx.notify(
-    '电信抓取',
-    `${tstr} ${isNewMethod ? '新接口' : '更新'}`,
-    `${appMethod.slice(0, 50)}\ndata长度: ${data.length}`
-  );
+  ctx.notify({
+    title: '电信抓取',
+    body: `${tstr} ${isNewMethod ? '新接口' : '更新'}\n${appMethod.slice(0, 50)}\ndata长度: ${data.length}`,
+  });
 
   if (isNewOpenid || isNewMethod) {
     const short = appMethod.length > 40 ? '…' + appMethod.slice(-37) : appMethod;
-    ctx.notify(
-      '电信小组件',
-      '已抓取登录凭证',
-      `接口：${short}\n打开小组件即可显示数据`
-    );
+    ctx.notify({
+      title: '电信小组件',
+      body: `已抓取登录凭证\n接口：${short}\n打开小组件即可显示数据`,
+    });
   }
 }
 
