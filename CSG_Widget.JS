@@ -179,7 +179,7 @@ function smallRow(color, symbol, glyph, value, unit, label) {
     gap: 8,
     flex: 1,
     padding: [4, 8, 4, 8],
-    backgroundColor: { light: color + "1F", dark: color + "33" },
+    backgroundColor: { light: color + "40", dark: color + "25" },
     borderRadius: 14,
     children: [
       {
@@ -190,7 +190,7 @@ function smallRow(color, symbol, glyph, value, unit, label) {
         width: 30,
         height: 30,
         borderRadius: 15,
-        backgroundColor: color,
+        backgroundColor: { light: color, dark: color + "60" },
         children: [iconChild],
       },
       {
@@ -306,12 +306,12 @@ async function handleWidget(ctx) {
 
   const colors = {
     bg:        { light: "#FFFFFF", dark: "#2C2C2E" },
-    border:    { light: "#E5E5EA", dark: "#3A3A3C" },
+    border:    { light: "#00000015", dark: "#FFFFFF20" },
     title:     { light: "#666666", dark: "#8E8E93" },
     value:     { light: "#1C1C1E", dark: "#FFFFFF" },
     time:      { light: "#999999", dark: "#666666" },
     error:     { light: "#FF3B30", dark: "#FF453A" },
-    capsuleBg: { light: "#F5F5F7", dark: "#3A3A3C" },
+    capsuleBg: { light: "#FFFFFF15", dark: "#FFFFFF10" },
     accent:    { light: "#FF9500", dark: "#FF9F0A" },
   };
 
@@ -437,7 +437,7 @@ async function handleWidget(ctx) {
   if (isSmall) {
     return {
       type: "widget",
-      backgroundColor: colors.bg,
+
       padding: [10, 10, 10, 10],
       gap: 6,
       refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
@@ -452,7 +452,7 @@ async function handleWidget(ctx) {
 
   return {
     type: "widget",
-    backgroundColor: colors.bg,
+
     padding: isSmall ? [10, 12, 10, 12] : [10, 14, 10, 14],
     gap: isSmall ? 6 : 12,
     refreshAfter: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
