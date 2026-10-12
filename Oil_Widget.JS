@@ -78,8 +78,8 @@ export default async function (ctx) {
     primary: { light: "#1A1A1A", dark: "#FFFFFF" },
     secondary: { light: "#666666", dark: "#CCCCCC" },
     tertiary: { light: "#999999", dark: "#888888" },
-    card: { light: "#F5F5F7", dark: "#2C2C2E" },
-    cardBorder: { light: "#E0E0E0", dark: "#3A3A3C" },
+    card: { light: "#FFFFFF15", dark: "#FFFFFF10" },
+    cardBorder: { light: "#00000015", dark: "#FFFFFF20" },
     p92: { light: "#FF9F0A", dark: "#FFB347" },
     p95: { light: "#FF6B35", dark: "#FF8A5C" },
     p98: { light: "#FF3B30", dark: "#FF6B6B" },
@@ -435,7 +435,7 @@ export default async function (ctx) {
       type:"widget",
       padding:[8,8,8,8],
       gap:4,
-      backgroundColor: backgroundColor,
+      
       refreshAfter:refreshTime,
       children:[
         {
@@ -506,7 +506,7 @@ export default async function (ctx) {
     type:"widget",
     padding:[10,8,10,8],
     gap:5,
-    backgroundColor: backgroundColor,
+    
     refreshAfter:refreshTime,
     children:[
       {
