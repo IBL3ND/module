@@ -85,8 +85,8 @@ const COLORS = {
   },
 
   capsuleBg: {
-    light: '#F5F5F7',
-    dark: '#3A3A3C',
+    light: '#FFFFFF15',
+    dark: '#FFFFFF10',
   },
 
   accent: {
@@ -965,8 +965,7 @@ function buildMainWidget(
   return {
     type: 'widget',
 
-    backgroundColor:
-      COLORS.bg,
+
 
     padding: [
       10,
@@ -1134,7 +1133,7 @@ function smallRow(
     ],
 
     backgroundColor: {
-      light: color + '1F',
+      light: color + '40',
       dark: color + '33',
     },
 
@@ -1157,7 +1156,7 @@ function smallRow(
 
         borderRadius: 15,
 
-        backgroundColor: color,
+        backgroundColor: { light: color, dark: color + '60' },
 
         children: [
           iconChild,
@@ -1269,8 +1268,7 @@ function buildSmall(
 
     type: 'widget',
 
-    backgroundColor:
-      COLORS.bg,
+
 
     padding: [
       10,
@@ -1555,8 +1553,7 @@ function buildError(
 
     type: 'widget',
 
-    backgroundColor:
-      COLORS.bg,
+
 
     padding: 12,
 
