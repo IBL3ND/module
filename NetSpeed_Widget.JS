@@ -60,10 +60,7 @@ export default async function(ctx) {
     padding: isSmall ? 12 : 16,
     gap: isSmall ? 8 : 12,
 
-    backgroundColor: { 
-      light: '#FFFFFF', 
-      dark: '#2C2C2E' 
-    },
+
 
     children: [
 
@@ -120,7 +117,7 @@ export default async function(ctx) {
             type: 'stack',
             width: barWidth,
             height: 4,
-            backgroundColor: color,
+            backgroundColor: { light: color + 'CC', dark: color + 'CC' },
             cornerRadius: 2
           },
           { type: 'spacer' }
