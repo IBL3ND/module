@@ -79,8 +79,8 @@ export default async function (ctx) {
  const bgGradient = {
   type: "linear",
   colors: [
-   { light: "#FFFFFF", dark: "#2C2C2E" },
-   { light: "#FFFFFF", dark: "#2C2C2E" },
+   { light: "#FFFFFF00", dark: "#2C2C2E00" },
+   { light: "#FFFFFF00", dark: "#2C2C2E00" },
   ],
   stops: [0, 1],
   startPoint: { x: 0, y: 0 },
@@ -236,7 +236,7 @@ function buildCard(result, colors, ctx, isMediumThree) {
    alignItems: "center",
    gap: 6,
    padding: cardPadding,
-   backgroundColor: { light: "#FFF5F5", dark: "#3B1F1F" },
+   backgroundColor: { light: "#FF3B3015", dark: "#FF453A20" },
    borderRadius: 8,
    children: [
     { type: "image", src: "sf-symbol:exclamationmark.circle.fill", width: 12, height: 12, color: colors.accentRed },
@@ -269,7 +269,7 @@ function buildCard(result, colors, ctx, isMediumThree) {
   direction: "column",
   gap: innerGap,
   padding: cardPadding,
-  backgroundColor: { light: "#FFFFFF", dark: "#2B2B2D" },
+  backgroundColor: { light: "#FFFFFF15", dark: "#FFFFFF10" },
   borderRadius: 8,
   borderWidth: 1,
   borderColor: colors.divider,
@@ -292,7 +292,7 @@ function buildCard(result, colors, ctx, isMediumThree) {
     borderRadius: 3,
     children: [
      { type: "stack", flex: Math.max(progressPercent, 1), height: barHeight, backgroundColor: statusColor, borderRadius: 3 },
-     { type: "stack", flex: Math.max(100 - progressPercent, 1), height: barHeight, backgroundColor: { light: "#E8E8EA", dark: "#48484A" }, borderRadius: 3 },
+     { type: "stack", flex: Math.max(100 - progressPercent, 1), height: barHeight, backgroundColor: { light: "#00000015", dark: "#FFFFFF20" }, borderRadius: 3 },
     ],
    },
    {
