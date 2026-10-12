@@ -394,7 +394,7 @@ async function fetchWeatherNow(ctx, key, lon, lat, host) {
   const url = `${host}/v7/weather/now?location=${lon},${lat}&key=${key}&lang=zh`;
   const resp = await ctx.http.get(url, { timeout: 8000 });
   const data = await resp.json();
-  if (data.code !== '200') throw new Error(data.msg || `接口返回 ${data.code}`);
+  if (data.code !== '200') throw new Error(describeApiError('实况', resp, data));
   return {
     temp: data.now.temp,
     feelsLike: data.now.feelsLike || '--',
@@ -412,7 +412,7 @@ async function fetchDaily3d(ctx, key, lon, lat, host) {
   const url = `${host}/v7/weather/3d?location=${lon},${lat}&key=${key}&lang=zh`;
   const resp = await ctx.http.get(url, { timeout: 8000 });
   const data = await resp.json();
-  if (data.code !== '200') throw new Error(data.msg || `3d接口返回 ${data.code}`);
+  if (data.code !== '200') throw new Error(describeApiError('3d预报', resp, data));
   return data.daily.map(d => ({
     date: d.fxDate,           // 2026-10-12
     tempMax: d.tempMax,
@@ -427,11 +427,25 @@ async function fetchHourly24h(ctx, key, lon, lat, host) {
   const url = `${host}/v7/weather/24h?location=${lon},${lat}&key=${key}&lang=zh`;
   const resp = await ctx.http.get(url, { timeout: 8000 });
   const data = await resp.json();
-  if (data.code !== '200') throw new Error(data.msg || `24h接口返回 ${data.code}`);
+  if (data.code !== '200') throw new Error(describeApiError('24h预报', resp, data));
   return data.hourly.map(h => ({
     time: h.fxTime,           // 2026-10-12T14:00+08:00
     temp: Number(h.temp),
   }));
+}
+
+// 接口报错诊断：带上 HTTP 状态码和返回体摘要，方便定位是 host/key/套餐问题
+function describeApiError(tag, resp, data) {
+  const status = resp ? resp.status : 'no-response';
+  let snippet = '';
+  try {
+    snippet = JSON.stringify(data);
+    if (snippet && snippet.length > 120) snippet = snippet.slice(0, 120) + '…';
+  } catch (e) { snippet = String(data); }
+  if (!snippet || snippet === '{}' || snippet === 'undefined') {
+    return `${tag}接口无有效返回(HTTP ${status})，请检查 API_HOST 是否正确`;
+  }
+  return `${tag}接口返回 ${snippet} (HTTP ${status})`;
 }
 
 async function fetchAirQuality(ctx, key, lon, lat, host) {
