@@ -73,7 +73,13 @@ async function fetchCsgData(ctx, token) {
       body: "{}",
       timeout: 10000
     }
-  );
+  ).catch(e => { e.transient = true; throw e; });
+  // token 被服务器拒绝（非 200）视为登录过期
+  if (resp.status === 401 || resp.status === 403) {
+    const e = new Error('auth failed: ' + resp.status);
+    e.authFailed = true;
+    throw e;
+  }
   const res = await resp.json();
 
   // 原逻辑：未绑定用电户时静默跳过（保持 "--" 显示，不报错）
@@ -151,6 +157,24 @@ async function handleKeepAlive(ctx) {
       }
     );
   } catch (e) {}
+}
+
+// 登录过期通知：同一个失效 token 只通知一次，成功获取数据后清除标记
+function notifyExpiredOnce(ctx, token) {
+  const key = 'csg_expired_notified';
+  const marker = token || 'none';
+  if (ctx.storage.get(key) === marker) return;
+  ctx.storage.set(key, marker);
+  try {
+    ctx.notify({
+      title: '南方电网',
+      body: '登录已过期，请重新打开南方电网 App 获取登录信息',
+    });
+  } catch (e) {}
+}
+
+function clearExpiredFlag(ctx) {
+  try { ctx.storage.remove('csg_expired_notified'); } catch (e) {}
 }
 
 /* ---------- 小组件 ---------- */
@@ -338,10 +362,18 @@ async function handleWidget(ctx) {
         data.total.value = f.total;
         data.yst.value = f.yst;
         data.updateTime = f.updateTime;
+        clearExpiredFlag(ctx);
       }
     } catch (e) {
-      data.error = "请求失败";
-      data.debugInfo.push(`错误: ${e.message}`);
+      if (e && e.authFailed) {
+        // token 被服务器拒绝：登录已过期，通知一次
+        data.error = "登录已过期";
+        data.debugInfo.push("❌ 登录已过期，请重新打开南方电网 App");
+        notifyExpiredOnce(ctx, token);
+      } else {
+        data.error = "请求失败";
+        data.debugInfo.push(`错误: ${e.message}`);
+      }
     }
   }
 
