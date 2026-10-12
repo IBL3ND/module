@@ -255,12 +255,25 @@ async function fetchUnicomData(
 
       credentials: 'omit',
     }
-  );
+  ).catch(e => { e.transient = true; throw e; });
 
 
-  if (!resp || resp.status !== 200) {
+  if (!resp) {
+    const e = new Error('no-response');
+    e.transient = true;
+    throw e;
+  }
+
+  // cookie 被服务器拒绝视为登录过期
+  if (resp.status === 401 || resp.status === 403) {
+    const e = new Error(`HTTP ${resp.status}`);
+    e.authFailed = true;
+    throw e;
+  }
+
+  if (resp.status !== 200) {
     throw new Error(
-      `HTTP ${resp ? resp.status : 'no-response'}`
+      `HTTP ${resp.status}`
     );
   }
 
@@ -582,6 +595,24 @@ function parseUnicomData(res) {
  * 加载数据
  * ========================================================= */
 
+// 登录过期通知：同一个失效 cookie 只通知一次，成功获取数据后清除标记
+function notifyExpiredOnce(ctx, cookie) {
+  const key = 'unicom_expired_notified';
+  const marker = cookie || 'none';
+  if (ctx.storage.get(key) === marker) return;
+  ctx.storage.set(key, marker);
+  try {
+    ctx.notify({
+      title: '中国联通',
+      body: '登录已过期，请重新打开联通 App 获取登录信息',
+    });
+  } catch (e) {}
+}
+
+function clearExpiredFlag(ctx) {
+  try { ctx.storage.remove('unicom_expired_notified'); } catch (e) {}
+}
+
 async function loadData(ctx) {
 
   const cookie =
@@ -681,6 +712,8 @@ async function loadData(ctx) {
       data
     );
 
+    clearExpiredFlag(ctx);
+
 
     return {
       data,
@@ -692,7 +725,12 @@ async function loadData(ctx) {
 
     /*
      * 如果接口失败，尝试使用缓存
+     * authFailed（cookie 被拒）时通知一次
      */
+    if (e && e.authFailed) {
+      notifyExpiredOnce(ctx, cookie);
+    }
+
     const cached =
       ctx.storage.getJSON(
         'unicom_datasource'
