@@ -1,0 +1,38 @@
+name: 和风天气小组件
+description: 和风天气 实况预报
+author: iBL3ND
+icon: https://iili.io/nVU16Cl.png
+compat_arguments:
+  weatherKey: ''
+  weatherHost: ''
+  weatherCity: '海口'
+  weatherUserName: ''
+compat_arguments_schema:
+  weatherKey:
+    name: 和风 API Key
+    description: 和风天气控制台获取的 API Key
+    default_value: ''
+  weatherHost:
+    name: API Host
+    description: 和风天气控制台 → 设置 → 复制 API Host
+    default_value: ''
+  weatherCity:
+    name: 城市
+    description: 要查询的城市，例如 海口、上海、北京
+    default_value: '海口'
+  weatherUserName:
+    name: 名字
+    description: 大尺寸问候语显示的名字，可不填
+    default_value: ''
+dns: {}
+scriptings:
+- generic:
+    name: qweather
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Weather_Widget.JS
+    env:
+      KEY: '{{{weatherKey}}}'
+      API_HOST: '{{{weatherHost}}}'
+      LOCATION: '{{{weatherCity}}}'
+      USER_NAME: '{{{weatherUserName}}}'
+widgets:
+- name: qweather
