@@ -4,8 +4,10 @@ author: iBL3ND
 icon: https://iili.io/nEufFXR.png
 compat_arguments:
   ctCapture: 'true'
-  ctGeneralFlow: 'true'
-  ctDirectionalFlow: 'true'
+  ctShowUsedFlow: 'false'
+  ctShowUsedVoice: 'false'
+  ctShowDirect: 'auto'
+  ctTitle: ''
 compat_arguments_schema:
   ctCapture:
     name: 中国电信数据抓取
@@ -14,36 +16,50 @@ compat_arguments_schema:
     options:
     - 'true'
     - 'false'
-  ctGeneralFlow:
-    name: 显示通用流量
-    description: 小组件流量统计包含通用流量（关闭则只统计定向流量）
-    default_value: 'true'
+  ctShowUsedFlow:
+    name: 显示已用流量
+    description: 开启显示已用流量，关闭显示剩余流量
+    default_value: 'false'
     options:
     - 'true'
     - 'false'
-  ctDirectionalFlow:
-    name: 显示定向流量
-    description: 小组件流量统计包含定向流量（关闭则只统计通用流量）
-    default_value: 'true'
+  ctShowUsedVoice:
+    name: 显示已用语音
+    description: 开启显示已用语音，关闭显示剩余语音
+    default_value: 'false'
     options:
     - 'true'
     - 'false'
+  ctShowDirect:
+    name: 定向流量卡
+    description: auto=自动判断，true=强制显示，false=隐藏
+    default_value: 'auto'
+    options:
+    - 'auto'
+    - 'true'
+    - 'false'
+  ctTitle:
+    name: 小组件标题
+    description: 默认"中国电信"，可自定义
+    default_value: ''
 dns: {}
 scriptings:
 - generic:
     name: china-telecom
-    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CT_Widget.JS
+    script_url: https://raw.githubusercontent.com/xccverse/egern-widgets/main/telecom/china-telecom.js
     env:
-      CT_SHOW_GENERAL_FLOW: '{{{ctGeneralFlow}}}'
-      CT_SHOW_DIRECTIONAL_FLOW: '{{{ctDirectionalFlow}}}'
+      CT_SHOW_USED_FLOW: '{{{ctShowUsedFlow}}}'
+      CT_SHOW_USED_VOICE: '{{{ctShowUsedVoice}}}'
+      CT_SHOW_DIRECT: '{{{ctShowDirect}}}'
+      CT_TITLE: '{{{ctTitle}}}'
 - http_request:
     name: 中国电信自动捕获
-    match: '^https://e\.dli[^{{{ctCapture}}}]e\.cn/'
-    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/ChinaTelecom.js
+    match: '^https://e\.dli[{{{ctCapture}}}]e\.cn/'
+    script_url: https://raw.githubusercontent.com/xccverse/egern-widgets/main/telecom/china-telecom.js
 - schedule:
     name: 中国电信保活
     cron: '*/20 * * * *'
-    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CT_Widget.JS
+    script_url: https://raw.githubusercontent.com/xccverse/egern-widgets/main/telecom/china-telecom.js
 mitm:
   hostnames:
     includes:
