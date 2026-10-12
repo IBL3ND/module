@@ -52,12 +52,7 @@ export default async function (ctx) {
       return renderSmall(now, city);
     }
     if (widgetFamily === 'systemLarge') {
-      // 大尺寸多合一：多拉 3 天预报 + 24 小时预报
-      const [daily3d, hourly24h] = await Promise.all([
-        fetchDaily3d(ctx, apiKey, lon, lat, apiHost).catch(() => null),
-        fetchHourly24h(ctx, apiKey, lon, lat, apiHost).catch(() => null),
-      ]);
-      return renderLarge(now, city, daily3d, hourly24h, userName);
+      return renderLarge(now, city);
     }
     return renderMedium(now, air, city);
 
@@ -779,256 +774,54 @@ function getGreeting(hour) {
   return '夜深了';
 }
 
-function renderLarge(now, city, daily3d, hourly24h, userName) {
-  const T = { light: '#1C1C1E', dark: '#F2F2F7' };       // 主文字
-  const S = { light: '#636366', dark: '#AEAEB2' };       // 次要文字
-  const ACC = { light: '#FF3B30', dark: '#FF453A' };    // 今天红
+/* ===================== 大尺寸（简化测试版） ===================== */
+
+function renderLarge(now, city) {
+  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
+  const S = { light: '#636366', dark: '#AEAEB2' };
+  const { icon, color } = getWeatherStyle(now.icon);
 
   const d = new Date();
-  const year = d.getFullYear(), month = d.getMonth() + 1;
-  const date = d.getDate(), hour = d.getHours();
-  const minute = d.getMinutes(), second = d.getSeconds();
-
-  // ---- 日程：取最近 2 个节日/节气 ----
-  let schedules = [];
-  try {
-    schedules = getCountdowns().slice(0, 2).map(c => {
-      const t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + c.days);
-      const md = `${String(t.getMonth() + 1).padStart(2, '0')}/${String(t.getDate()).padStart(2, '0')}`;
-      return { name: c.name, md };
-    });
-  } catch (e) {}
-
-  const scheduleRows = schedules.map((s, i) => ({
-    type: 'stack',
-    direction: 'row',
-    alignItems: 'center',
-    gap: 6,
-    children: [
-      { type: 'stack', width: 4, height: 32, backgroundColor: i === 0 ? { light: '#34C759', dark: '#30D158' } : { light: '#FF9500', dark: '#FF9F0A' }, borderRadius: 2 },
-      {
-        type: 'stack',
-        direction: 'column',
-        children: [
-          { type: 'text', text: s.name, font: { size: 15, weight: 'medium' }, textColor: T },
-          { type: 'text', text: s.md, font: { size: 13 }, textColor: S },
-        ]
-      }
-    ]
-  }));
-
-  // ---- 本周一 ----
-  const monday = new Date(d);
-  const dow = (d.getDay() + 6) % 7; // 周一=0
-  monday.setDate(d.getDate() - dow);
-  const weekNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-  const weekCells = [];
-  for (let i = 0; i < 7; i++) {
-    const wd = new Date(monday);
-    wd.setDate(monday.getDate() + i);
-    const isToday = wd.getDate() === date && wd.getMonth() === d.getMonth();
-    let lunarDay = '';
-    try {
-      lunarDay = solarToLunar(wd.getFullYear(), wd.getMonth() + 1, wd.getDate()).dayStr || '';
-    } catch (e) {}
-    weekCells.push({
-      type: 'stack',
-      direction: 'column',
-      alignItems: 'center',
-      flex: 1,
-      children: [
-        {
-          type: 'stack',
-          width: 44, height: 44,
-          direction: 'column',
-          alignItems: 'center',
-          backgroundColor: isToday ? ACC : undefined,
-          borderRadius: 22,
-          children: [
-            { type: 'spacer' },
-            { type: 'text', text: String(wd.getDate()), font: { size: 19, weight: 'semibold' }, textColor: isToday ? '#FFFFFF' : T },
-            { type: 'spacer' }
-          ]
-        },
-        { type: 'text', text: lunarDay, font: { size: 10 }, textColor: isToday ? ACC : S, maxLines: 1 }
-      ]
-    });
-  }
-
-  // ---- 天气数据 ----
-  const today = daily3d && daily3d[0];
-  const tomorrow = daily3d && daily3d[1];
-  const dayAfter = daily3d && daily3d[2];
-  const { icon: nowIcon, color: nowColor } = getWeatherStyle(now.icon);
-  const windMs = now.windSpeed !== '--' ? (Number(now.windSpeed) / 3.6).toFixed(1) : '--';
-
-  const forecastCol = (label, dayInfo) => {
-    if (!dayInfo) return { type: 'stack', flex: 1, children: [] };
-    const { icon, color } = getWeatherStyle(dayInfo.iconDay);
-    return {
-      type: 'stack',
-      direction: 'column',
-      alignItems: 'center',
-      flex: 1,
-      gap: 4,
-      children: [
-        { type: 'text', text: label, font: { size: 16, weight: 'medium' }, textColor: T },
-        { type: 'image', src: `sf-symbol:${icon}`, width: 34, height: 34, color },
-        { type: 'text', text: `${dayInfo.tempMin}°C/${dayInfo.tempMax}°C`, font: { size: 14 }, textColor: S },
-      ]
-    };
-  };
-
-  const curveSrc = hourly24h && hourly24h.length ? buildTempCurveSVG(hourly24h) : '';
-
-  const greeting = getGreeting(hour);
-  const greetText = userName ? `${userName} ${greeting}！` : `${greeting}！`;
+  const dateStr = `${d.getMonth() + 1}月${d.getDate()}日`;
 
   return {
     type: 'widget',
-    padding: 16,
+    padding: 20,
     children: [
-      // ---- 顶栏：年月日程 | 时钟 | 大日期 ----
       {
         type: 'stack',
         direction: 'row',
         alignItems: 'center',
         children: [
-          {
-            type: 'stack',
-            direction: 'column',
-            gap: 6,
-            flex: 1,
-            children: [
-              { type: 'text', text: `${month}月 ${year}`, font: { size: 26, weight: 'bold' }, textColor: T },
-              {
-                type: 'stack',
-                direction: 'row',
-                children: [
-                  {
-                    type: 'stack',
-                    backgroundColor: { light: '#AF52DE15', dark: '#BF5AF225' },
-                    borderRadius: 8,
-                    padding: [3, 10, 3, 10],
-                    children: [{ type: 'text', text: '日程', font: { size: 14, weight: 'semibold' }, textColor: { light: '#AF52DE', dark: '#BF5AF2' } }]
-                  },
-                  { type: 'spacer' }
-                ]
-              },
-              ...scheduleRows,
-            ]
-          },
-          { type: 'image', src: buildClockSVG(hour, minute, second), width: 110, height: 110 },
-          {
-            type: 'stack',
-            direction: 'column',
-            alignItems: 'flex-end',
-            flex: 1,
-            children: [
-              { type: 'text', text: String(date).padStart(2, '0'), font: { size: 84, weight: 'bold' }, textColor: T },
-              { type: 'text', text: greetText, font: { size: 17, weight: 'semibold' }, textColor: S },
-            ]
-          },
-        ]
-      },
-
-      { type: 'spacer', length: 10 },
-
-      // ---- 星期头 ----
-      {
-        type: 'stack',
-        direction: 'row',
-        children: weekNames.map(w => ({
-          type: 'stack', flex: 1, alignItems: 'center',
-          children: [{ type: 'text', text: w, font: { size: 15 }, textColor: T }]
-        }))
-      },
-      { type: 'spacer', length: 6 },
-
-      // ---- 日期条 ----
-      {
-        type: 'stack',
-        direction: 'row',
-        borderWidth: 1,
-        borderColor: { light: '#00000020', dark: '#FFFFFF30' },
-        borderRadius: 22,
-        padding: [8, 4, 8, 4],
-        children: weekCells,
-      },
-
-      { type: 'spacer', length: 12 },
-
-      // ---- 天气标题行 ----
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        children: [
-          { type: 'text', text: 'WEATHER FORECAST', font: { size: 20, weight: 'bold' }, textColor: S },
+          { type: 'text', text: city, font: { size: 22, weight: 'semibold' }, textColor: T },
           { type: 'spacer' },
-          { type: 'text', text: `${now.temp}°`, font: { size: 30, weight: 'bold' }, textColor: T },
-          { type: 'spacer', length: 8 },
-          {
-            type: 'stack',
-            direction: 'column',
-            children: [
-              { type: 'text', text: today ? `${today.tempMax}°C` : '--', font: { size: 15, weight: 'semibold' }, textColor: T },
-              { type: 'text', text: today ? `${today.tempMin}°C` : '--', font: { size: 15 }, textColor: S },
-            ]
-          },
-          { type: 'spacer', length: 8 },
-          { type: 'image', src: `sf-symbol:${nowIcon}`, width: 36, height: 36, color: nowColor },
+          { type: 'text', text: dateStr, font: { size: 17 }, textColor: S },
         ]
       },
-
-      { type: 'spacer', length: 8 },
-
-      // ---- 城市 + 温度曲线 ----
+      { type: 'spacer' },
       {
         type: 'stack',
         direction: 'row',
         alignItems: 'center',
-        gap: 10,
         children: [
-          {
-            type: 'stack',
-            direction: 'row',
-            alignItems: 'center',
-            gap: 4,
-            children: [
-              { type: 'image', src: 'sf-symbol:location.fill', width: 16, height: 16, color: T },
-              { type: 'text', text: city, font: { size: 19, weight: 'semibold' }, textColor: T },
-            ]
-          },
-          ...(curveSrc ? [{ type: 'image', src: curveSrc, width: 220, height: 74 }] : []),
+          { type: 'text', text: `${now.temp}°`, font: { size: 72, weight: 'bold' }, textColor: T },
+          { type: 'spacer', length: 12 },
+          { type: 'image', src: `sf-symbol:${icon}`, width: 52, height: 52, color },
+          { type: 'spacer', length: 8 },
+          { type: 'text', text: now.text, font: { size: 24, weight: 'medium' }, textColor: T },
         ]
       },
-
-      { type: 'spacer', length: 8 },
-
-      // ---- 详情 2x2 ----
+      { type: 'spacer' },
       {
         type: 'stack',
         direction: 'row',
         children: [
-          {
-            type: 'stack', direction: 'column', flex: 1, gap: 6,
-            children: [
-              { type: 'text', text: `天气：${now.text}`, font: { size: 16 }, textColor: T },
-              { type: 'text', text: `风速：${windMs} m/s`, font: { size: 16 }, textColor: T },
-            ]
-          },
-          {
-            type: 'stack', direction: 'column', flex: 1, gap: 6,
-            children: [
-              { type: 'text', text: `体感：${now.feelsLike}°C`, font: { size: 16 }, textColor: T },
-              { type: 'text', text: `湿度：${now.humidity}%`, font: { size: 16 }, textColor: T },
-            ]
-          },
-          forecastCol('明天', tomorrow),
-          forecastCol('后天', dayAfter),
+          { type: 'text', text: `体感 ${now.feelsLike}°`, font: { size: 16 }, textColor: S, flex: 1 },
+          { type: 'text', text: `湿度 ${now.humidity}%`, font: { size: 16 }, textColor: S, flex: 1 },
+          { type: 'text', text: `风速 ${now.windSpeed}km/h`, font: { size: 16 }, textColor: S, flex: 1 },
         ]
       },
+      { type: 'spacer' },
     ]
   };
 }
