@@ -23,12 +23,15 @@
  */
 
 export default async function (ctx) {
-  const env = ctx.env || {};
-  const widgetFamily = ctx.widgetFamily || 'systemMedium';
+  const safeCtx = ctx || {};
+  const env = safeCtx.env || {};
+  const widgetFamily = safeCtx.widgetFamily || 'systemMedium';
 
+  // 本地直测：key/host 写死在文件里，复制到 Egern 脚本编辑器直接运行
+  // ⚠️ 推公开仓库前记得删掉！
   const apiKey     = (env.KEY || '').trim();
   const apiHostRaw = (env.API_HOST || '').trim();
-  const location   = (env.LOCATION || '北京').trim();
+  const location   = (env.LOCATION || '').trim();
   const userName   = (env.USER_NAME || '').trim();
 
   if (!apiKey)     return renderError('缺少 KEY 环境变量');
@@ -37,12 +40,12 @@ export default async function (ctx) {
   const apiHost = normalizeHost(apiHostRaw);
 
   try {
-    const { lon, lat, city } = await getLocation(ctx, location, apiKey, apiHost);
-    const now = await fetchWeatherNow(ctx, apiKey, lon, lat, apiHost);
+    const { lon, lat, city } = await getLocation(safeCtx, location, apiKey, apiHost);
+    const now = await fetchWeatherNow(safeCtx, apiKey, lon, lat, apiHost);
 
     let air = null;
     if (widgetFamily !== 'systemSmall' && !isAccessoryFamily(widgetFamily)) {
-      air = await fetchAirQuality(ctx, apiKey, lon, lat, apiHost);
+      air = await fetchAirQuality(safeCtx, apiKey, lon, lat, apiHost);
     }
 
     if (isAccessoryFamily(widgetFamily)) {
@@ -52,14 +55,18 @@ export default async function (ctx) {
       return renderSmall(now, city);
     }
     if (widgetFamily === 'systemLarge') {
-      const daily3d = await fetchDaily3d(ctx, apiKey, lon, lat, apiHost).catch(() => null);
-      return renderLarge(now, city, daily3d);
+      const [daily3d, hourly24h] = await Promise.all([
+        fetchDaily3d(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
+        fetchHourly24h(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
+      ]);
+      return renderLarge(now, city, daily3d, hourly24h);
     }
     return renderMedium(now, air, city);
 
   } catch (e) {
-    console.error(e);
-    return renderError(`请求失败：${e.message.slice(0, 60)}`);
+    try { console.error(e); } catch (_) {}
+    const msg = String((e && e.message) || e || '未知错误').slice(0, 80);
+    return renderError(`请求失败：${msg}`);
   }
 }
 
@@ -777,91 +784,141 @@ function getGreeting(hour) {
 
 /* ===================== 大尺寸（简化测试版） ===================== */
 
-function renderLarge(now, city, daily3d) {
+function renderLarge(now, city, daily3d, hourly24h) {
   const T = { light: '#1C1C1E', dark: '#F2F2F7' };
-  const S = { light: '#636366', dark: '#AEAEB2' };
+  const S = { light: '#8E8E93', dark: '#AEAEB2' };
   const { icon, color } = getWeatherStyle(now.icon);
-
   const d = new Date();
-  const dateStr = `${d.getMonth() + 1}月${d.getDate()}日`;
+  const clockSrc = buildClockSVG(d.getHours(), d.getMinutes(), d.getSeconds());
+  const curveSrc = hourly24h && hourly24h.length ? buildTempCurveSVG(hourly24h) : '';
+  const greeting = getGreeting(d.getHours());
+
+  let schedules = [];
+  try {
+    schedules = getCountdowns().slice(0, 2).map(c => {
+      const t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + c.days);
+      return { name: c.name, md: `${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}` };
+    });
+  } catch (e) {}
+
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const weekNames = ['一', '二', '三', '四', '五', '六', '日'];
+  const weekCells = [];
+  for (let i = 0; i < 7; i++) {
+    const wd = new Date(monday);
+    wd.setDate(monday.getDate() + i);
+    const isToday = wd.getDate() === d.getDate() && wd.getMonth() === d.getMonth();
+    weekCells.push({
+      type: 'stack', direction: 'column', alignItems: 'center', flex: 1, gap: 1,
+      children: [
+        { type: 'text', text: weekNames[i], font: { size: 10 }, textColor: S },
+        {
+          type: 'stack', alignItems: 'center',
+          ...(isToday ? { backgroundColor: { light: '#FF3B3025', dark: '#FF453A30' } } : {}),
+          borderRadius: 10, padding: [3, 10, 3, 10],
+          children: [
+            { type: 'text', text: String(wd.getDate()), font: { size: 15, weight: 'semibold' },
+              textColor: isToday ? { light: '#FF3B30', dark: '#FF453A' } : T },
+          ]
+        },
+      ]
+    });
+  }
 
   const today = daily3d && daily3d[0];
   const tomorrow = daily3d && daily3d[1];
   const dayAfter = daily3d && daily3d[2];
 
-  const forecastCol = (label, dayInfo) => {
+  const dayCard = (label, dayInfo) => {
     if (!dayInfo) return { type: 'stack', flex: 1, children: [] };
     const s = getWeatherStyle(dayInfo.iconDay);
     return {
-      type: 'stack',
-      direction: 'column',
-      alignItems: 'center',
-      flex: 1,
-      gap: 4,
+      type: 'stack', direction: 'row', alignItems: 'center', flex: 1, gap: 6,
       children: [
-        { type: 'text', text: label, font: { size: 16, weight: 'medium' }, textColor: T },
-        { type: 'image', src: `sf-symbol:${s.icon}`, width: 32, height: 32, color: s.color },
-        { type: 'text', text: `${dayInfo.tempMin}°/${dayInfo.tempMax}°`, font: { size: 14 }, textColor: S },
+        { type: 'text', text: label, font: { size: 13 }, textColor: S },
+        { type: 'image', src: `sf-symbol:${s.icon}`, width: 22, height: 22, color: s.color },
+        { type: 'text', text: `${dayInfo.tempMin}°-${dayInfo.tempMax}°`, font: { size: 13, weight: 'semibold' }, textColor: T },
       ]
     };
   };
 
   return {
     type: 'widget',
-    padding: 20,
+    padding: [12, 12, 4, 12],
+    gap: 8,
     children: [
+      // 顶栏
       {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
+        type: 'stack', direction: 'row', alignItems: 'center',
         children: [
-          { type: 'text', text: city, font: { size: 22, weight: 'semibold' }, textColor: T },
+          {
+            type: 'stack', direction: 'column', gap: 4, alignItems: 'start',
+            children: [
+              { type: 'text', text: `${d.getFullYear()} ${d.getMonth() + 1}月`, font: { size: 22, weight: 'bold' }, textColor: T },
+              {
+                type: 'stack',
+                backgroundColor: { light: '#AF52DE25', dark: '#BF5AF230' },
+                borderRadius: 6, padding: [2, 8, 2, 8],
+                children: [{ type: 'text', text: '日程', font: { size: 12, weight: 'bold' },
+                  textColor: { light: '#AF52DE', dark: '#BF5AF2' } }]
+              },
+              ...schedules.map((s, i) => ({
+                type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
+                children: [
+                  { type: 'stack', width: 3, height: 28,
+                    backgroundColor: i === 0 ? { light: '#34C75960', dark: '#30D15860' } : { light: '#FF950060', dark: '#FF9F0A60' },
+                    borderRadius: 2 },
+                  { type: 'text', text: `${s.name} ${s.md}`, font: { size: 13 }, textColor: T, maxLines: 1 },
+                ]
+              })),
+            ]
+          },
           { type: 'spacer' },
-          { type: 'text', text: dateStr, font: { size: 17 }, textColor: S },
-        ]
-      },
-      { type: 'spacer' },
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        children: [
-          { type: 'text', text: `${now.temp}°`, font: { size: 72, weight: 'bold' }, textColor: T },
-          { type: 'spacer', length: 12 },
-          { type: 'image', src: `sf-symbol:${icon}`, width: 52, height: 52, color },
-          { type: 'spacer', length: 8 },
-          { type: 'text', text: now.text, font: { size: 24, weight: 'medium' }, textColor: T },
+          { type: 'image', src: clockSrc, width: 88, height: 88 },
           { type: 'spacer' },
           {
-            type: 'stack',
-            direction: 'column',
+            type: 'stack', direction: 'column', alignItems: 'center',
             children: [
-              { type: 'text', text: today ? `最高 ${today.tempMax}°` : '--', font: { size: 16, weight: 'semibold' }, textColor: T },
-              { type: 'text', text: today ? `最低 ${today.tempMin}°` : '--', font: { size: 16 }, textColor: S },
+              { type: 'text', text: String(d.getDate()), font: { size: 68, weight: 'bold' }, textColor: T },
+              { type: 'text', text: greeting + '!', font: { size: 14, weight: 'semibold' }, textColor: S },
             ]
           },
         ]
       },
-      { type: 'spacer' },
+      // 星期条（周几+日期）
+      { type: 'stack', direction: 'row', gap: 4, children: weekCells },
+      // 天气
       {
-        type: 'stack',
-        direction: 'row',
+        type: 'stack', direction: 'row', alignItems: 'center', gap: 10,
         children: [
-          { type: 'text', text: `体感 ${now.feelsLike}°`, font: { size: 16 }, textColor: S, flex: 1 },
-          { type: 'text', text: `湿度 ${now.humidity}%`, font: { size: 16 }, textColor: S, flex: 1 },
-          { type: 'text', text: `风速 ${now.windSpeed}km/h`, font: { size: 16 }, textColor: S, flex: 1 },
+          { type: 'image', src: `sf-symbol:${icon}`, width: 36, height: 36, color },
+          { type: 'text', text: `${now.temp}°`, font: { size: 36, weight: 'bold' }, textColor: T },
+          {
+            type: 'stack', direction: 'column', gap: 1,
+            children: [
+              { type: 'text', text: today ? `${today.tempMax}°-${today.tempMin}°` : '', font: { size: 14 }, textColor: S },
+              { type: 'text', text: `${city} ${now.text}`, font: { size: 13 }, textColor: S },
+            ]
+          },
+          { type: 'spacer' },
+          {
+            type: 'stack', direction: 'column', alignItems: 'end', gap: 1,
+            children: [
+              { type: 'text', text: `体感${now.feelsLike}°`, font: { size: 12 }, textColor: S },
+              { type: 'text', text: `湿度${now.humidity}%`, font: { size: 12 }, textColor: S },
+            ]
+          },
         ]
       },
-      { type: 'spacer', length: 12 },
-      {
-        type: 'stack',
-        direction: 'row',
-        children: [
-          forecastCol('明天', tomorrow),
-          forecastCol('后天', dayAfter),
-        ]
-      },
+      // 明后天（中间）
+      { type: 'stack', direction: 'row', gap: 16, children: [ dayCard('明天', tomorrow), dayCard('后天', dayAfter) ] },
+      // 弹性空隙：把曲线推到底部
       { type: 'spacer' },
+      // 曲线（最下面，宽度自适应）
+      ...(curveSrc ? [{
+        type: 'image', src: curveSrc, height: 112
+      }] : []),
     ]
   };
 }
