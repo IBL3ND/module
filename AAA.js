@@ -840,11 +840,14 @@ function renderLarge(now, city, daily3d, hourly24h, userName) {
         {
           type: 'stack',
           width: 44, height: 44,
-          alignItems: 'center', justifyContent: 'center',
+          direction: 'column',
+          alignItems: 'center',
           backgroundColor: isToday ? ACC : undefined,
           borderRadius: 22,
           children: [
-            { type: 'text', text: String(wd.getDate()), font: { size: 19, weight: 'semibold' }, textColor: isToday ? '#FFFFFF' : T }
+            { type: 'spacer' },
+            { type: 'text', text: String(wd.getDate()), font: { size: 19, weight: 'semibold' }, textColor: isToday ? '#FFFFFF' : T },
+            { type: 'spacer' }
           ]
         },
         { type: 'text', text: lunarDay, font: { size: 10 }, textColor: isToday ? ACC : S, maxLines: 1 }
@@ -900,11 +903,17 @@ function renderLarge(now, city, daily3d, hourly24h, userName) {
               { type: 'text', text: `${month}月 ${year}`, font: { size: 26, weight: 'bold' }, textColor: T },
               {
                 type: 'stack',
-                backgroundColor: { light: '#AF52DE15', dark: '#BF5AF225' },
-                borderRadius: 8,
-                padding: [3, 10, 3, 10],
-                alignSelf: 'flex-start',
-                children: [{ type: 'text', text: '日程', font: { size: 14, weight: 'semibold' }, textColor: { light: '#AF52DE', dark: '#BF5AF2' } }]
+                direction: 'row',
+                children: [
+                  {
+                    type: 'stack',
+                    backgroundColor: { light: '#AF52DE15', dark: '#BF5AF225' },
+                    borderRadius: 8,
+                    padding: [3, 10, 3, 10],
+                    children: [{ type: 'text', text: '日程', font: { size: 14, weight: 'semibold' }, textColor: { light: '#AF52DE', dark: '#BF5AF2' } }]
+                  },
+                  { type: 'spacer' }
+                ]
               },
               ...scheduleRows,
             ]
