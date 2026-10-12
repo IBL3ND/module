@@ -354,10 +354,9 @@ async function handleWidget(ctx) {
       alignItems: "center",
       flex: 1,
       padding: [8, 10, 8, 10],
-      backgroundColor: colors.capsuleBg,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: { light: "#00000020", dark: "#FFFFFF60" },
       children: [
         {
           type: "text",
