@@ -2,34 +2,6 @@
 */
 
 export default async function(ctx) {
-  // --- 小组件样式：glass（默认透明）| classic（经典纯色）---
-  function getStyleMode(c) {
-    const v = String(c.env?.WIDGET_STYLE || 'glass').trim().toLowerCase();
-    return v === 'classic' ? 'classic' : 'glass';
-  }
-  function getColors(isGlass) {
-    return {
-      bg: isGlass
-        ? { light: 'rgba(255,255,255,0.25)', dark: 'rgba(0,0,0,0.25)' }
-        : { light: '#FFFFFF', dark: '#1C1C1E' },
-      themeRed: { light: '#C83C3C', dark: '#C83C3C' },
-      textRed: isGlass
-        ? { light: '#D7000F', dark: '#FF9E9E' }
-        : { light: '#C83C3C', dark: '#FF6B6B' },
-      textMain: isGlass
-        ? { light: '#1A1A1A', dark: '#FFFFFF' }
-        : { light: '#333333', dark: '#FFFFFF' },
-      textSub: isGlass
-        ? { light: 'rgba(0,0,0,0.6)', dark: 'rgba(255,255,255,0.7)' }
-        : { light: '#888888', dark: '#CCCCCC' },
-      textFade: isGlass
-        ? { light: 'rgba(0,0,0,0.45)', dark: 'rgba(255,255,255,0.55)' }
-        : { light: '#C7C7CC', dark: '#777777' },
-    };
-  }
-  const isGlass = getStyleMode(ctx) === 'glass';
-  const C = getColors(isGlass);
-
   // --- 辅助函数：计算当前是第几周 ---
   function getWeekNumber(date) {
     const target = new Date(date.valueOf());
@@ -126,11 +98,11 @@ export default async function(ctx) {
   const currentWeekNum = getWeekNumber(now);
   const currentLunarStr = getRealLunarFull(now);
 
-  const themeRed = C.themeRed;
-  const textRed = C.textRed;
-  const textMain = C.textMain;
-  const textSub = C.textSub;
-  const textFade = C.textFade;
+  const themeRed = { light: '#C83C3C', dark: '#C83C3C' }; 
+  const textRed = { light: '#C83C3C', dark: '#FF6B6B' };  
+  const textMain = { light: '#333333', dark: '#FFFFFF' }; 
+  const textSub = { light: '#888888', dark: '#CCCCCC' };  
+  const textFade = { light: '#C7C7CC', dark: '#777777' }; 
 
   const family = ctx.widgetFamily || 'systemLarge';
   const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
@@ -140,20 +112,41 @@ export default async function(ctx) {
   // 小号组件 (Small) - 今日聚焦
   // ==========================================
   if (family === 'systemSmall') {
-    const smallWidget = {
+    return {
       type: 'widget',
       url: 'calshow://',
       padding: 0,
+
       children: [
         {
           type: 'stack',
           direction: 'row',
-          backgroundColor: themeRed,
+
           padding: [8, 12, 8, 12], 
           children: [
-            { type: 'text', text: `${year}年${month + 1}月`, font: { size: 11, weight: 'bold' }, textColor: '#FFFFFF' },
+            {
+              type: 'stack',
+              backgroundColor: { light: '#34C75915', dark: '#30D15820' },
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: { light: '#34C75950', dark: '#30D15860' },
+              padding: [4, 10, 4, 10],
+              children: [
+                { type: 'text', text: `${year}年${month + 1}月`, font: { size: 11, weight: 'bold' }, textColor: { light: '#2E8B57', dark: '#4CD964' } },
+              ]
+            },
             { type: 'spacer' },
-            { type: 'text', text: `周${weekdays[day === 0 ? 6 : day - 1]}`, font: { size: 11, weight: 'bold' }, textColor: '#FFFFFF' }
+            {
+              type: 'stack',
+              backgroundColor: { light: '#34C75915', dark: '#30D15820' },
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: { light: '#34C75950', dark: '#30D15860' },
+              padding: [4, 10, 4, 10],
+              children: [
+                { type: 'text', text: `周${weekdays[day === 0 ? 6 : day - 1]}`, font: { size: 11, weight: 'bold' }, textColor: { light: '#2E8B57', dark: '#4CD964' } },
+              ]
+            }
           ]
         },
         {
@@ -171,8 +164,6 @@ export default async function(ctx) {
         }
       ]
     };
-    smallWidget.backgroundColor = C.bg;
-    return smallWidget;
   }
 
   // ==========================================
@@ -206,21 +197,37 @@ export default async function(ctx) {
     type: 'stack',
     direction: 'row',
     alignItems: 'center', 
-    backgroundColor: themeRed,
+
     padding: ui.headerPad,
     children: [
       {
-        type: 'text',
-        text: `${year}年${month + 1}月 第${currentWeekNum}周`,
-        font: { size: ui.headerTitle, weight: 'medium' },
-        textColor: '#FFFFFF'
+        type: 'stack',
+        backgroundColor: { light: '#34C75915', dark: '#30D15820' },
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: { light: '#34C75950', dark: '#30D15860' },
+        padding: [4, 10, 4, 10],
+        children: [{
+          type: 'text',
+          text: `${year}年${month + 1}月 第${currentWeekNum}周`,
+          font: { size: ui.headerTitle, weight: 'medium' },
+          textColor: { light: '#2E8B57', dark: '#4CD964' }
+        }]
       },
       { type: 'spacer' },
       {
-        type: 'text',
-        text: currentLunarStr, 
-        font: { size: ui.headerLunar, weight: 'medium' },
-        textColor: '#FFFFFF'
+        type: 'stack',
+        backgroundColor: { light: '#34C75915', dark: '#30D15820' },
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: { light: '#34C75950', dark: '#30D15860' },
+        padding: [4, 10, 4, 10],
+        children: [{
+          type: 'text',
+          text: currentLunarStr, 
+          font: { size: ui.headerLunar, weight: 'medium' },
+          textColor: { light: '#2E8B57', dark: '#4CD964' }
+        }]
       }
     ]
   };
@@ -252,7 +259,7 @@ export default async function(ctx) {
   const weekStacks = [];
   let currentDayOffset = 1 - firstDayIndex; 
 
-  for (let r = 0; r < 6; r++) {
+  for (let r = 0; r < 5; r++) {
     const dayCells = [];
     for (let c = 0; c < 7; c++) {
       const cellDateObj = new Date(year, month, currentDayOffset);
@@ -269,8 +276,8 @@ export default async function(ctx) {
 
       let primaryColor, secondaryColor;
       if (isToday) {
-        primaryColor = '#FFFFFF';
-        secondaryColor = '#FFFFFF'; 
+        primaryColor = { light: '#C83C3C', dark: '#FF6B6B' };
+        secondaryColor = { light: '#C83C3C', dark: '#FF6B6B' }; 
       } else if (isCurrentMonth) {
         primaryColor = isWeekend ? textRed : textMain;
         secondaryColor = isWeekend ? textRed : textSub;
@@ -306,14 +313,22 @@ export default async function(ctx) {
       textContent.push({ type: 'spacer' }); // 底部弹性占位（用于强制垂直居中）
 
       // 无论是不是今天，都给它套上一个绝对等宽、等高的隐形正方形盒子！
+      // 胶囊配色照抄节假日：普通绿、今天红
       let innerCell = {
         type: 'stack',
         direction: 'column',
         alignItems: 'center',
         width: ui.circleSize,  // 【关键修复】统一定义宽度，杜绝文字长短撑开导致列弯曲！
         height: ui.circleSize, // 【关键修复】统一定义高度（中号 20px，绝不重叠）
-        backgroundColor: isToday ? themeRed : undefined,
+
         borderRadius: 100, // 给个极大的数值，iOS 会完美切成正圆
+        backgroundColor: isToday
+          ? { light: '#FF3B3015', dark: '#FF453A25' }
+          : { light: '#34C75915', dark: '#30D15820' },
+        borderWidth: 1,
+        borderColor: isToday
+          ? { light: '#FF3B3050', dark: '#FF453A60' }
+          : { light: '#34C75950', dark: '#30D15860' },
         children: textContent
       };
 
@@ -338,17 +353,18 @@ export default async function(ctx) {
     });
   }
 
-  const mainWidget = {
+  return {
     type: 'widget',
     url: 'calshow://',
-    padding: 0,
+    padding: 0, 
+
     children: [
-      headerSection,
+      headerSection, 
       {
         type: 'stack',
         direction: 'column',
-        padding: ui.gridPad,
-        gap: ui.rowGap,
+        padding: ui.gridPad, 
+        gap: ui.rowGap, 
         children: [
           weekdayHeaderStack,
           ...weekStacks
@@ -356,6 +372,4 @@ export default async function(ctx) {
       }
     ]
   };
-  mainWidget.backgroundColor = C.bg;
-  return mainWidget;
 }
