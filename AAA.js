@@ -52,7 +52,8 @@ export default async function (ctx) {
       return renderSmall(now, city);
     }
     if (widgetFamily === 'systemLarge') {
-      return renderLarge(now, city);
+      const daily3d = await fetchDaily3d(ctx, apiKey, lon, lat, apiHost).catch(() => null);
+      return renderLarge(now, city, daily3d);
     }
     return renderMedium(now, air, city);
 
@@ -776,13 +777,34 @@ function getGreeting(hour) {
 
 /* ===================== 大尺寸（简化测试版） ===================== */
 
-function renderLarge(now, city) {
+function renderLarge(now, city, daily3d) {
   const T = { light: '#1C1C1E', dark: '#F2F2F7' };
   const S = { light: '#636366', dark: '#AEAEB2' };
   const { icon, color } = getWeatherStyle(now.icon);
 
   const d = new Date();
   const dateStr = `${d.getMonth() + 1}月${d.getDate()}日`;
+
+  const today = daily3d && daily3d[0];
+  const tomorrow = daily3d && daily3d[1];
+  const dayAfter = daily3d && daily3d[2];
+
+  const forecastCol = (label, dayInfo) => {
+    if (!dayInfo) return { type: 'stack', flex: 1, children: [] };
+    const s = getWeatherStyle(dayInfo.iconDay);
+    return {
+      type: 'stack',
+      direction: 'column',
+      alignItems: 'center',
+      flex: 1,
+      gap: 4,
+      children: [
+        { type: 'text', text: label, font: { size: 16, weight: 'medium' }, textColor: T },
+        { type: 'image', src: `sf-symbol:${s.icon}`, width: 32, height: 32, color: s.color },
+        { type: 'text', text: `${dayInfo.tempMin}°/${dayInfo.tempMax}°`, font: { size: 14 }, textColor: S },
+      ]
+    };
+  };
 
   return {
     type: 'widget',
@@ -809,6 +831,15 @@ function renderLarge(now, city) {
           { type: 'image', src: `sf-symbol:${icon}`, width: 52, height: 52, color },
           { type: 'spacer', length: 8 },
           { type: 'text', text: now.text, font: { size: 24, weight: 'medium' }, textColor: T },
+          { type: 'spacer' },
+          {
+            type: 'stack',
+            direction: 'column',
+            children: [
+              { type: 'text', text: today ? `最高 ${today.tempMax}°` : '--', font: { size: 16, weight: 'semibold' }, textColor: T },
+              { type: 'text', text: today ? `最低 ${today.tempMin}°` : '--', font: { size: 16 }, textColor: S },
+            ]
+          },
         ]
       },
       { type: 'spacer' },
@@ -819,6 +850,15 @@ function renderLarge(now, city) {
           { type: 'text', text: `体感 ${now.feelsLike}°`, font: { size: 16 }, textColor: S, flex: 1 },
           { type: 'text', text: `湿度 ${now.humidity}%`, font: { size: 16 }, textColor: S, flex: 1 },
           { type: 'text', text: `风速 ${now.windSpeed}km/h`, font: { size: 16 }, textColor: S, flex: 1 },
+        ]
+      },
+      { type: 'spacer', length: 12 },
+      {
+        type: 'stack',
+        direction: 'row',
+        children: [
+          forecastCol('明天', tomorrow),
+          forecastCol('后天', dayAfter),
         ]
       },
       { type: 'spacer' },
