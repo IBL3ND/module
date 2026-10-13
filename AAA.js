@@ -6,24 +6,24 @@
 let SGCC_USERNAME = "";  // 填写手机号
 let SGCC_PASSWORD = "";  // 填写密码
 
-// Egern 适配: 从模块参数读取账号密码
+// Egern 模块适配: 从模块设置读取账号密码（优先级高于文件头硬编码）
+// 优先级：$env（generic env透传） > $argument > 文件头
 (function(){
   try {
-    var _u = null, _p = null;
-    // 尝试从 $argument 获取 (Egern 模块 compat_arguments)
-    if (typeof $argument !== 'undefined' && $argument) {
-      var arg = (typeof $argument === 'string') ? JSON.parse($argument) : $argument;
-      _u = arg.sgccUsername || arg.username;
-      _p = arg.sgccPassword || arg.password;
+    if (typeof $env !== "undefined" && $env) {
+      if ($env.SGCC_USERNAME) SGCC_USERNAME = $env.SGCC_USERNAME;
+      if ($env.SGCC_PASSWORD) SGCC_PASSWORD = $env.SGCC_PASSWORD;
     }
-    // 写入 persistentStore 供主逻辑读取
-    if (_u && typeof $persistentStore !== 'undefined') {
-      $persistentStore.write(_u, "95598_username");
+  } catch(e1) {}
+  try {
+    if (typeof $argument !== "undefined" && $argument) {
+      var arg = (typeof $argument === "string") ? JSON.parse($argument) : $argument;
+      var _u = arg.sgccUsername || arg.SGCC_USERNAME || arg.username;
+      var _p = arg.sgccPassword || arg.SGCC_PASSWORD || arg.password;
+      if (_u) SGCC_USERNAME = _u;
+      if (_p) SGCC_PASSWORD = _p;
     }
-    if (_p && typeof $persistentStore !== 'undefined') {
-      $persistentStore.write(_p, "95598_password");
-    }
-  } catch(e) {}
+  } catch(e2) {}
 })();
 /* ===== 原脚本开始 ===== */
 /******************************************
