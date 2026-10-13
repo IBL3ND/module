@@ -1,924 +1,2088 @@
-/**
- * 🌤️ 和风天气 - Egern 小组件
- *
- * ⚠️ 重要提示
- * 环境变量：
- * KEY: 和风天气 API Key（必填）
- * API_HOST: 你的个人API Host（必填！从控制台获取）
- * LOCATION: 城市名，如"北京" （支持预设城市自动经纬度，非预设城市会尝试 geo 查询）
- *
- * ⚠️ 重要提示
- * 公共域名已停用： devapi.qweather.com 、 api.qweather.com  等将从2026年起逐步停止服务
- * 必须使用个人API Host：每个开发者账号都有独立的API Host
- * 从控制台复制：登录 https://console.qweather.com/ → 设置 → 复制API Host
- * KEY获取: 开始请求API之前，你需要先创建项目和凭据 前往控制台-项目管理 点击右上角“创建项目”按钮 填写项目名称，项目名称最多20个字符。你可以稍后对名称进行修改。点击“保存”按钮。然后点你刚创建的项目名称 进去就可以看见了。 ⚠️重要提示: 应用限制 你需要选择不限制
- * ————————————————————————————————————————————————
- * 示例 教程
- * 名称里面填   LOCATION
- * 值里面填     海口                 你想要显示出来的地区
- * 名称里填     KEY
- * 值里面填     h**********f        你的和风天气KEY
- * 名称里面填    API_HOST       
- * 值里面填     **.qweatherapi.com  你的个人API Host
- */
+// ============================================
+// 网上国网小组件（单文件版）
+// 填写你的 95598 账号密码，保存即可用
+// 数据经 api.120399.xyz 中转加解密
+// ============================================
+let SGCC_USERNAME = "";  // 填写手机号
+let SGCC_PASSWORD = "";  // 填写密码
 
-export default async function (ctx) {
-  const safeCtx = ctx || {};
-  const env = safeCtx.env || {};
-  const widgetFamily = safeCtx.widgetFamily || 'systemMedium';
-
-  // 本地直测：key/host 写死在文件里，复制到 Egern 脚本编辑器直接运行
-  // ⚠️ 推公开仓库前记得删掉！
-  const apiKey     = (env.KEY || '').trim();
-  const apiHostRaw = (env.API_HOST || '').trim();
-  const location   = (env.LOCATION || '').trim();
-  const userName   = (env.USER_NAME || '').trim();
-
-  if (!apiKey)     return renderError('缺少 KEY 环境变量');
-  if (!apiHostRaw) return renderError('缺少 API_HOST 环境变量');
-
-  const apiHost = normalizeHost(apiHostRaw);
-
+// Egern 适配: 从模块参数读取账号密码
+(function(){
   try {
-    const { lon, lat, city } = await getLocation(safeCtx, location, apiKey, apiHost);
-    const now = await fetchWeatherNow(safeCtx, apiKey, lon, lat, apiHost);
+    var _u = null, _p = null;
+    // 尝试从 $argument 获取 (Egern 模块 compat_arguments)
+    if (typeof $argument !== 'undefined' && $argument) {
+      var arg = (typeof $argument === 'string') ? JSON.parse($argument) : $argument;
+      _u = arg.sgccUsername || arg.username;
+      _p = arg.sgccPassword || arg.password;
+    }
+    // 写入 persistentStore 供主逻辑读取
+    if (_u && typeof $persistentStore !== 'undefined') {
+      $persistentStore.write(_u, "95598_username");
+    }
+    if (_p && typeof $persistentStore !== 'undefined') {
+      $persistentStore.write(_p, "95598_password");
+    }
+  } catch(e) {}
+})();
+/* ===== 原脚本开始 ===== */
+/******************************************
+ * 参考：
+ * @name 网上国网小组件数据更新接口
+ * @description 网上国网电费查询
+ * @channel https://t.me/yqc_123/
+ * @feedback https://t.me/NobyDa_Chat
+ * @author 小白脸|𝐎𝐍𝐙𝟑𝐕
+ * 
+ * @description 借用 @Yuheng0101 大佬脚本更改，调整了接口返回的内容，增加去年的用电量
+ * 
+BoxJs订阅地址:
+https://raw.githubusercontent.com/Yuheng0101/X/main/Tasks/boxjs.json
 
-    let air = null;
-    if (widgetFamily !== 'systemSmall' && !isAccessoryFamily(widgetFamily)) {
-      air = await fetchAirQuality(safeCtx, apiKey, lon, lat, apiHost);
-    }
+#!name =🔴 网上国网
+#!category=通用重写
+#!desc=95598 
 
-    if (isAccessoryFamily(widgetFamily)) {
-      return renderAccessory(now, city, widgetFamily);
-    }
-    if (widgetFamily === 'systemSmall') {
-      return renderSmall(now, city);
-    }
-    if (widgetFamily === 'systemLarge') {
-      const [daily3d, hourly24h] = await Promise.all([
-        fetchDaily3d(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
-        fetchHourly24h(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
-      ]);
-      return renderLarge(now, city, daily3d, hourly24h);
-    }
-    return renderMedium(now, air, city);
+[Script]
+接口重写 = type=http-request, pattern=^https?:\/\/api\.wsgw-rewrite\.com\/electricity\/bill\/all, script-path=https://raw.githubusercontent.com/dompling/Script/master/wsgw/index.js, requires-body=true, max-size=-1, timeout=60
 
-  } catch (e) {
-    try { console.error(e); } catch (_) {}
-    const msg = String((e && e.message) || e || '未知错误').slice(0, 80);
-    return renderError(`请求失败：${msg}`);
+[MITM]
+hostname = %APPEND% api.wsgw-rewrite.com
+
+
+******************************************/
+function getUrlParams(url) {
+  const queryString = url.split("?")[1];
+  if (!queryString) return {};
+  const query = queryString.split("&");
+  let params = {};
+  for (let i = 0; i < query.length; i++) {
+    let pair = query[i].split("=");
+    let key = decodeURIComponent(pair[0]);
+    let value = decodeURIComponent(pair[1] || "");
+    params[key] = value;
   }
+  return params;
 }
 
-function renderMedium(now, air, city) {
-  const { icon, color: iconColor } = getWeatherStyle(now.icon);
-  const aqiStyle = getAQIStyle(air?.aqi);
-
-  const time = new Date();
-  const timeStr = `${time.getMonth() + 1}-${time.getDate()} ${time.getHours()}:${String(time.getMinutes()).padStart(2, '0')}`;
-
-  const bg = { light: '#FFFFFF', dark: '#2C2C2E' };
-  const cardBg = { light: '#F2F2F715', dark: '#FFFFFF15' };
-
-  return {
-    type: 'widget',
-    
-    padding: 14,
-    gap: 10,
-    children: [
-
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        gap: 6,
-        children: [
-          capsuleTag(city, { light: '#FF3B30', dark: '#FF453A' }, { light: '#FF3B3015', dark: '#FF453A25' }),
-          capsuleTag(now.text, iconColor, getBadgeBg(now.icon)),
-          { type: 'spacer' },
-          capsuleTag(`AQI ${air?.aqi ?? '--'}`, aqiStyle.color, aqiStyle.bg),
-          {
-            type: 'text',
-            text: timeStr,
-            font: { size: 11 },
-            textColor: { light: '#8E8E93', dark: '#636366' }
+const getEnv = () =>
+    "undefined" != typeof $environment && $environment["surge-version"]
+      ? "Surge"
+      : "undefined" != typeof $environment && $environment["stash-version"]
+      ? "Stash"
+      : eval('typeof process !== "undefined"')
+      ? "Node.js"
+      : "undefined" != typeof $task
+      ? "Quantumult X"
+      : "undefined" != typeof $loon
+      ? "Loon"
+      : "undefined" != typeof $rocket
+      ? "Shadowrocket"
+      : void 0,
+  isQuanX = () => "Quantumult X" === getEnv(),
+  isLoon = () => "Loon" === getEnv(),
+  isStash = () => "Stash" === getEnv(),
+  isNode = () => "Node.js" === getEnv();
+class Logger {
+  constructor(e = "日志输出", o = "info") {
+    (this.prefix = e),
+      (this.levels = ["trace", "debug", "info", "warn", "error"]),
+      this.setLevel(o);
+  }
+  setLevel(e) {
+    this.currentLevelIndex = this.levels.indexOf(e);
+  }
+  log(e, ...o) {
+    this.levels.indexOf(e) >= this.currentLevelIndex &&
+      console.log(
+        `${this.prefix ? `[${this.prefix}] ` : ""}[${e.toUpperCase()}]\n` +
+          [...o].join("\n")
+      );
+  }
+  trace(...e) {
+    this.log("trace", ...e);
+  }
+  debug(...e) {
+    this.log("debug", ...e);
+  }
+  info(...e) {
+    this.log("info", ...e);
+  }
+  warn(...e) {
+    this.log("warn", ...e);
+  }
+  error(...e) {
+    this.log("error", ...e);
+  }
+}
+const request$1 = async (request = {} || "", option = {}) => {
+  switch (request.constructor) {
+    case Object:
+      request = { ...request, ...option };
+      break;
+    case String:
+      request = { url: request, ...option };
+  }
+  request.method ||
+    ((request.method = "GET"),
+    (request.body ?? request.bodyBytes) && (request.method = "POST")),
+    delete request.headers?.["Content-Length"],
+    delete request.headers?.["content-length"];
+  const method = request.method.toLocaleLowerCase();
+  switch (getEnv()) {
+    case "Loon":
+    case "Surge":
+    case "Stash":
+    case "Shadowrocket":
+    default:
+      return (
+        delete request.id,
+        request.policy &&
+          (isLoon() && (request.node = request.policy),
+          isStash() &&
+            (request.headers || (request.headers = {}),
+            (request.headers["X-Stash-Selected-Proxy"] = encodeURI(
+              request.policy
+            )))),
+        ArrayBuffer.isView(request.body) && (request["binary-mode"] = !0),
+        await new Promise((e, o) => {
+          $httpClient[method](request, (r, s, n) => {
+            r
+              ? o(r)
+              : ((s.ok = /^2\d\d$/.test(s.status)),
+                (s.statusCode = s.status),
+                n &&
+                  ((s.body = n),
+                  1 == request["binary-mode"] && (s.bodyBytes = n)),
+                e(s));
+          });
+        })
+      );
+    case "Quantumult X":
+      switch (
+        (delete request.scheme,
+        delete request.sessionIndex,
+        delete request.charset,
+        request.policy &&
+          (request.opts || (request.opts = {}),
+          (request.opts.policy = request.policy)),
+        (
+          request?.headers?.["Content-Type"] ??
+          request?.headers?.["content-type"]
+        )?.split(";")?.[0])
+      ) {
+        default:
+          delete request.bodyBytes;
+          break;
+        case "application/protobuf":
+        case "application/x-protobuf":
+        case "application/vnd.google.protobuf":
+        case "application/grpc":
+        case "application/grpc+proto":
+        case "application/octet-stream":
+          delete request.body,
+            ArrayBuffer.isView(request.bodyBytes) &&
+              (request.bodyBytes = request.bodyBytes.buffer.slice(
+                request.bodyBytes.byteOffset,
+                request.bodyBytes.byteLength + request.bodyBytes.byteOffset
+              ));
+        case void 0:
+      }
+      return await $task.fetch(request).then(
+        (e) => (
+          (e.ok = /^2\d\d$/.test(e.statusCode)), (e.status = e.statusCode), e
+        ),
+        (e) => Promise.reject(e.error)
+      );
+    case "Node.js":
+      const got = eval('require("got")');
+      let iconv = eval('require("iconv-lite")');
+      const { url: url, ...option } = request;
+      return await got[method](url, option).then(
+        (e) => (
+          (e.statusCode = e.status),
+          (e.body = iconv.decode(e.rawBody, request?.encoding || "utf-8")),
+          (e.bodyBytes = e.rawBody),
+          e
+        ),
+        (e) => {
+          if (e.response && 500 === e.response.statusCode)
+            return Promise.reject(e.response.body);
+          Promise.reject(e.message);
+        }
+      );
+  }
+};
+class Store {
+  constructor(NAMESPACE) {
+    if (
+      ((this.env = getEnv()),
+      (this.Store = "./store"),
+      NAMESPACE && (this.Store = `./store/${NAMESPACE}`),
+      "Node.js" === this.env)
+    ) {
+      const { LocalStorage: LocalStorage } = eval(
+        'require("node-localstorage")'
+      );
+      this.localStorage = new LocalStorage(this.Store);
+    }
+  }
+  get(e) {
+    switch (this.env) {
+      case "Surge":
+      case "Loon":
+      case "Stash":
+      case "Shadowrocket":
+        return $persistentStore.read(e);
+      case "Quantumult X":
+        return $prefs.valueForKey(e);
+      case "Node.js":
+        return this.localStorage.getItem(e);
+      default:
+        return null;
+    }
+  }
+  set(e, o) {
+    switch (this.env) {
+      case "Surge":
+      case "Loon":
+      case "Stash":
+      case "Shadowrocket":
+        return $persistentStore.write(o, e);
+      case "Quantumult X":
+        return $prefs.setValueForKey(o, e);
+      case "Node.js":
+        return this.localStorage.setItem(e, o), !0;
+      default:
+        return null;
+    }
+  }
+  clear(e) {
+    switch (this.env) {
+      case "Surge":
+      case "Loon":
+      case "Stash":
+      case "Shadowrocket":
+        return $persistentStore.write(null, e);
+      case "Quantumult X":
+        return $prefs.removeValueForKey(e);
+      case "Node.js":
+        return this.localStorage.removeItem(e), !0;
+      default:
+        return null;
+    }
+  }
+}
+const notify = (e = "", o = "", r = "", s = {}) => {
+    const n = (e) => {
+      const { $open: o, $copy: r, $media: s, $mediaMime: n } = e;
+      switch (typeof e) {
+        case void 0:
+          return e;
+        case "string":
+          switch (getEnv()) {
+            case "Surge":
+            case "Stash":
+            default:
+              return { url: e };
+            case "Loon":
+            case "Shadowrocket":
+              return e;
+            case "Quantumult X":
+              return { "open-url": e };
+            case "Node.js":
+              return;
           }
-        ]
-      },
-
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        gap: 0,
-        children: [
-          {
-            type: 'image',
-            src: `sf-symbol:${icon}`,
-            width: 52,
-            height: 52,
-            color: iconColor
-          },
-          { type: 'spacer' },
-          {
-            type: 'text',
-            text: `${now.temp}°`,
-            font: { size: 46, weight: 'bold' },
-            textColor: { light: '#1C1C1E', dark: '#F2F2F7' },
-            textAlign: 'center',
-            minScale: 0.7
-          },
-          { type: 'spacer' },
-          capsuleTagLarge(aqiStyle.text, aqiStyle.color, aqiStyle.bg)
-        ]
-      },
-
-      {
-        type: 'stack',
-        direction: 'row',
-        gap: 8,
-        children: [
-          infoCard('drop.fill',    '湿度', `${now.humidity}%`,        '#007AFF', cardBg),
-          infoCard('wind',         '风向', `${now.windDir} ${now.windScale}级`, '#5856D6', cardBg),
-          infoCard('gauge.medium', '风速', `${now.windSpeed}km/h`,    '#FF9500', cardBg)
-        ]
+        case "object":
+          switch (getEnv()) {
+            case "Surge":
+            case "Stash":
+            case "Shadowrocket":
+            default: {
+              const c = {};
+              let t = e.openUrl || e.url || e["open-url"] || o;
+              t && Object.assign(c, { action: "open-url", url: t });
+              let a = e["update-pasteboard"] || e.updatePasteboard || r;
+              if (
+                (a && Object.assign(c, { action: "clipboard", text: a }), s)
+              ) {
+                let e, o, r;
+                if (s.startsWith("http")) e = s;
+                else if (s.startsWith("data:")) {
+                  const [e] = s.split(";"),
+                    [, n] = s.split(",");
+                  (o = n), (r = e.replace("data:", ""));
+                } else {
+                  (o = s),
+                    (r = ((e) => {
+                      const o = {
+                        JVBERi0: "application/pdf",
+                        R0lGODdh: "image/gif",
+                        R0lGODlh: "image/gif",
+                        iVBORw0KGgo: "image/png",
+                        "/9j/": "image/jpg",
+                      };
+                      for (var r in o) if (0 === e.indexOf(r)) return o[r];
+                      return null;
+                    })(s));
+                }
+                Object.assign(c, {
+                  "media-url": e,
+                  "media-base64": o,
+                  "media-base64-mime": n ?? r,
+                });
+              }
+              return (
+                Object.assign(c, {
+                  "auto-dismiss": e["auto-dismiss"],
+                  sound: e.sound,
+                }),
+                c
+              );
+            }
+            case "Loon": {
+              const r = {};
+              let n = e.openUrl || e.url || e["open-url"] || o;
+              n && Object.assign(r, { openUrl: n });
+              let c = e.mediaUrl || e["media-url"];
+              return (
+                s?.startsWith("http") && (c = s),
+                c && Object.assign(r, { mediaUrl: c }),
+                console.log(JSON.stringify(r)),
+                r
+              );
+            }
+            case "Quantumult X": {
+              const n = {};
+              let c = e["open-url"] || e.url || e.openUrl || o;
+              c && Object.assign(n, { "open-url": c });
+              let t = e["media-url"] || e.mediaUrl;
+              s?.startsWith("http") && (t = s),
+                t && Object.assign(n, { "media-url": t });
+              let a = e["update-pasteboard"] || e.updatePasteboard || r;
+              return (
+                a && Object.assign(n, { "update-pasteboard": a }),
+                console.log(JSON.stringify(n)),
+                n
+              );
+            }
+            case "Node.js":
+              return;
+          }
+        default:
+          return;
       }
-    ]
-  };
-}
-
-function renderSmall(now, city) {
-  const { icon, color: iconColor } = getWeatherStyle(now.icon);
-  return {
-    type: 'widget',
-    
-    padding: 14,
-    gap: 8,
-    children: [
-      capsuleTag(city, { light: '#FF3B30', dark: '#FF453A' }, { light: '#FF3B3015', dark: '#FF453A25' }),
-      {
-        type: 'image',
-        src: `sf-symbol:${icon}`,
-        width: 40,
-        height: 40,
-        color: iconColor
-      },
-      {
-        type: 'text',
-        text: `${now.temp}°`,
-        font: { size: 36, weight: 'bold' },
-        textColor: { light: '#1C1C1E', dark: '#F2F2F7' }
-      },
-      {
-        type: 'text',
-        text: now.text,
-        font: { size: 13 },
-        textColor: { light: '#6E6E73', dark: '#AEAEB2' }
-      }
-    ]
-  };
-}
-
-function renderAccessory(now, city, family) {
-  if (family === 'accessoryCircular') {
-    return {
-      type: 'widget',
-      children: [{
-        type: 'text',
-        text: `${now.temp}°\n${city}`,
-        font: { size: 14, weight: 'bold' },
-        textAlign: 'center'
-      }]
     };
-  }
-  return {
-    type: 'widget',
-    children: [{
-      type: 'text',
-      text: `${city} ${now.temp}° ${now.text}`
-    }]
-  };
-}
-
-function capsuleTag(text, textColor, bgColor) {
-  return {
-    type: 'stack',
-    backgroundColor: bgColor,
-    borderRadius: 20,
-    padding: [4, 10, 4, 10],
-    children: [{
-      type: 'text',
-      text,
-      font: { size: 13, weight: 'semibold' },
-      textColor,
-      maxLines: 1
-    }]
-  };
-}
-
-function capsuleTagLarge(text, textColor, bgColor) {
-  return {
-    type: 'stack',
-    backgroundColor: bgColor,
-    borderRadius: 20,
-    padding: [6, 14, 6, 14],
-    children: [{
-      type: 'text',
-      text,
-      font: { size: 18, weight: 'bold' },
-      textColor,
-      maxLines: 1
-    }]
-  };
-}
-
-function infoCard(_sfIcon, label, value, _iconColor, cardBg) {
-  return {
-    type: 'stack',
-    direction: 'column',
-    alignItems: 'center',
-    flex: 1,
-    backgroundColor: cardBg,
-    borderRadius: 14,
-    padding: [8, 6, 8, 6],
-    gap: 3,
-    children: [
-      {
-        type: 'text',
-        text: label,
-        font: { size: 10 },
-        textColor: { light: '#8E8E93', dark: '#636366' }
-      },
-      {
-        type: 'text',
-        text: value,
-        font: { size: 13, weight: 'semibold' },
-        textColor: { light: '#1C1C1E', dark: '#F2F2F7' },
-        maxLines: 1,
-        minScale: 0.7
-      }
-    ]
-  };
-}
-
-function getWeatherStyle(code) {
-  const n = Number(code);
-  if (n === 100) return { icon: 'sun.max.fill',           color: { light: '#FF9500', dark: '#FFB340' } };
-  if (n === 101) return { icon: 'cloud.sun.fill',         color: { light: '#FF9500', dark: '#FFB340' } };
-  if (n === 102) return { icon: 'cloud.sun.fill',         color: { light: '#FF9500', dark: '#FFB340' } };
-  if (n === 103) return { icon: 'cloud.sun.fill',         color: { light: '#FF9500', dark: '#FFB340' } };
-  if (n === 104) return { icon: 'cloud.fill',             color: { light: '#8E8E93', dark: '#AEAEB2' } };
-  if (n >= 200 && n <= 299) return { icon: 'cloud.bolt.rain.fill', color: { light: '#5856D6', dark: '#7D7AFF' } };
-  if (n >= 300 && n <= 399) return { icon: 'cloud.rain.fill',      color: { light: '#007AFF', dark: '#0A84FF' } };
-  if (n >= 400 && n <= 499) return { icon: 'cloud.snow.fill',      color: { light: '#5AC8FA', dark: '#64D2FF' } };
-  if (n >= 105 && n <= 154) return { icon: 'cloud.fill',           color: { light: '#8E8E93', dark: '#AEAEB2' } };
-  return { icon: 'cloud.fill', color: { light: '#8E8E93', dark: '#AEAEB2' } };
-}
-
-function getBadgeBg(code) {
-  const n = Number(code);
-  if (n >= 100 && n <= 103) return { light: '#FFF3E015', dark: '#3A280025' };
-  if (n >= 200 && n <= 299) return { light: '#EDE7F615', dark: '#1E1A3625' };
-  if (n >= 300 && n <= 399) return { light: '#E3F2FD15', dark: '#001A3625' };
-  if (n >= 400 && n <= 499) return { light: '#E0F7FA15', dark: '#00333625' };
-  return { light: '#F2F2F715', dark: '#2C2C2E25' };
-}
-
-function getAQIStyle(val) {
-  const n = Number(val);
-  if (isNaN(n) || val === '--') return {
-    text: '--', color: { light: '#8E8E93', dark: '#636366' },
-    bg: { light: '#F2F2F715', dark: '#FFFFFF15' }
-  };
-  if (n <= 50)  return { text: '优', color: { light: '#34C759', dark: '#30D158' }, bg: { light: '#34C75915', dark: '#30D15825' } };
-  if (n <= 100) return { text: '良', color: { light: '#FF9500', dark: '#FF9F0A' }, bg: { light: '#FF950015', dark: '#FF9F0A25' } };
-  if (n <= 150) return { text: '轻度', color: { light: '#FF6B35', dark: '#FF6B35' }, bg: { light: '#FF6B3515', dark: '#FF6B3525' } };
-  return { text: '中度', color: { light: '#FF3B30', dark: '#FF453A' }, bg: { light: '#FF3B3015', dark: '#FF453A25' } };
-}
-
-function renderError(msg) {
-  return {
-    type: 'widget',
-    
-    padding: 16,
-    children: [{
-      type: 'stack',
-      backgroundColor: { light: '#FF3B3015', dark: '#FF453A25' },
-      borderRadius: 14,
-      padding: 12,
-      children: [{
-        type: 'text',
-        text: `⚠️ ${msg}`,
-        font: { size: 13 },
-        textColor: { light: '#FF3B30', dark: '#FF453A' }
-      }]
-    }]
-  };
-}
-
-
-function normalizeHost(host) {
-  let h = host;
-  if (!/^https?:\/\//i.test(h)) h = 'https://' + h;
-  return h.replace(/\/+$/, '');
-}
-
-function isAccessoryFamily(family) {
-  return family.startsWith('accessory');
-}
-
-async function getLocation(ctx, locName, key, host) {
-  const presets = {
-    // ── 海南省 ──
-    '海口': { lon: '110.3288', lat: '20.0310' }, '三亚': { lon: '109.5119', lat: '18.2528' },
-    '儋州': { lon: '109.5768', lat: '19.5209' }, '琼海': { lon: '110.4746', lat: '19.2584' },
-    '万宁': { lon: '110.3893', lat: '18.7953' }, '文昌': { lon: '110.7530', lat: '19.6129' },
-    '东方': { lon: '108.6536', lat: '19.1017' }, '五指山': { lon: '109.5169', lat: '18.7752' },
-    '陵水': { lon: '110.0372', lat: '18.5050' }, '保亭': { lon: '109.7026', lat: '18.6390' },
-    '屯昌': { lon: '110.1029', lat: '19.3638' }, '澄迈': { lon: '110.0073', lat: '19.7364' },
-    '临高': { lon: '109.6877', lat: '19.9084' }, '定安': { lon: '110.3593', lat: '19.6849' },
-    '乐东': { lon: '109.1717', lat: '18.7478' }, '昌江': { lon: '109.0556', lat: '19.2983' },
-    '白沙': { lon: '109.4515', lat: '19.2240' }, '琼中': { lon: '109.8335', lat: '18.9982' },
-    // ── 广东省 ──
-    '广州': { lon: '113.2644', lat: '23.1291' }, '深圳': { lon: '114.0579', lat: '22.5431' },
-    '珠海': { lon: '113.5767', lat: '22.2707' }, '汕头': { lon: '116.6813', lat: '23.3540' },
-    '佛山': { lon: '113.1214', lat: '23.0215' }, '韶关': { lon: '113.5975', lat: '24.8104' },
-    '湛江': { lon: '110.3593', lat: '21.2707' }, '肇庆': { lon: '112.4725', lat: '23.0515' },
-    '江门': { lon: '113.0816', lat: '22.5787' }, '茂名': { lon: '110.9254', lat: '21.6629' },
-    '惠州': { lon: '114.4161', lat: '23.1107' }, '梅州': { lon: '116.1225', lat: '24.2886' },
-    '汕尾': { lon: '115.3752', lat: '22.7862' }, '河源': { lon: '114.7001', lat: '23.7337' },
-    '阳江': { lon: '111.9826', lat: '21.8579' }, '清远': { lon: '113.0560', lat: '23.6817' },
-    '东莞': { lon: '113.7517', lat: '23.0206' }, '中山': { lon: '113.3927', lat: '22.5170' },
-    '潮州': { lon: '116.6226', lat: '23.6569' }, '揭阳': { lon: '116.3728', lat: '23.5497' },
-    '云浮': { lon: '112.0444', lat: '22.9150' },
-    // ── 全国热门城市 ──
-    '北京': { lon: '116.4074', lat: '39.9042' }, '上海': { lon: '121.4737', lat: '31.2304' },
-    '天津': { lon: '117.2008', lat: '39.0842' }, '重庆': { lon: '106.5049', lat: '29.5630' },
-    '香港': { lon: '114.1733', lat: '22.3200' }, '澳门': { lon: '113.5491', lat: '22.1987' },
-    '台北': { lon: '121.5090', lat: '25.0443' }, '杭州': { lon: '120.1551', lat: '30.2741' },
-    '南京': { lon: '118.7674', lat: '32.0415' }, '苏州': { lon: '120.5853', lat: '31.2989' },
-    '武汉': { lon: '114.2986', lat: '30.5844' }, '成都': { lon: '104.0657', lat: '30.6595' },
-    '西安': { lon: '108.9480', lat: '34.2632' }, '长沙': { lon: '112.9388', lat: '28.2282' },
-    '郑州': { lon: '113.6654', lat: '34.7579' }, '合肥': { lon: '117.2272', lat: '31.8206' },
-    '南昌': { lon: '115.8582', lat: '28.6829' }, '济南': { lon: '117.0009', lat: '36.6758' },
-    '青岛': { lon: '120.3826', lat: '36.0671' }, '福州': { lon: '119.3062', lat: '26.0753' },
-    '厦门': { lon: '118.0894', lat: '24.4798' }, '南宁': { lon: '108.3200', lat: '22.8240' },
-    '桂林': { lon: '110.2902', lat: '25.2736' }, '贵阳': { lon: '106.7135', lat: '26.5783' },
-    '昆明': { lon: '102.8329', lat: '25.0406' }, '大理': { lon: '100.2246', lat: '25.5916' },
-    '丽江': { lon: '100.2330', lat: '26.8721' }, '拉萨': { lon: '91.1322', lat: '29.6604' },
-    '沈阳': { lon: '123.4315', lat: '41.8057' }, '大连': { lon: '121.6147', lat: '38.9140' },
-    '长春': { lon: '125.3235', lat: '43.8171' }, '哈尔滨': { lon: '126.5350', lat: '45.8038' },
-    '石家庄': { lon: '114.5148', lat: '38.0423' }, '太原': { lon: '112.5488', lat: '37.8706' },
-    '呼和浩特': { lon: '111.6708', lat: '40.8183' }, '兰州': { lon: '103.8236', lat: '36.0581' },
-    '西宁': { lon: '101.7789', lat: '36.6231' }, '银川': { lon: '106.2781', lat: '38.4664' },
-    '乌鲁木齐': { lon: '87.6177', lat: '43.7928' }, '宁波': { lon: '121.5440', lat: '29.8683' },
-    '无锡': { lon: '120.3016', lat: '31.5747' }, '常州': { lon: '119.9469', lat: '31.7727' },
-    '徐州': { lon: '117.1848', lat: '34.2617' }, '扬州': { lon: '119.4129', lat: '32.3942' },
-    '金华': { lon: '119.6495', lat: '29.0895' }, '台州': { lon: '121.4286', lat: '28.6613' },
-    '温州': { lon: '120.6721', lat: '28.0005' }, '绍兴': { lon: '120.5821', lat: '29.9971' },
-    '泉州': { lon: '118.5894', lat: '24.9088' }, '洛阳': { lon: '112.4344', lat: '34.6630' },
-  };
-
-  if (presets[locName]) return { ...presets[locName], city: locName };
-
-  try {
-    const url = `${host}/geo/v2/city/lookup?location=${encodeURIComponent(locName)}&key=${key}&number=1&lang=zh`;
-    const resp = await ctx.http.get(url, { timeout: 6000 });
-    const data = await resp.json();
-    if (data.code === '200' && data.location?.[0]) {
-      const loc = data.location[0];
-      return { lon: loc.lon, lat: loc.lat, city: loc.name || locName };
+    switch (getEnv()) {
+      case "Surge":
+      case "Loon":
+      case "Stash":
+      case "Shadowrocket":
+      default:
+        $notification.post(e, o, r, n(s));
+        break;
+      case "Quantumult X":
+        $notify(e, o, r, n(s));
+      case "Node.js":
     }
-  } catch {}
-  return { lon: '116.4074', lat: '39.9042', city: locName || '北京' };
-}
-
-async function fetchWeatherNow(ctx, key, lon, lat, host) {
-  const url = `${host}/v7/weather/now?location=${lon},${lat}&key=${key}&lang=zh`;
-  const resp = await ctx.http.get(url, { timeout: 8000 });
-  const data = await resp.json();
-  if (data.code !== '200') throw new Error(describeApiError('实况', resp, data));
-  return {
-    temp: data.now.temp,
-    feelsLike: data.now.feelsLike || '--',
-    text: data.now.text,
-    icon: data.now.icon,
-    humidity: data.now.humidity,
-    windDir: data.now.windDir || '--',
-    windScale: data.now.windScale || '--',
-    windSpeed: data.now.windSpeed || '--'
-  };
-}
-
-// 3 天预报：拿今明后三天的高低温 + 白天图标
-async function fetchDaily3d(ctx, key, lon, lat, host) {
-  const url = `${host}/v7/weather/3d?location=${lon},${lat}&key=${key}&lang=zh`;
-  const resp = await ctx.http.get(url, { timeout: 8000 });
-  const data = await resp.json();
-  if (data.code !== '200') throw new Error(describeApiError('3d预报', resp, data));
-  return data.daily.map(d => ({
-    date: d.fxDate,           // 2026-10-12
-    tempMax: d.tempMax,
-    tempMin: d.tempMin,
-    iconDay: d.iconDay,
-    textDay: d.textDay,
-  }));
-}
-
-// 24 小时预报：拿逐小时温度画曲线
-async function fetchHourly24h(ctx, key, lon, lat, host) {
-  const url = `${host}/v7/weather/24h?location=${lon},${lat}&key=${key}&lang=zh`;
-  const resp = await ctx.http.get(url, { timeout: 8000 });
-  const data = await resp.json();
-  if (data.code !== '200') throw new Error(describeApiError('24h预报', resp, data));
-  return data.hourly.map(h => ({
-    time: h.fxTime,           // 2026-10-12T14:00+08:00
-    temp: Number(h.temp),
-  }));
-}
-
-// 接口报错诊断：带上 HTTP 状态码和返回体摘要，方便定位是 host/key/套餐问题
-function describeApiError(tag, resp, data) {
-  const status = resp ? resp.status : 'no-response';
-  let snippet = '';
-  try {
-    snippet = JSON.stringify(data);
-    if (snippet && snippet.length > 120) snippet = snippet.slice(0, 120) + '…';
-  } catch (e) { snippet = String(data); }
-  if (!snippet || snippet === '{}' || snippet === 'undefined') {
-    return `${tag}接口无有效返回(HTTP ${status})，请检查 API_HOST 是否正确`;
-  }
-  return `${tag}接口返回 ${snippet} (HTTP ${status})`;
-}
-
-async function fetchAirQuality(ctx, key, lon, lat, host) {
-  try {
-    const url = `${host}/airquality/v1/current/${lat}/${lon}?key=${key}&lang=zh`;
-    const resp = await ctx.http.get(url, { timeout: 7000 });
-    const data = await resp.json();
-    if (data.indexes && data.indexes.length > 0) {
-      const cnMee = data.indexes.find(i => i.code === 'cn-mee') || data.indexes[0];
-      return { aqi: Math.round(Number(cnMee.aqi)), category: cnMee.category };
+    let c = ["", "==============📣系统通知📣=============="];
+    c.push(e), o && c.push(o), r && c.push(r), console.log(c.join("\n"));
+  },
+  done = (e = {}) => {
+    switch (getEnv()) {
+      case "Surge":
+      case "Loon":
+      case "Stash":
+      case "Shadowrocket":
+      case "Quantumult X":
+      default:
+        $done(e);
+        break;
+      case "Node.js":
+        process.exit(1);
     }
-  } catch {}
-  return { aqi: '--', category: '--' };
-}
-
-
-/* ===================== 节假日/农历数据（自 Holiday_Countdown 移植） ===================== */
-/**
- * 📅 节日倒计时小组件
- */
-const HOLIDAYS = {
-  '01-01': { name: '元旦', type: 'holiday' },
-  '02-14': { name: '情人节', type: 'holiday' },
-  '03-08': { name: '妇女节', type: 'holiday' },
-  '04-01': { name: '愚人节', type: 'holiday' },
-  '05-01': { name: '劳动节', type: 'holiday' },
-  '05-04': { name: '青年节', type: 'holiday' },
-  '06-01': { name: '儿童节', type: 'holiday' },
-  '07-01': { name: '建党节', type: 'holiday' },
-  '08-01': { name: '建军节', type: 'holiday' },
-  '09-10': { name: '教师节', type: 'holiday' },
-  '10-01': { name: '国庆节', type: 'holiday' },
-  '11-11': { name: '光棍节', type: 'holiday' },
-  '12-25': { name: '圣诞节', type: 'holiday' },
-  '12-31': { name: '跨年夜', type: 'holiday' },
-};
-
-const LUNAR_HOLIDAYS = {
-  '1-1': '春节', '1-15': '元宵节', '2-2': '龙抬头',
-  '5-5': '端午节', '7-7': '七夕节', '7-15': '中元节',
-  '8-15': '中秋节', '9-9': '重阳节', '12-8': '腊八节', '12-30': '除夕'
-};
-
-const FLOATING_HOLIDAYS = {
-  'mother': { name: '母亲节', calc: (y) => getNthWeekday(y, 5, 0, 2) },
-  'father': { name: '父亲节', calc: (y) => getNthWeekday(y, 6, 0, 3) },
-};
-
-/* ===================== 农历核心算法(修正版) ===================== */
-const LUNAR_INFO = [
-  0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
-  0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255, 0x0b540, 0x0d6a0, 0x0ada2, 0x095b0, 0x14977,
-  0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40, 0x1ab54, 0x02b60, 0x09570, 0x052f2, 0x04970,
-  0x06566, 0x0d4a0, 0x0ea50, 0x06e95, 0x05ad0, 0x02b60, 0x186e3, 0x092e0, 0x1c8d7, 0x0c950,
-  0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4, 0x025d0, 0x092d0, 0x0d2b2, 0x0a950, 0x0b557,
-  0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5b0, 0x14573, 0x052b0, 0x0a9a8, 0x0e950, 0x06aa0,
-  0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570, 0x05260, 0x0f263, 0x0d950, 0x05b57, 0x056a0,
-  0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4, 0x0d250, 0x0d558, 0x0b540, 0x0b6a0, 0x195a6,
-  0x095b0, 0x049b0, 0x0a974, 0x0a4b0, 0x0b27a, 0x06a50, 0x06d40, 0x0af46, 0x0ab60, 0x09570,
-  0x04af5, 0x04970, 0x064b0, 0x074a3, 0x0ea50, 0x06b58, 0x055c0, 0x0ab60, 0x096d5, 0x092e0,
-  0x0c960, 0x0d954, 0x0d4a0, 0x0da50, 0x07552, 0x056a0, 0x0abb7, 0x025d0, 0x092d0, 0x0cab5,
-  0x0a950, 0x0b4a0, 0x0baa4, 0x0ad50, 0x055d9, 0x04ba0, 0x0a5b0, 0x15176, 0x052b0, 0x0a930,
-  0x07954, 0x06aa0, 0x0ad50, 0x05b52, 0x04b60, 0x0a6e6, 0x0a4e0, 0x0d260, 0x0ea65, 0x0d530,
-  0x05aa0, 0x076a3, 0x096d0, 0x04afb, 0x04ad0, 0x0a4d0, 0x1d0b6, 0x0d250, 0x0d520, 0x0dd45,
-  0x0b5a0, 0x056d0, 0x055b2, 0x049b0, 0x0a577, 0x0a4b0, 0x0aa50, 0x1b255, 0x06d20, 0x0ada0,
-  0x14aa6, 0x02b60, 0x09570, 0x04976, 0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40, 0x1ab54,
-  0x02b60, 0x09570, 0x052f2, 0x04970, 0x06566, 0x0d4a0, 0x0ea50, 0x16ea5, 0x05ad0, 0x02b60,
-  0x186e3, 0x092e0, 0x1c8d7, 0x0c950, 0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4, 0x025d0,
-  0x092d0, 0x0d2b2, 0x0a950, 0x0b557, 0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5d0, 0x145ad,
-  0x052b0, 0x0a9a8, 0x0e950, 0x06aa0, 0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570, 0x05260,
-  0x0f263, 0x0d950, 0x05b57, 0x056a0, 0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4, 0x0d250
-];
-
-const GAN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
-const ZHI = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-const ANIMALS = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
-const LUNAR_MONTH_NAMES = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '腊'];
-const LUNAR_DAY_NAMES = [
-  '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
-  '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
-  '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'
-];
-
-const LUNAR_MIN_YEAR = 1900;
-const LUNAR_MAX_YEAR = 2100;
-
-function lunarYearDays(y) {
-  let sum = 348;
-  for (let i = 0x8000; i > 0x8; i >>= 1) sum += (LUNAR_INFO[y - LUNAR_MIN_YEAR] & i) ? 1 : 0;
-  return sum + lunarLeapDays(y);
-}
-function lunarLeapMonth(y) { return LUNAR_INFO[y - LUNAR_MIN_YEAR] & 0xf; }
-function lunarLeapDays(y) {
-  return lunarLeapMonth(y) ? ((LUNAR_INFO[y - LUNAR_MIN_YEAR] & 0x10000) ? 30 : 29) : 0;
-}
-function lunarMonthDays(y, m) {
-  return (LUNAR_INFO[y - LUNAR_MIN_YEAR] & (0x10000 >> m)) ? 30 : 29;
-}
-
-function solarToLunar(yy, mm, dd) {
-  const baseDate = new Date(Date.UTC(1900, 0, 31));
-  const objDate = new Date(Date.UTC(yy, mm - 1, dd));
-  let offset = Math.round((objDate - baseDate) / 86400000);
-
-  let i, temp = 0;
-  for (i = LUNAR_MIN_YEAR; i < LUNAR_MAX_YEAR && offset > 0; i++) {
-    temp = lunarYearDays(i);
-    offset -= temp;
-  }
-  if (offset < 0) { offset += temp; i--; }
-  const year = i;
-
-  const leap = lunarLeapMonth(year);
-  let isLeap = false;
-  for (i = 1; i < 13 && offset > 0; i++) {
-    if (leap > 0 && i === leap + 1 && !isLeap) {
-      --i;
-      isLeap = true;
-      temp = lunarLeapDays(year);
-    } else {
-      temp = lunarMonthDays(year, i);
-    }
-    if (isLeap && i === leap + 1) isLeap = false;
-    offset -= temp;
-  }
-  if (offset === 0 && leap > 0 && i === leap + 1) {
-    if (isLeap) { isLeap = false; }
-    else { isLeap = true; --i; }
-  }
-  if (offset < 0) { offset += temp; i--; }
-
-  const month = i;
-  const day = offset + 1;
-  const ganIndex = (year - 4) % 10;
-  const zhiIndex = (year - 4) % 12;
-
-  return {
-    year, month, day, isLeap,
-    ganZhi: GAN[(ganIndex + 10) % 10] + ZHI[(zhiIndex + 12) % 12],
-    animal: ANIMALS[(zhiIndex + 12) % 12],
-    monthStr: (isLeap ? '闰' : '') + LUNAR_MONTH_NAMES[month - 1],
-    dayStr: LUNAR_DAY_NAMES[day - 1] || ''
-  };
-}
-
-const Lunar = {
-  getLunarDate: (d) => solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate()),
-  solarToLunar
-};
-
-/* ===================== 24节气(修正版) ===================== */
-const SOLAR_TERM_NAMES = [
-  '小寒', '大寒', '立春', '雨水', '惊蛰', '春分',
-  '清明', '谷雨', '立夏', '小满', '芒种', '夏至',
-  '小暑', '大暑', '立秋', '处暑', '白露', '秋分',
-  '寒露', '霜降', '立冬', '小雪', '大雪', '冬至'
-];
-
-const SOLAR_TERM_OFFSETS_MIN = [
-  0, 21208, 42467, 63836, 85337, 107014, 128867, 150921, 173149, 195551, 218072, 240693,
-  263343, 285989, 308563, 331033, 353350, 375494, 397447, 419210, 440795, 462224, 483532, 504758
-];
-
-const TROPICAL_YEAR_MS = 365.24219878 * 86400000;
-const SOLAR_TERM_BASE = Date.UTC(1900, 0, 6, 2, 5, 0);
-
-function getSolarTermDate(year, termIndex) {
-  const ms = SOLAR_TERM_BASE + TROPICAL_YEAR_MS * (year - 1900) + SOLAR_TERM_OFFSETS_MIN[termIndex] * 60000;
-  const d = new Date(ms);
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
-}
-
-/* ===================== 通用日期工具 ===================== */
-function getNthWeekday(year, month, weekday, n) {
-  const first = new Date(year, month - 1, 1);
-  const diff = (weekday - first.getDay() + 7) % 7;
-  return new Date(year, month - 1, 1 + diff + (n - 1) * 7);
-}
-
-function daysDiff(from, to) {
-  const f = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  const t = new Date(to.getFullYear(), to.getMonth(), to.getDate());
-  return Math.floor((t - f) / 86400000);
-}
-
-// 在给定公历年份 ~ 次年3月10日范围内，找到对应"农历 targetLunarMonth月targetLunarDay日"(非闰月)的公历日期
-function findSolarDateByLunar(targetLunarMonth, targetLunarDay, year) {
-  const start = new Date(year, 0, 1);
-  const end = new Date(year + 1, 2, 10);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const lunar = solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
-    if (lunar.month === targetLunarMonth && lunar.day === targetLunarDay && !lunar.isLeap) {
-      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    }
-  }
-  return null;
-}
-
-/* ===================== 汇总所有倒计时 ===================== */
-function getCountdowns(customToday) {
-  const now = customToday || new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const year = today.getFullYear();
-  const results = [];
-
-  for (const [k, v] of Object.entries(HOLIDAYS)) {
-    const [m, d] = k.split('-').map(Number);
-    let t = new Date(year, m - 1, d);
-    if (t < today) t = new Date(year + 1, m - 1, d);
-    results.push({ name: v.name, days: daysDiff(today, t), type: v.type });
-  }
-
-  for (const v of Object.values(FLOATING_HOLIDAYS)) {
-    let t = v.calc(year);
-    if (t < today) t = v.calc(year + 1);
-    results.push({ name: v.name, days: daysDiff(today, t), type: 'floating' });
-  }
-
-  for (let i = 0; i < 24; i++) {
-    const term = getSolarTermDate(year, i);
-    let t = new Date(term.year, term.month - 1, term.day);
-    if (t < today) {
-      const term2 = getSolarTermDate(year + 1, i);
-      t = new Date(term2.year, term2.month - 1, term2.day);
-    }
-    results.push({ name: SOLAR_TERM_NAMES[i], days: daysDiff(today, t), type: 'term' });
-  }
-
-  try {
-    for (const [k, name] of Object.entries(LUNAR_HOLIDAYS)) {
-      const [lm, ld] = k.split('-').map(Number);
-      const isChuxi = k === '12-30';
-
-      let t = findSolarDateByLunar(lm, ld, year);
-      if (isChuxi && !t) t = findSolarDateByLunar(12, 29, year);
-
-      if (!t || t < today) {
-        t = findSolarDateByLunar(lm, ld, year + 1);
-        if (isChuxi && !t) t = findSolarDateByLunar(12, 29, year + 1);
-      }
-
-      if (t) results.push({ name, days: daysDiff(today, t), type: 'lunar' });
-    }
-  } catch (e) {
-    console.warn('[Lunar Calc Fallback]', e);
-  }
-
-  results.sort((a, b) => a.days - b.days);
-  const seen = new Set();
-  return results.filter(r => !seen.has(r.name) && seen.add(r.name));
-}
-
-/* ===================== SVG 构建器 ===================== */
-
-// 模拟时钟 SVG（200x200）
-function buildClockSVG(hour, minute, second) {
-  const cx = 100, cy = 100, r = 92;
-  let ticks = '';
-  for (let i = 0; i < 60; i++) {
-    const a = (i * 6 - 90) * Math.PI / 180;
-    const isHour = i % 5 === 0;
-    const r1 = isHour ? r - 14 : r - 8;
-    const x1 = cx + r1 * Math.cos(a), y1 = cy + r1 * Math.sin(a);
-    const x2 = cx + r * Math.cos(a), y2 = cy + r * Math.sin(a);
-    ticks += `<line x1='${x1.toFixed(1)}' y1='${y1.toFixed(1)}' x2='${x2.toFixed(1)}' y2='${y2.toFixed(1)}' stroke='%23333' stroke-width='${isHour ? 3 : 1.5}'/>`;
-  }
-  let nums = '';
-  for (let n = 1; n <= 12; n++) {
-    const a = (n * 30 - 90) * Math.PI / 180;
-    const x = cx + (r - 28) * Math.cos(a), y = cy + (r - 28) * Math.sin(a);
-    nums += `<text x='${x.toFixed(1)}' y='${(y + 7).toFixed(1)}' text-anchor='middle' font-size='20' font-weight='600' fill='%23333'>${n}</text>`;
-  }
-  const ha = ((hour % 12) * 30 + minute * 0.5 - 90) * Math.PI / 180;
-  const ma = (minute * 6 - 90) * Math.PI / 180;
-  const sa = (second * 6 - 90) * Math.PI / 180;
-  const hx = cx + 45 * Math.cos(ha), hy = cy + 45 * Math.sin(ha);
-  const mx = cx + 68 * Math.cos(ma), my = cy + 68 * Math.sin(ma);
-  const sx = cx + 75 * Math.cos(sa), sy = cy + 75 * Math.sin(sa);
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'>` +
-    `<circle cx='100' cy='100' r='96' fill='none' stroke='%23999' stroke-width='2'/>` +
-    ticks + nums +
-    `<line x1='100' y1='100' x2='${hx.toFixed(1)}' y2='${hy.toFixed(1)}' stroke='%23333' stroke-width='7' stroke-linecap='round'/>` +
-    `<line x1='100' y1='100' x2='${mx.toFixed(1)}' y2='${my.toFixed(1)}' stroke='%23333' stroke-width='5' stroke-linecap='round'/>` +
-    `<line x1='100' y1='100' x2='${sx.toFixed(1)}' y2='${sy.toFixed(1)}' stroke='%23FF9500' stroke-width='2.5' stroke-linecap='round'/>` +
-    `<circle cx='100' cy='100' r='7' fill='%23FF9500'/>` +
-    `</svg>`;
-  return 'data:image/svg+xml,' + svg;
-}
-
-// 逐小时温度曲线 SVG（360x120）
-function buildTempCurveSVG(hourly) {
-  const W = 360, H = 120, padL = 8, padR = 8, padT = 22, padB = 16;
-  const pts = hourly.slice(0, 9);
-  if (!pts.length) return '';
-  const temps = pts.map(p => p.temp);
-  const min = Math.min(...temps), max = Math.max(...temps);
-  const span = Math.max(max - min, 1);
-  const iw = W - padL - padR, ih = H - padT - padB;
-  const xy = pts.map((p, i) => {
-    const x = padL + (iw * i) / (pts.length - 1);
-    const y = padT + ih * (1 - (p.temp - min) / span);
-    return { x, y, temp: p.temp };
-  });
-  let grid = '';
-  for (let g = 0; g <= 3; g++) {
-    const y = padT + (ih * g) / 3;
-    grid += `<line x1='${padL}' y1='${y.toFixed(1)}' x2='${W - padR}' y2='${y.toFixed(1)}' stroke='%23999' stroke-width='1' stroke-dasharray='5,4' opacity='0.5'/>`;
-  }
-  const line = xy.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  let dots = '';
-  xy.forEach(p => {
-    dots += `<circle cx='${p.x.toFixed(1)}' cy='${p.y.toFixed(1)}' r='3' fill='%23007AFF'/>` +
-      `<text x='${p.x.toFixed(1)}' y='${(p.y - 8).toFixed(1)}' text-anchor='middle' font-size='11' fill='%23333'>${p.temp}</text>`;
-  });
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W} ${H}'>` +
-    grid +
-    `<polyline points='${line}' fill='none' stroke='%23007AFF' stroke-width='2.5'/>` +
-    dots +
-    `</svg>`;
-  return 'data:image/svg+xml,' + svg;
-}
-
-/* ===================== 大尺寸多合一 ===================== */
-
-function getGreeting(hour) {
-  if (hour >= 5 && hour < 9) return '早晨好';
-  if (hour >= 9 && hour < 12) return '上午好';
-  if (hour >= 12 && hour < 14) return '中午好';
-  if (hour >= 14 && hour < 18) return '下午好';
-  if (hour >= 18 && hour < 23) return '晚上好';
-  return '夜深了';
-}
-
-/* ===================== 大尺寸（简化测试版） ===================== */
-
-function renderLarge(now, city, daily3d, hourly24h) {
-  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
-  const S = { light: '#8E8E93', dark: '#AEAEB2' };
-  const { icon, color } = getWeatherStyle(now.icon);
-  const d = new Date();
-  const clockSrc = buildClockSVG(d.getHours(), d.getMinutes(), d.getSeconds());
-  const curveSrc = hourly24h && hourly24h.length ? buildTempCurveSVG(hourly24h) : '';
-  const greeting = getGreeting(d.getHours());
-
-  let schedules = [];
-  try {
-    schedules = getCountdowns().slice(0, 2).map(c => {
-      const t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + c.days);
-      return { name: c.name, md: `${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}` };
-    });
-  } catch (e) {}
-
-  const monday = new Date(d);
-  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  const weekNames = ['一', '二', '三', '四', '五', '六', '日'];
-  const weekCells = [];
-  for (let i = 0; i < 7; i++) {
-    const wd = new Date(monday);
-    wd.setDate(monday.getDate() + i);
-    const isToday = wd.getDate() === d.getDate() && wd.getMonth() === d.getMonth();
-    weekCells.push({
-      type: 'stack', direction: 'column', alignItems: 'center', flex: 1, gap: 1,
-      children: [
-        { type: 'text', text: weekNames[i], font: { size: 10 }, textColor: S },
-        {
-          type: 'stack', alignItems: 'center',
-          ...(isToday ? { backgroundColor: { light: '#FF3B3025', dark: '#FF453A30' } } : {}),
-          borderRadius: 10, padding: [3, 10, 3, 10],
-          children: [
-            { type: 'text', text: String(wd.getDate()), font: { size: 15, weight: 'semibold' },
-              textColor: isToday ? { light: '#FF3B30', dark: '#FF453A' } : T },
-          ]
+  },
+  SERVER_HOST = "https://api.120399.xyz",
+  BASE_URL = "https://www.95598.cn",
+  request = async (e) => {
+    try {
+      const o = {
+          url: `${SERVER_HOST}/wsgw/encrypt`,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ yuheng: e }),
         },
-      ]
-    });
+        r = await Encrypt(o);
+      if ("/api/oauth2/oauth/authorize" === e.url)
+        Object.assign(r, { body: r.body.replace(/^\"|\"$/g, "") });
+      let { body: s } = await request$1(r);
+      try {
+        s = JSON.parse(s);
+      } catch {}
+      if (
+        s.code &&
+        (10010 == s.code ||
+          (10002 === s.code && "WEB渠道KeyCode已失效" == s.message) ||
+          30010 === s.code ||
+          "20103" === s.code ||
+          (10002 === s.code && bizrt.token && "Token 为空！" == s.message))
+      )
+        return Promise.reject(s.message);
+      const n = { config: { ...e }, data: s };
+      if ("/api/oauth2/outer/c02/f02" === e.url)
+        Object.assign(n.config, { headers: { encryptKey: r.encryptKey } });
+      const c = {
+        url: `${SERVER_HOST}/wsgw/decrypt`,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ yuheng: n }),
+      };
+      return await Decrypt(c);
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  },
+  Encrypt = async (e) =>
+    request$1(e).then(({ body: e }) => {
+      try {
+        e = JSON.parse(e);
+      } catch {}
+      return (
+        (e.data.url = BASE_URL + e.data.url),
+        (e.data.body = JSON.stringify(e.data.data)),
+        delete e.data.data,
+        e.data
+      );
+    }),
+  Decrypt = async (e) =>
+    request$1(e).then(({ body: o }) => {
+      let r = JSON.parse(o);
+      const { code: s, message: n, data: c } = r.data;
+      return "" + s == "1"
+        ? c
+        : e.url.indexOf("oauth2/oauth/authorize") > -1 &&
+          c &&
+          s &&
+          "" != s &&
+          (10015 === s ||
+            10108 === s ||
+            10009 === s ||
+            10207 === s ||
+            10005 === s ||
+            10010 === s ||
+            30010 === s ||
+            (10002 === s && "WEB渠道KeyCode已失效" == n) ||
+            (10002 === s && bizrt.token && "Token 为空！" == n))
+        ? Promise.reject(`重新获取: ${n}`)
+        : Promise.reject(n);
+    }),
+  Recoginze = async (e) => {
+    const o = {
+      url: `${SERVER_HOST}/wsgw/get_x`,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ yuheng: e }),
+    };
+    return request$1(o).then(({ body: e }) => JSON.parse(e));
+  },
+  getBeforeDate = (e) => {
+    const o = new Date();
+    o.setDate(o.getDate() - e);
+    return `${o.getFullYear()}-${String(o.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(o.getDate()).padStart(2, "0")}`;
+  },
+  jsonParse = (e) => {
+    try {
+      return JSON.parse(e);
+    } catch {
+      return e;
+    }
+  },
+  jsonStr = (e, ...o) => {
+    try {
+      return JSON.stringify(e, ...o);
+    } catch {
+      return e;
+    }
+  },
+  isTrue = (e) => !0 === e || "true" === e || 1 === e || "1" === e,
+  $api = {
+    getKeyCode: "/oauth2/outer/c02/f02",
+    getAuth: "/oauth2/oauth/authorize",
+    getWebToken: "/oauth2/outer/getWebToken",
+    getRoutes: "/osg-web0004/open/c7/f01",
+    searchMenu: "/osg-web0004/open/c2/f02",
+    contentSearch: "/osg-web0004/open/c4/f05",
+    shouyequery: "/osg-web0004/member/c4/f08",
+    seachOrgNo: "/osg-open-om0001/member/c13/f05",
+    detailpcut: "/osg-open-mce0001/member/c4/f06",
+    login: "/osg-open-uc0001/member/c8/f23",
+    loginout: "/osg-open-uc0001/member/c8/f2311111",
+    tokenlogin: "/osg-open-uc0001/member/c8/f01",
+    seachMsgEs: "/osg-web0004/open/c4/f03",
+    orderEmail: "/osg-open-bc0001/member/c02/f04",
+    LowelectBill: "/osg-open-bc0001/member/c04/f01",
+    HideelectBill: "/osg-open-bc0001/member/c04/f02",
+    quantity: "/osg-open-bc0001/member/c01/f01",
+    searchProgress: "/osg-open-uc0001/member/c6/f06",
+    Urge: "/osg-open-woc0001/member/c5/f06",
+    fileLists: "/osg-open-woc0001/member/c27/f01",
+    fileLists2: "/osg-open-woc0001/member/c5/f07",
+    fileLists3: "/osg-open-woc0001/member/c5/f08",
+    realType: "/osg-open-uc0001/member/c7/f01",
+    paymentRecord: "/osg-open-bc0001/member/c03/f12",
+    power: "/osg-omgmt0005/member/c9/f30",
+    accountInfo: "/osg-open-uc0001/member/c4/f01",
+    address: "/osg-open-om0001/member/c72/f01",
+    CheckBillAmount: "/osg-open-bc0001/member/c03/f07",
+    vatname: "/osg-open-uc0001/member/c4/f02",
+    fgd_Submit: "/osg-open-woc0001/member/c4/f09",
+    fgd_appraise: "/osg-open-woc0001/member/c27/f07",
+    shouye: "/osg-web0004/open/c1/f01",
+    captcha: "/osg-web0004/open/c15/f01",
+    login: "/osg-open-uc0001/member/c8/f23",
+    captchaPassword: "/osg-web0004/open/c15/f03",
+    getCode2: "/osg-web0004/open/c50/f02",
+    getCode: "/osg-open-uc0001/member/c8/f24",
+    clickCard: "/osg-web0004/open/c44/f07",
+    useTokenGetInfo: "/osg-uc0013/member/c4/f04",
+    tokenGetUserInfo: "/osg-open-uc0001/member/c8/f56",
+    getQCodeNew: "/osg-open-uc0001/member/c8/f31",
+    checkQCode: "/osg-open-uc0001/member/c8/f32",
+    qcodeCallback: "/osg-open-uc0001/member/c8/f33",
+    content: "/osg-web0004/open/c4/f01",
+    menu: "/osg-web0004/open/c2/f01",
+    indexPage: "/osg-web0004/open/c1/f01",
+    newsList: "/osg-open-mce0001/member/c4/f01",
+    delMsg: "/osg-open-mce0001/member/c4/f05",
+    codeLogin: "/osg-open-uc0001/member/c8/f22",
+    codeLoginApi: "/osg-uc0013/member/c4/f02",
+    reg: "/osg-open-uc0001/member/c8/f25",
+    dianfeiList: "/osg-open-bc0001/member/c01/f02",
+    changePassword: "/osg-open-uc0001/member/c8/f06",
+    Presubmission: "/osg-open-woc0001/member/c4/f03",
+    messageList: "/osg-open-uc0001/member/c13/f01",
+    newMessageList: "/osg-web0004/member/c15/f06",
+    forgetPass: "/osg-open-uc0001/member/c8/f06",
+    sendCode: "/osg-open-uc0001/member/c8/f04",
+    checkCode: "/osg-open-uc0001/member/c8/f05",
+    resetPass: "/osg-open-uc0001/member/c8/f07",
+    submitHouse: "/osg-open-uc0001/member/c5/f04",
+    bindholds: "/osg-open-uc0001/member/c14/f02",
+    getBindDoorCity: "/osg-open-om0001/member/arg/020390006",
+    hadList: "/osg-open-uc0001/member/c9/f02",
+    holdList: "/osg-open-uc0001/member/c9/f03",
+    wantbindhold: "/osg-open-uc0001/member/c9/f04",
+    holdsign: "/osg-open-uc0001/member/c9/f07",
+    Mainhold: "/osg-open-uc0001/member/c9/f05",
+    untying: "/osg-open-uc0001/member/c14/f03",
+    holdCert: "/osg-open-uc0001/member/c5/f02",
+    onSite: "/osg-open-woc0001/member/c27/f20",
+    subJudge: "/osg-open-sfan0001/member/c4/f01",
+    getevalMsg: "/osg-open-om0001/member/c8/f02",
+    getVCommit: "/osg-open-sfan0001/member/c4/f02",
+    pauseSCode: "/osg-open-woc0001/member/c27/f30",
+    newSCode: "/osg-web0004/member/c15/f05",
+    pauseTCode: "/osg-open-woc0001/member/c27/f24",
+    giveHome: "/osg-open-woc0001/member/c4/f13",
+    reName: "/osg-open-woc0001/member/c4/f12",
+    uploadPic: "/osg-open-scp0001/member/c5/f05",
+    uploadAuthPic: "/osg-open-scp0001/member/c5/f07",
+    invoiceList: "/osg-open-bc0001/member/c02/f01",
+    operaLis: "/osg-open-bc0001/member/c02/f03",
+    kpdetailsLis: "/osg-open-bc0001/member/c02/f02",
+    unread: "/osg-open-mce0001/member/c4/f02",
+    readAllMsg: "/osg-open-mce0001/member/c4/f07",
+    markRead: "/osg-open-mce0001/member/arg/010410001",
+    newsdetails: "/osg-open-mce0001/member/c4/f04",
+    newsdelete: "/osg-open-mce0001/member/c4/f05",
+    pay: "/osg-wp0004/member/payment/getPayMethodList",
+    createOrder: "/osg-wp0002/member/charge/createOrder",
+    invokey: "/osg-wp0002/member/charge/invokePay",
+    surplus: "/osg-wp0002/member/charge/getElecUserChargeList",
+    orderStatus: "/osg-wp0002/member/charge/getOrderHeaderStatus",
+    reCardVer: "/osg-wp0002/member/charge/checkRechargeUser",
+    reCardRecharge: "/osg-wp0002/member/charge/rechargeCard",
+    searchUser: "/osg-open-uc0001/member/c9/f02",
+    send: "/osg-open-uc0001/member/c8/f04",
+    code: "/osg-open-uc0001/member/c8/f05",
+    electBill: "/osg-open-bc0001/member/c04/f03",
+    segmentDate: "/osg-open-bc0001/member/arg/020070013",
+    Progress: "/osg-web0004/member/c18/f01",
+    searchProgress2: "/osg-open-uc0001/member/c6/f07",
+    lookMore: "/osg-open-uc0001/member/c6/f02",
+    gdAnniu: "/osg-open-woc0001/member/c27/f19",
+    deleteProgress: "/osg-open-uc0001/member/c6/f05",
+    dataList: "osg-open-woc0001/member/c27/f16",
+    dataList2: "osg-open-woc0001/member/c27/f17",
+    getData: "/osg-open-woc0001/member/c27/f28",
+    getOtherData: "/osg-open-woc0001/member/arg/020370031",
+    startData: "/osg-open-woc0001/member/c27/f27",
+    complaintsubmit: "/osg-open-woc0001/member/c5/f00",
+    reportsubmit: "/osg-open-woc0001/member/c5/f01",
+    professionsubmit: "/osg-open-woc0001/member/c5/f02",
+    havesaysubmit: "/osg-open-woc0001/member/c5/f03",
+    faultrepairsubmit: "/osg-open-woc0001/member/c5/f04",
+    faultrepair: "/osg-open-om0001/member/c72/f02",
+    idauthen: "/osg-open-woc0001/member/c27/f26",
+    companySub: "/osg-open-woc0001/member/c4/f07",
+    increaseSub: "/osg-open-woc0001/member/c4/f10",
+    subzj: "/osg-open-woc0001/member/c4/f06",
+    order: "/osg-open-scp0001/member/c4/f01",
+    vatchang: "/osg-open-woc0001/member/c4/f17",
+    doorNumber: "/osg-open-uc0001/member/c9/f02",
+    setMainDoor: "/osg-open-uc0001/member/c9/f05",
+    queryAbleBindDoorNumber: "/osg-open-uc0001/member/c9/f03",
+    identitySubmit: "/osg-open-uc0001/member/c8/f02",
+    listconsumers: "/osg-open-uc0001/member/c6/f03",
+    delListconsumers: "/osg-open-uc0001/member/arg/020360024",
+    listconsumers_Progress: "/osg-open-uc0001/member/c6/f01",
+    stopCapacity: "/osg-open-woc0001/member/c4/f01",
+    lessCapacity: "/osg-open-woc0001/member/c4/f02",
+    personageApi: "/osg-open-woc0001/member/c4/f11",
+    newHouseholdElectricity: "/osg-open-woc0001/member/c4/f08",
+    certificationSearchFinal: "/osg-open-uc0001/member/c8/f11",
+    identitymap: "/osg-open-uc0001/member/c8/f08",
+    OCR: "/osg-open-uc0001/member/c8/f09",
+    adFlag: "/osg-open-uc0001/member/c14/f01",
+    meterCalibration: "/osg-open-woc0001/member/c4/f05",
+    meteringPoint: "/osg-open-uc0001/member/c6/f11",
+    transformer: "/osg-open-uc0001/member/c6/f08",
+    powerSupply: "/osg-open-uc0001/member/c6/f10",
+    updateUserInfo: "/osg-open-uc0001/member/c8/f03",
+    updateAccount: "/osg-open-uc0001/member/c8/f26",
+    userInfo: "/osg-open-uc0001/member/c8/f01",
+    pauseSub: "/osg-open-woc0001/member/c4/f15",
+    reduceSub: "/osg-open-woc0001/member/c4/f16",
+    infoSupplement: "/osg-open-woc0001/member/c27/f25",
+    electricityPriceStrategyChange: "/osg-open-woc0001/member/arg/030340052",
+    subscriptionList: "/osg-open-mce0001/member/c7/f00",
+    participate: "/osg-open-mce0001/member/c05/f04",
+    fuzzySearch: "/osg-open-uc0001/member/c4/f04",
+    downloadImg: "/osg-open-scp0001/member/c5/f02",
+    tokendownloadImg: "/osg-open-uc0001/member/c8/f72",
+    eemandValueAdjustment: "/osg-open-woc0001/member/c4/f14",
+    oneOffice: "/osg-open-scp0001/member/c4/f02",
+    ceshi: "/osg-rm0001/member/c1/f05",
+    InformationConfirmation: "/osg-open-woc0001/member/c27/f21",
+    vatlist: "/osg-open-om0001/member/c72/f03",
+    payAmtList: "/osg-web0004/member/c77/f01",
+    accapi: "/osg-open-bc0001/member/c05/f01",
+    chergileApi: "/osg-open-woc0001/member/c4/f04",
+    otherApi: "/osg-open-woc0001/member/c27/f40",
+    demographicStatus: "/osg-open-sfan0001/member/c5/f01",
+    demoGraphicChecks: "/osg-open-sfan0001/member/c5/f03",
+    subDemoGraphic: "/osg-woc0001/member/c72/f01",
+    checkHomeApi: "/osg-open-sfan0001/member/c5/f02",
+    biaojiDanHao: "/osg-open-uc0001/member/c6/f09",
+    electTrend: "/osg-open-bc0001/member/c03/f14",
+    dayElectLoad: "/osg-open-bc0001/member/c03/f05",
+    electLoadTrend: "/osg-open-bc0001/member/c03/f06",
+    JiFen: "/osg-open-om0001/member/c19/f01",
+    JiFenYuE: "/osg-open-om0001/member/c19/f02",
+    searchBankBind: "/osg-open-uc0001/member/c8/f18",
+    hasBindBankAuth: "/osg-open-uc0001/member/c8/f20",
+    bankAuthSendCode: "/osg-open-uc0001/member/c8/f16",
+    HBankAuthCode: "/osg-open-uc0001/member/c8/f15",
+    searchBankXY: "/osg-open-uc0001/member/c8/f14",
+    searchIDofBank: "/osg-open-uc0001/member/c8/f13",
+    searchTypeOfBank: "/osg-open-uc0001/member/c8/f12",
+    boundsendver: "/osg-open-uc0001/member/c8/f21",
+    friendLink: "/osg-web0004/open/c5/f01",
+    getIPAddr: "/osg-web0004/open/c8/f01",
+    pauseSCodeApi: "/osg-open-woc0001/member/c27/f30",
+    checkCodeApi: "/osg-woc0001/member/c2/f01",
+    payCodeApi: "/osg-open-uc0001/member/arg/030010192",
+    empowerBindApi: "/osg-open-uc0001/member/arg/030010193",
+    getAuthToken: "/osg-open-uc0001/member/arg/020360047",
+    getUserInfoByAuthToken: "/osg-open-uc0001/member/arg/020360048",
+    loginVerifyCode: "/osg-web0004/open/c44/f01",
+    loginTestCode: "/osg-web0004/open/c44/f02",
+    loginVerifyCodeNew: "/osg-web0004/open/c44/f05",
+    loginTestCodeNew: "/osg-web0004/open/c44/f06",
+    jsonApi: "/osg-web0004/member/c15/f01",
+    getNewsApi: "/osg-web0004/open/c4/f04",
+    getBankInfo: "/osg-open-uc0001/member/c8/f17",
+    newsListApi: "/osg-web0004/member/c15/f02",
+    StopList: "/osg-open-mce0001/member/c06/f01",
+    busInfoApi: "/osg-web0004/member/c24/f01",
+    getIntelligentPaymentStatus: "/osg-open-bc0001/member/arg/020070032",
+    getnewPhoneCode: "/osg-web0004/member/c15/f03",
+    allFileLists: "/osg-web0004/member/c24/f02",
+    changePhoneGetOldCode: "/osg-web0004/member/c15/f04",
+    emergencys: "/osg-open-p0001/member/c5/f03",
+    theme: "/osg-web0004/open/c3/f01",
+    backOrderMsg: "/osg-woc0001/member/c70/f01",
+    queryCarAddress: "/osg-web0004/member/c49/f01",
+    queryBoundGroupAccount: "/osg-open-uc0001/member/arg/030360248",
+    queryBoundGroupSubAccount: "/osg-open-uc0001/member/arg/030360252",
+    queryElectricEnterprise: "/osg-open-bc0001/member/arg/030070112",
+    queryAccountNumberBoundEnterprise: "/osg-open-bc0001/member/arg/030070112",
+    queryapUPConsumingEnterprises: "/osg-open-bc0001/member/arg/030070113",
+    queryPowerHandlingProcess: "/osg-open-woc0001/member/arg/030010214",
+    getAppaVersion: "/osg-web0004/open/c17/f01",
+    homeMsgBox: "/osg-web0004/open/c18/f01",
+    excludeDayCompany: "/osg-open-bc0001/member/c11/f04",
+    excludeDayUser: "/osg-open-bc0001/member/c11/f03",
+    excludeMonthCompany: "/osg-open-bc0001/member/c11/f02",
+    excludeMonthUser: "/osg-open-bc0001/member/c11/f01",
+    eleMonthForecast: "/osg-open-bc0001/member/c11/f00",
+    eleMonthRange: "/osg-open-bc0001/member/c10/f14",
+    eleMonthRangePermit: "/osg-open-bc0001/member/c10/f16",
+    eleDayRange: "/osg-open-bc0001/member/c10/f17",
+    eleDayRangePermit: "/osg-open-bc0001/member/c10/f19",
+    ListAgentUsersElectricitySellingE: "/osg-open-uc0001/member/c9/f11",
+    ListAuthorizeUsersElectricitySellingE: "/osg-open-sfan0001/member/c8/f03",
+    BoundEnterpriseQuery: "/osg-open-uc0001/member/c9/f14",
+    eleMonthThb: "/osg-open-bc0001/member/c10/f14",
+    eleApplyCount: "/osg-open-bc0001/member/c11/f27",
+    eleApplyCountChart: "/osg-open-bc0001/member/c11/f28",
+    applyList: "/osg-open-bc0001/member/c11/f29",
+    unApplyList: "/osg-open-bc0001/member/c11/f30",
+    sendMessageByBatch: "/osg-open-bc0001/member/c11/f32",
+    sendMessageByOne: "/osg-open-bc0001/member/c11/f31",
+    exportApplyedData: "/osg-open-bc0001/member/c11/f56",
+    priceDeviationData: "/osg-open-bc0001/member/c11/f52",
+    priceDeviationTimeType: "/osg-open-bc0001/member/c11/f47",
+    priceClearingCount: "/osg-open-bc0001/member/c11/f41",
+    priceClearingList: "/osg-open-bc0001/member/c11/f42",
+    priceClearingDelete: "/osg-open-bc0001/member/c11/f45",
+    priceClearingDetail: "/osg-open-bc0001/member/c11/f43",
+    priceClearingUpdate: "/osg-open-bc0001/member/c11/f44",
+    priceClearingImportExcel: "/osg-open-bc0001/member/c11/f46",
+    getMetaRegionByFullId: "/osg-open-bc0001/member/c11/f48",
+    getElecList: "/osg-open-bc0001/member/c11/f13",
+    electDelete: "/osg-open-bc0001/member/c11/f15",
+    electDetails: "/osg-open-bc0001/member/c11/f14",
+    electSave: "/osg-open-bc0001/member/c11/f16",
+    applyPageList: "/osg-open-bc0001/member/c11/f49",
+    applyPageCount: "/tradeApplyCaseRq/findApplyCaseRqCount",
+    applyCaseRqDetail: " /osg-open-bc0001/member/c11/f50",
+    applyCaseRqList: "/osg-open-bc0001/member/c11/f51",
+    applyCaseRqSave: "/osg-open-bc0001/member/c11/f53",
+    applyCaseRqDel: "/osg-open-bc0001/member/c11/f54",
+    doHourCompanyFourcast: "/osg-open-bc0001/member/c11/f06",
+    doSaveHourFourcast: " /osg-open-bc0001/member/c11/f07",
+    getHourFourcastTasklist: "/osg-open-bc0001/member/c11/f08",
+    getHourFourcastResultOneday: "/osg-open-bc0001/member/c11/f55",
+    getHourFourcastResultByRefId: "/osg-open-bc0001/member/c11/f10",
+    deleteHourFourcastResultByRefId: "/osg-open-bc0001/member/c11/f11",
+    getDivisionByProviceCode: "/osg-open-bc0001/member/c11/f12",
+    tCsaveTrade: "/osg-open-bc0001/member/c11/f33",
+    tCsetMealList: "/osg-open-bc0001/member/c11/f34",
+    tCdeleteOneById: "/osg-open-bc0001/member/c11/f35",
+    tCgetTcDetailListByTcId: "/osg-open-bc0001/member/c11/f38",
+    eleApplyList: "/osg-open-bc0001/member/c11/f23",
+    eleApplyOne: "/osg-open-bc0001/member/c11/f24",
+    eleApplySave: "/osg-open-bc0001/member/c11/f22",
+    eleApplyModify: "/osg-open-bc0001/member/c11/f26",
+    priceCatPrcQueryBySecNoAndProvince: "/osg-open-bc0001/member/c11/f20",
+    priceCatPrcSave: "/osg-open-bc0001/member/c11/f21",
+    priceCatPrcQueryForecastData: "/osg-open-bc0001/member/c11/f18",
+    priceCatPrcGetBySecNo: "/osg-open-bc0001/member/c11/f17",
+    priceCatPrcQueryElecHourData: "/osg-open-bc0001/member/c11/f19",
+    applyDeviAnalyQuery: "/osg-open-bc0001/member/c11/f05",
+    goodsSaveData: "/osg-open-bc0001/member/arg/030070085",
+    goodsqueryList: "/osg-open-bc0001/member/arg/030070086",
+    getDataByGoodsId: "/osg-open-bc0001/member/arg/030070087",
+    goodsDelete: "/osg-open-bc0001/member/arg/030070088",
+    goodsUpShelf: "/osg-open-bc0001/member/arg/030070089",
+    goodsOffShelf: "/osg-open-bc0001/member/arg/030070090",
+    goodsUploadFile: "/osg-open-bc0001/member/c11/f57",
+    goodsDownloadFile: "/osg-open-bc0001/member/c11/f59",
+    uploadFile: "/osg-open-bc0001/member/c11/f57",
+    fileList: "/osg-open-bc0001/member/arg/030070083",
+    downloadFileList: "/osg-open-bc0001/member/c11/f59",
+    downloadFile: "/osg-open-bc0001/member/c11/f58",
+    deleteFileById: "/osg-open-bc0001/member/arg/030070084",
+    ordersList: "/osg-open-bc0001/member/arg/030210002",
+    ordersDetail: "/osg-open-bc0001/member/arg/030070100",
+    saveHtMain: "/osg-open-bc0001/member/arg/030070101",
+    queryHtMainByOrderId: "/osg-open-bc0001/member/arg/030070102",
+    comboOrdersApplyCancel: "/osg-open-bc0001/member/arg/030070092",
+    comboOrdersConfirmCancel: "/osg-open-bc0001/member/arg/030070093",
+    getFavList: "/osg-open-bc0001/member/arg/030070081",
+    cancelFav: "/osg-open-bc0001/member/arg/030070080",
+    saveFav: "/osg-open-bc0001/member/arg/030070079",
+    ifFav: "/osg-open-bc0001/member/arg/030070082",
+    queryEnquiryPageList: "/osg-open-bc0001/member/arg/030070095",
+    goodsEnquirySaveData: "/osg-open-bc0001/member/arg/030070094",
+    saveReplyEnquiryData: "/osg-open-bc0001/member/arg/030070099",
+    goodsEnquiryList: "/osg-open-bc0001/member/arg/030070095",
+    goodsComboordersCreate: "/osg-open-bc0001/member/arg/030070091",
+    goodsComboordersJudgeQualifications:
+      "/osg-open-bc0001/member/arg/030070098",
+    goodsEnquiryOfferPriceJudge: "/osg-open-bc0001/member/arg/030070096",
+    goodsEnquiryOfferPrice: "/osg-open-bc0001/member/arg/030070097",
+    goodsEnquiryOffShelf: "/osg-open-bc0001/member/arg/030070105",
+    queryDataListByEnquiryVo: "/osg-open-bc0001/member/arg/030070106",
+    queryEnquiryListPage: "/osg-open-bc0001/member/arg/030070107",
+    saveBackEnquiryData: "/osg-open-bc0001/member/arg/030070108",
+    enquiryOrdersApplyCancel: "/osg-open-bc0001/member/arg/030070109",
+    enquiryOrdersConfirmCancel: "/osg-open-bc0001/member/arg/030070110",
+    saveFiles: "/osg-open-bc0001/member/arg/030070111",
+    BindingOfElectricitySellingEnterprises: "/osg-open-uc0001/member/c9/f24",
+    BindEnterprise: "/osg-open-uc0001/member/c8/f60",
+    BoundEnterpriseQuery: "/osg-open-uc0001/member/c9/f14",
+    ListAgentUsersElectricitySellingE: "/osg-open-uc0001/member/c9/f11",
+    getSDCode: "/osg-open-uc0001/member/c8/f04",
+    excludeDayCompany: "/osg-open-bc0001/member/c11/f04",
+    excludeDayUser: "/osg-open-bc0001/member/c11/f03",
+    excludeMonthCompany: "/osg-open-bc0001/member/c11/f02",
+    excludeMonthUser: "/osg-open-bc0001/member/c11/f01",
+    queryHandlerManagement: "/osg-open-sfan0001/member/arg/030330101",
+    handlerPhoneCheck: "/osg-open-sfan0001/member/arg/030330102",
+    getBindHandlerCode: "/osg-open-uc0001/member/arg/030360273",
+    cancelHandlerBind: "/osg-open-sfan0001/member/arg/030330103",
+    infoPublic: "/osg-omgmt1015/content/c01/f52",
+    electrovalenceStandard: "/osg-omgmt1030/priceinfo/c01/f04",
+    electrovalenceType: "/osg-omgmt1030/priceinfo/c01/f05",
+    classicCase: "/osg-omgmt1030/content/c01/f52",
+    uploadfile: "/osg-scp0002/member/c2/f03",
+    dispute: "/osg-open-woc0001/member/c27/f52",
+    disputeDetail: "/osg-open-woc0001/member/c27/f53",
+    selldispite: "/osg-open-woc0001/member/c27/f51",
+    information: "/osg-open-om0001/member/c16/f02",
+    informationList: "/osg-open-om0001/member/c16/f03",
+    searchKeyWords: "/osg-open-om0001/member/arg/020390035",
+    searchKeyWordsInfo: "emss-pfa-pro-front/app_api/selectNewChannelist",
+    billingService: "/osg-open-bc0001/member/c10/f01",
+    monthSearch: "/osg-open-bc0001/member/c03/f15",
+    dataSearch: "/osg-open-bc0001/member/c03/f16",
+    pointSearch: "/osg-open-bc0001/member/c03/f17",
+    indicatSearch: "/osg-open-bc0001/member/c03/f18",
+    indicatPost: "/osg-open-bc0001/member/c03/f19",
+    querySuperAdministrator: "/osg-open-sfan0001/member/arg/030010096",
+    applySuperAdministrator: "/osg-open-sfan0001/member/arg/030330099",
+    getApplicationRecord: "/osg-open-sfan0001/member/arg/030330100",
+    fileUpload: "/osg-open-sfan0001/member/arg/030010098",
+    fileDownload: "/osg-open-sfan0001/member/arg/030010097",
+    querySellerPageList: "/osg-open-sfan0001/member/arg/030010182",
+    querySettlePageList: "/osg-open-sfan0001/member/arg/030010183",
+    elecYdPuPageList: "/osg-open-sfan0001/member/arg/030010178",
+    elecYdPuConfirm: "/osg-open-sfan0001/member/arg/030010179",
+    elecYdPuExport: "/saler/dldl/export",
+    elecSbFdSaveSwdl: "/osg-open-sfan0001/member/arg/030010180",
+    elecSbFdGetSwdl: "/osg-open-sfan0001/member/arg/030010181",
+    salerDldjPageList: "/osg-open-sfan0001/member/arg/030010173",
+    salerDldjConfirm: "/osg-open-sfan0001/member/arg/030010174",
+    salerDldjSave: "/osg-open-sfan0001/member/arg/030010175",
+    salerDldjImport: "/osg-open-sfan0001/member/arg/030010176",
+    salerDldjExport: "/osg-open-sfan0001/member/arg/030010177",
+    unbindPowerGenerationEnterprise: "/osg-open-uc0001/member/arg/030360278",
+    queryPowerGenerationEnterpriseList: "/osg-open-uc0001/member/arg/030360279",
+    bindPowerGenerationEnterprise: "/osg-open-uc0001/member/arg/030360280",
+    queryBoundPowerGenerationEnterpriseList:
+      "/osg-open-uc0001/member/arg/030370095",
+    queryPowerGenerationEnterpriseDetail:
+      "/osg-open-uc0001/member/arg/030360281",
+    downloadNewGenFile: "/osg-open-bc0001/member/arg/020010002",
+    downloadNewGenFile: "/osg-open-bc0001/member/arg/020010002",
+    unbindPowerGenerationEnterprise: "/osg-open-uc0001/member/arg/030360278",
+    queryPowerGenerationEnterpriseList: "/osg-open-uc0001/member/arg/030360279",
+    bindPowerGenerationEnterprise: "/osg-open-uc0001/member/arg/030360280",
+    queryBoundPowerGenerationEnterpriseList:
+      "/osg-open-uc0001/member/arg/030370095",
+    queryPowerGenerationEnterpriseDetail:
+      "/osg-open-uc0001/member/arg/030360281",
+    queryMonthElec: "/osg-open-bc0001/member/arg/020010008",
+    queryMonthsElec: "/osg-open-bc0001/member/arg/020010010",
+    queryDayElec: "/osg-open-bc0001/member/arg/020010009",
+    queryDaysElec: "/osg-open-bc0001/member/arg/020010011",
+    billPageList: "/osg-open-bc0001/member/arg/020010003",
+    getBillById: "/osg-open-bc0001/member/arg/020010005",
+    getMonthBillByMemberID: "/osg-open-bc0001/member/arg/020010004",
+    getBillSummaryData: "/osg-open-bc0001/member/arg/020010007",
+    submitBillData: "/osg-open-bc0001/member/arg/020010006",
+    viewBindingAccountNumber: "/osg-open-uc0001/member/c9/f22",
+    highVoltageSubscriberBinding: "/osg-open-uc0001/member/arg/020210008",
+    saveGfPersonal: "/osg-open-om0001/member/arg/030010195",
+    saveGfEnterprise: "/osg-open-om0001/member/arg/030010196",
+    getGfOwnBankList: "/osg-open-om0001/member/arg/030010203",
+    getGfAgentBankList: "/osg-open-om0001/member/arg/030010201",
+    getGfBankList: "/osg-open-om0001/member/arg/030010205",
+    changeGfBank: "/osg-open-om0001/member/arg/030010206",
+    saveGfOwnBank: "/osg-open-om0001/member/arg/030010204",
+    saveGfAgentBank: "/osg-open-om0001/member/arg/030010202",
+    getGfPhoneCode: "/osg-open-om0001/member/arg/030010199",
+    jointBusinessQuery: "/osg-open-woc0001/member/arg/030010211",
+    jointBusinessSubmit: "/osg-open-woc0001/member/arg/030010212",
+    sendSMS: "/osg-open-uc0001/member/c8/f48",
+    getGBServiceList: "/osg-open-uc0001/member/arg/030360295",
+    checkGBAccount: "/osg-open-uc0001/member/arg/030360297",
+    GBEmpowerBind: "/osg-open-uc0001/member/arg/030360296",
+    getStaticLink: "/osg-open-om0001/member/c11/f07",
+    getBankDatainfo: "/osg-open-sfan0001/member/arg/010210042",
+    labelsAccordingColumn: "/osg-web0004/open/c20/f01",
+    getOurGradesConf: "/osg-web0004/open/c19/f01",
+    subscribeInvoice: "/osg-open-bc0001/member/arg/030070148",
+    emailSubscribe: "/osg-open-bc0001/member/arg/030070146",
+    invoiceingEle: "/osg-open-bc0001/member/arg/030070144",
+    invoiceListBj: "/osg-open-bc0001/member/arg/030070142",
+    invoiceListZl: "/osg-open-bc0001/member/arg/030070149",
+    invoicePrivate: "/osg-open-bc0001/member/arg/020070007",
+    qurGcNoListNew: "/osg-open-woc0001/member/arg/020370033",
+    getConfigInfo: "/osg-open-woc0001/member/arg/020370034",
+    iphoneController: "/osg-open-woc0001/member/arg/020370035",
+    selectElectricity: "/osg-open-woc0001/member/arg/020370038",
+    selectPayScheduleNew: "/osg-open-woc0001/member/arg/020370039",
+    payMessageFeedbackNew: "/osg-open-woc0001/member/arg/020370040",
+    selectActualPaymentInfo: "/osg-open-woc0001/member/arg/020370041",
+  },
+  $configuration = {
+    uscInfo: {
+      member: "0902",
+      devciceIp: "",
+      devciceId: "",
+      tenant: "state_grid",
+    },
+    source: "SGAPP",
+    target: "32101",
+    channelCode: "0902",
+    channelNo: "0902",
+    toPublish: "01",
+    siteId: "2012000000033700",
+    srvCode: "",
+    serialNo: "",
+    funcCode: "",
+    serviceCode: {
+      order: "0101154",
+      uploadPic: "0101296",
+      pauseSCode: "0101250",
+      pauseTCode: "0101251",
+      listconsumers: "0101093",
+      messageList: "0101343",
+      submit: "0101003",
+      sbcMsg: "0101210",
+      powercut: "0104514",
+      BkAuth01: "f15",
+      BkAuth02: "f18",
+      BkAuth03: "f02",
+      BkAuth04: "f17",
+      BkAuth05: "f05",
+      BkAuth06: "f16",
+      BkAuth07: "f01",
+      BkAuth08: "f03",
+    },
+    electricityArchives: { servicecode: "0104505", source: "0902" },
+    subscriptionList: {
+      srvCode: "APP_SGPMS_05_030",
+      serialNo: "22",
+      channelCode: "0902",
+      funcCode: "22",
+      target: "-1",
+    },
+    userInformation: { serviceCode: "01008183", source: "SGAPP" },
+    userInform: { serviceCode: "0101183", source: "SGAPP" },
+    elesum: {
+      channelCode: "0902",
+      funcCode: "WEBALIPAY_01",
+      promotCode: "1",
+      promotType: "1",
+      serviceCode: "0101143",
+      source: "app",
+    },
+    account: { channelCode: "0902", funcCode: "WEBA1007200" },
+    doorNumberManeger: {
+      source: "0902",
+      target: "-1",
+      channelCode: "09",
+      channelNo: "09",
+      serviceCode: "01010049",
+      funcCode: "WEBA40050000",
+      uscInfo: {
+        member: "0902",
+        devciceIp: "",
+        devciceId: "",
+        tenant: "state_grid",
+      },
+    },
+    doorAuth: { source: "SGAPP", serviceCode: "f04" },
+    xinZ: {
+      serCat: "101",
+      jM_busiTypeCode: "101",
+      fJ_busiTypeCode: "102",
+      jM_custType: "03",
+      fJ_custType: "02",
+      serviceType: "01",
+      subBusiTypeCode: "",
+      funcCode: "WEBA10070700",
+      order: "0101154",
+      source: "SGAPP",
+      querytypeCode: "1",
+    },
+    onedo: {
+      serviceCode: "0101046",
+      source: "SGAPP",
+      funcCode: "WEBA10070700",
+      queryType: "03",
+    },
+    xinHuTongDian: {
+      serCat: "110",
+      busiTypeCode: "211",
+      subBusiTypeCode: "21102",
+      funcCode: "WEBA10071200",
+      channelCode: "0902",
+      source: "09",
+      serviceCode: "0101183",
+    },
+    company: {
+      serCat: "104",
+      funcCode: "WEBA10070700",
+      serviceType: "02",
+      querytypeCode: "1",
+      authFlag: "1",
+      source: "SGAPP",
+      order: "0101154",
+    },
+    charge: {
+      channelCode: "09",
+      funcCode: "WEBA10071300",
+      channelNo: "0901",
+      serCat: "102",
+      jM_custType: "01",
+      jM_busiTypeCode: "102",
+    },
+    other: {
+      channelCode: "09",
+      funcCode: "WEBA10079700",
+      serCat: "129",
+      busiTypeCode: "999",
+      subBusiTypeCode: "21501",
+      serviceCode: "BCP_000026",
+      srvCode: "",
+      serialNo: "",
+    },
+    vatchange: {
+      submit: "0101003",
+      busiTypeCode: "320",
+      subBusiTypeCode: "",
+      serCat: "115",
+      funcCode: "WEBA10074000",
+      authFlag: "1",
+    },
+    bill: {
+      clearCache: "1",
+      funcCode: "WEBALIPAY_01",
+      promotType: "1",
+      serviceCode: "BCP_000026",
+    },
+    stepelect: {
+      channelCode: "0902",
+      funcCode: "WEBALIPAY_01",
+      promotType: "1",
+      clearCache: "09",
+      serviceCode: "BCP_000026",
+      source: "app",
+    },
+    intelligentPayment: { serviceCode: "0102719", source: "SGAPP" },
+    getday: {
+      channelCode: "0902",
+      clearCache: "11",
+      funcCode: "WEBALIPAY_01",
+      promotCode: "1",
+      promotType: "1",
+      serviceCode: "BCP_000026",
+      source: "app",
+    },
+    mouthOut: {
+      channelCode: "0902",
+      clearCache: "11",
+      funcCode: "WEBALIPAY_01",
+      promotCode: "1",
+      promotType: "1",
+      serviceCode: "BCP_000026",
+      source: "app",
+    },
+    meter: {
+      serCat: "114",
+      busiTypeCode: "304",
+      funcCode: "WEBA10071000",
+      subBusiTypeCode: "",
+      serviceCode: "0101046",
+      serialNo: "",
+    },
+    complaint: {
+      busiTypeCode: "005",
+      srvMode: "0902",
+      anonymousFlag: "0",
+      replyMode: "01",
+      retvisitFlag: "01",
+    },
+    report: { busiTypeCode: "006" },
+    tradewinds: { busiTypeCode: "019" },
+    somesay: { busiTypeCode: "091" },
+    faultrepair: {
+      funcCode: "WEBA10070900",
+      serviceCode: "0101183",
+      serCat: "111",
+      busiTypeCode: "001",
+      subBusiTypeCode: "21505",
+    },
+    electronicInvoice: { serCat: "105", busiTypeCode: "0" },
+    rename: {
+      serviceCode: "0101046",
+      funcCode: "WEBA10076100",
+      busiTypeCode: "210",
+      serCat: "109",
+      authFlag: "1",
+      gh_busiTypeCode: "211",
+      gh_subusi: "21101",
+      serialNo: "",
+      srvCode: "",
+    },
+    pause: {
+      subBusiTypeCode: "",
+      serviceCode: "01010049",
+      funcCode: "WEBA10073600",
+      serCat: "107",
+      busiTypeCode: "201",
+      jr_busi: "201",
+      serialNo: "",
+      srvCode: "",
+      order: "0101154",
+      source: "SGAPP",
+      querytypeCode: "1",
+    },
+    capacityRecovery: {
+      serviceCode: "01010049",
+      source: "SGAPP",
+      srvCode: "",
+      serialNo: "",
+      funcCode: "WEBA10073700",
+      busiTypeCode_stop: "204",
+      busiTypeCode_less: "202",
+      busiTypeCode: "202",
+      subBusiTypeCode: "",
+      serCat: "108",
+      timeDay: "5",
+      authFlag: "1",
+    },
+    electricityPriceChange: {
+      serviceCode: "0101183",
+      busiTypeCode: "215",
+      subBusiTypeCode: "21502",
+      serCat: "113",
+      authFlag: "1",
+      timeDay: "15",
+      funcCode: "WEBA10073900WEB",
+      srvCode: "",
+      serialNo: "",
+    },
+    electricityPriceStrategyChange: {
+      serviceCode: "01008183",
+      busiTypeCode: "215",
+      subBusiTypeCode: "21506",
+      serCat: "160",
+      funcCode: "WEBV00000517WEB",
+      srvCode: "",
+      serialNo: "",
+    },
+    eemandValueAdjustment: {
+      serviceCode: "0101183",
+      srvCode: "",
+      serialNo: "",
+      serCat: "112",
+      funcCode: "WEBA10073800",
+      busiTypeCode: "215",
+      subBusiTypeCode: "21504",
+      authFlag: "1",
+      timeDay: "5",
+      getMonthServiceCode: "0101046",
+    },
+    businessProgress: {
+      serviceCode: "0101183",
+      srvCode: "01",
+      funcCode: "WEB01",
+    },
+    increase: {
+      source: "SGAPP",
+      serialNo: "",
+      srvCode: "",
+      serviceCode_smt: "01010049",
+      serviceCode: "0101154",
+      order: "0101154",
+      funcCode: "WEBA10070800",
+      querytypeCode: "1",
+      serCat: "106",
+      busiTypeCode: "111",
+      subBusiTypeCode: "",
+    },
+    fjincrea: {
+      serCat: "105",
+      busiTypeCode: "110",
+      subBusiTypeCode: "",
+      source: "SGAPP",
+      funcCode: "WEBA10070800",
+      serialNo: "",
+      srvCode: "",
+      serviceCode_smt: "01010049",
+      serviceCode: "0101154",
+      order: "0101154",
+      querytypeCode: "1",
+    },
+    persIncrea: {
+      serCat: "105",
+      busiTypeCode: "109",
+      order: "0101154",
+      subBusiTypeCode: "",
+      source: "SGAPP",
+      funcCode: "WEBA10070800",
+      querytypeCode: "1",
+    },
+    fgdChange: {
+      serviceCode: "0101183",
+      srvCode: "01",
+      channelCode: "09",
+      funcCode: "WEBA10070900",
+      busiTypeCode: "215",
+      subBusiTypeCode: "21505",
+      serCat: "111",
+      authFlag: "1",
+    },
+    createOrder: {
+      channelCode: "0902",
+      funcCode: "WEBALIPAY_01",
+      srvCode: "BCP_000001",
+      chargeMode: "02",
+      conType: "01",
+      bizTypeId: "BT_ELEC",
+    },
+    largePopulation: {
+      busiTypeCode: "383",
+      funcCode: "WEBA10076800",
+      subBusiTypeCode: "",
+      srvCode: "",
+      promotType: "",
+      promotCode: "",
+      channelCode: "0901",
+      serCat: "383",
+      serviceCode: "",
+      serialNo: "",
+    },
+    biaoJiCode: { serviceCode: "0104507", source: "1704", channelCode: "1704" },
+    biaoJiCode: { serviceCode: "0104507", source: "1704", channelCode: "1704" },
+    twoGuar: {
+      busiTypeCode: "402",
+      subBusiTypeCode: "40201",
+      funcCode: "web_twoGuar",
+    },
+    electTrend: { serviceCode: "BCP_00026", channelCode: "0902" },
+    emergency: {
+      serviceCode: "BCP_00026",
+      funcCode: "A10000000",
+      channelCode: "0902",
+    },
+    infoPublic: { serviceCode: "2545454", source: "app" },
+  },
+  Notify = isNode() ? require("./sendNotify") : "",
+  SCRIPTNAME = "网上国网",
+  NAMESPACE = "ONZ3V",
+  store = new Store(NAMESPACE),
+  Global =
+    "undefined" != typeof globalThis
+      ? globalThis
+      : "undefined" != typeof window
+      ? window
+      : "undefined" != typeof global
+      ? global
+      : "undefined" != typeof self
+      ? self
+      : {};
+Global.bizrt = jsonParse(store.get("95598_bizrt")) || {};
+const log = new Logger(
+    SCRIPTNAME,
+    isTrue(isNode() ? process.env.WSGW_LOG_DEBUG : store.get("95598_log_debug"))
+      ? "debug"
+      : "info"
+  ),
+  USERNAME =
+    (isNode() ? process.env.WSGW_USERNAME : store.get("95598_username")) || "",
+  PASSWORD =
+    (isNode() ? process.env.WSGW_PASSWORD : store.get("95598_password")) || "";
+async function getKeyCode() {
+  console.log("⏳ 获取keyCode和publicKey...");
+  try {
+    const e = { url: `/api${$api.getKeyCode}`, method: "post", headers: {} };
+    (Global.requestKey = await request(e)),
+      log.info("✅ 获取keyCode和publicKey成功"),
+      log.debug(`🔑 keyCode&publicKey: ${jsonStr(requestKey, null, 2)}`);
+  } catch (e) {
+    return Promise.reject(`获取keyCode和PublicKey失败: ${e}`);
+  } finally {
+    console.log("🔚 获取keyCode和publicKey结束");
+  }
+}
+async function getVerifyCode() {
+  console.log("⏳ 获取验证码...");
+  try {
+    const e = {
+        url: `/api${$api.loginVerifyCodeNew}`,
+        method: "post",
+        data: {
+          password: PASSWORD,
+          account: USERNAME,
+          canvasHeight: 200,
+          canvasWidth: 310,
+        },
+        headers: { ...requestKey },
+      },
+      o = await request(e);
+    log.info("✅ 获取验证码凭证成功"), log.debug(`🔑 验证码凭证: ${o.ticket}`);
+    const { data: r } = await Recoginze(o.canvasSrc);
+    return (
+      log.info("✅ 识别验证码成功"),
+      log.debug(`🔑 验证码: ${r}`),
+      { code: r, ticket: o.ticket }
+    );
+  } catch (e) {
+    return Promise.reject("获取验证码失败: " + e);
+  } finally {
+    console.log("🔚 获取验证码结束");
+  }
+}
+async function login(e, o) {
+  console.log("⏳ 登录中...");
+  try {
+    const r = {
+        url: `/api${$api.loginTestCodeNew}`,
+        method: "post",
+        headers: { ...requestKey },
+        data: {
+          loginKey: e,
+          code: o,
+          params: {
+            uscInfo: {
+              devciceIp: "",
+              tenant: "state_grid",
+              member: "0902",
+              devciceId: "",
+            },
+            quInfo: {
+              optSys: "android",
+              pushId: "000000",
+              addressProvince: "110100",
+              password: PASSWORD,
+              addressRegion: "110101",
+              account: USERNAME,
+              addressCity: "330100",
+            },
+          },
+          Channels: "web",
+        },
+      },
+      { bizrt: s } = await request(r);
+    if (!(s?.userInfo?.length > 0))
+      return Promise.reject("登录失败: 请检查信息填写是否正确! ");
+    store.set("95598_bizrt", jsonStr(s)),
+      (Global.bizrt = s),
+      log.info("✅ 登录成功"),
+      log.debug(
+        `🔑 用户凭证: ${s.token}`,
+        `👤 用户信息: ${s.userInfo[0].nickname || s.userInfo[0].loginAccount}`
+      );
+  } catch (e) {
+    return /验证错误/.test(e)
+      ? (log.error(`滑块验证出错, 重新登录: ${e}`), await doLogin())
+      : Promise.reject(`登陆失败: ${e}`);
+  } finally {
+    console.log("🔚 登录结束");
+  }
+}
+async function getAuthcode() {
+  console.log("⏳ 获取授权码...");
+  try {
+    const e = {
+        url: `/api${$api.getAuth}`,
+        method: "post",
+        headers: { ...requestKey, token: bizrt.token },
+      },
+      { redirect_url: o } = await request(e);
+    (Global.authorizecode = o.split("?code=")[1]),
+      log.info("✅ 获取授权码成功"),
+      log.debug(`🔑 授权码: ${authorizecode}`);
+  } catch (e) {
+    return Promise.reject(`获取授权码失败: ${e}`);
+  } finally {
+    console.log("🔚 获取授权码结束");
+  }
+}
+async function getAccessToken() {
+  console.log("⏳ 获取凭证...");
+  try {
+    const e = {
+      url: `/api${$api.getWebToken}`,
+      method: "post",
+      headers: {
+        ...requestKey,
+        token: bizrt.token,
+        authorizecode: authorizecode,
+      },
+    };
+    (Global.accessToken = await request(e).then((e) => e.access_token)),
+      log.info("✅ 获取凭证成功"),
+      log.debug(`🔑 AccessToken: ${accessToken}`);
+  } catch (e) {
+    return Promise.reject(`获取凭证失败: ${e}`);
+  } finally {
+    console.log("🔚 获取凭证结束");
+  }
+}
+async function getBindInfo() {
+  console.log("⏳ 查询绑定信息...");
+  try {
+    const e = {
+      url: `/api${$api.searchUser}`,
+      method: "post",
+      headers: { ...requestKey, token: bizrt.token, acctoken: accessToken },
+      data: {
+        serviceCode: $configuration.userInform.serviceCode,
+        source: $configuration.source,
+        target: $configuration.target,
+        uscInfo: {
+          member: $configuration.uscInfo.member,
+          devciceIp: $configuration.uscInfo.devciceIp,
+          devciceId: $configuration.uscInfo.devciceId,
+          tenant: $configuration.uscInfo.tenant,
+        },
+        quInfo: { userId: bizrt.userInfo[0].userId },
+        token: bizrt.token,
+        Channels: "web",
+      },
+    };
+    (Global.bindInfo = await request(e).then((e) => e.bizrt)),
+      log.info("✅ 获取绑定信息成功"),
+      log.debug(`🔑 用户绑定信息: ${jsonStr(bindInfo, null, 2)}`);
+  } catch (e) {
+    return Promise.reject(`获取绑定信息失败: ${e}`);
+  } finally {
+    console.log("🔚 查询绑定信息结束");
+  }
+}
+async function getElcFee(e) {
+  console.log("⏳ 查询电费...");
+  try {
+    const o = bindInfo.powerUserList[e],
+      [r] = bizrt.userInfo,
+      s = {
+        url: `/api${$api.accapi}`,
+        method: "post",
+        headers: { ...requestKey, token: bizrt.token, acctoken: accessToken },
+        data: {
+          data: {
+            srvCode: "",
+            serialNo: "",
+            channelCode: $configuration.account.channelCode,
+            funcCode: $configuration.account.funcCode,
+            acctId: r.userId,
+            userName: r.loginAccount ? r.loginAccount : r.nickname,
+            promotType: "1",
+            promotCode: "1",
+            userAccountId: r.userId,
+            list: [
+              {
+                consNoSrc: o.consNo_dst,
+                proCode: o.proNo,
+                sceneType: o.constType,
+                consNo: o.consNo,
+                orgNo: o.orgNo,
+              },
+            ],
+          },
+          serviceCode: "0101143",
+          source: $configuration.source,
+          target: o.proNo || o.provinceId,
+        },
+      };
+    (Global.eleBill = await request(s).then((e) => e.list[0])),
+      log.info("✅ 查询电费成功"),
+      log.debug(`🔑 电费信息: ${jsonStr(Global.eleBill, null, 2)}`);
+    if (Global.eleBill.powerUserList)
+      store.set("eleBill", jsonStr(Global.eleBill));
+    else if (store.get("eleBill"))
+      Global.eleBill = jsonParse(store.get("eleBill"));
+  } catch (e) {
+    if (store.get("eleBill")) Global.eleBill = jsonParse(store.get("eleBill"));
+    return console.log(`查询电费失败: ${e}`);
+  } finally {
+    console.log("🔚 查询电费结束");
+  }
+}
+async function getDayElecQuantity(e) {
+  console.log("⏳ 获取日用电量...");
+  try {
+    const o = bindInfo.powerUserList[e],
+      [r] = bizrt.userInfo,
+      s = getBeforeDate(6),
+      n = getBeforeDate(1),
+      c = {
+        url: `/api${$api.busInfoApi}`,
+        method: "post",
+        headers: { ...requestKey, token: bizrt.token, acctoken: accessToken },
+        data: {
+          params1: {
+            serviceCode: $configuration.serviceCode,
+            source: $configuration.source,
+            target: $configuration.target,
+            uscInfo: {
+              member: $configuration.uscInfo.member,
+              devciceIp: $configuration.uscInfo.devciceIp,
+              devciceId: $configuration.uscInfo.devciceId,
+              tenant: $configuration.uscInfo.tenant,
+            },
+            quInfo: { userId: r.userId },
+            token: bizrt.token,
+          },
+          params3: {
+            data: {
+              acctId: r.userId,
+              consNo: o.consNo_dst,
+              consType: "02" == o.constType ? "02" : "01",
+              endTime: n,
+              orgNo: o.orgNo,
+              queryYear: new Date().getFullYear().toString(),
+              proCode: o.proNo || o.provinceId,
+              serialNo: "",
+              srvCode: "",
+              startTime: s,
+              userName: r.nickname ? r.nickname : r.loginAccount,
+              funcCode: $configuration.getday.funcCode,
+              channelCode: $configuration.getday.channelCode,
+              clearCache: $configuration.getday.clearCache,
+              promotCode: $configuration.getday.promotCode,
+              promotType: $configuration.getday.promotType,
+            },
+            serviceCode: $configuration.getday.serviceCode,
+            source: $configuration.getday.source,
+            target: o.proNo || o.provinceId,
+          },
+          params4: "010103",
+        },
+      },
+      t = await request(c);
+    log.info("✅ 获取日用电量成功"),
+      log.debug(jsonStr(t, null, 2)),
+      (Global.dayElecQuantity = t);
+    if (Global.dayElecQuantity.sevenEleList)
+      store.set("dayElecQuantity", jsonStr(Global.dayElecQuantity));
+    else if (store.get("dayElecQuantity"))
+      Global.dayElecQuantity = jsonParse(store.get("dayElecQuantity"));
+  } catch (e) {
+    if (store.get("dayElecQuantity"))
+      Global.dayElecQuantity = jsonParse(store.get("dayElecQuantity"));
+    return console.log("获取日用电量失败: " + e);
+  } finally {
+    console.log("🔚 获取日用电量结束");
+  }
+}
+
+async function getDay31ElecQuantity(e) {
+  console.log("⏳ 获取日用电量...");
+  try {
+    const o = bindInfo.powerUserList[e],
+      [r] = bizrt.userInfo,
+      s = getBeforeDate(32),
+      n = getBeforeDate(1),
+      c = {
+        url: `/api${$api.busInfoApi}`,
+        method: "post",
+        headers: { ...requestKey, token: bizrt.token, acctoken: accessToken },
+        data: {
+          params1: {
+            serviceCode: $configuration.serviceCode,
+            source: $configuration.source,
+            target: $configuration.target,
+            uscInfo: {
+              member: $configuration.uscInfo.member,
+              devciceIp: $configuration.uscInfo.devciceIp,
+              devciceId: $configuration.uscInfo.devciceId,
+              tenant: $configuration.uscInfo.tenant,
+            },
+            quInfo: { userId: r.userId },
+            token: bizrt.token,
+          },
+          params3: {
+            data: {
+              acctId: r.userId,
+              consNo: o.consNo_dst,
+              consType: "02" == o.constType ? "02" : "01",
+              endTime: n,
+              orgNo: o.orgNo,
+              queryYear: new Date().getFullYear().toString(),
+              proCode: o.proNo || o.provinceId,
+              serialNo: "",
+              srvCode: "",
+              startTime: s,
+              userName: r.nickname ? r.nickname : r.loginAccount,
+              funcCode: $configuration.getday.funcCode,
+              channelCode: $configuration.getday.channelCode,
+              clearCache: $configuration.getday.clearCache,
+              promotCode: $configuration.getday.promotCode,
+              promotType: $configuration.getday.promotType,
+            },
+            serviceCode: $configuration.getday.serviceCode,
+            source: $configuration.getday.source,
+            target: o.proNo || o.provinceId,
+          },
+          params4: "010103",
+        },
+      },
+      t = await request(c);
+    log.info("✅ 获取32日用电量成功"),
+      log.debug(jsonStr(t, null, 2)),
+      (Global.dayElecQuantity31 = t);
+
+    if (Global.dayElecQuantity31.sevenEleList)
+      store.set("dayElecQuantity31", jsonStr(Global.dayElecQuantity31));
+    else if (store.get("dayElecQuantity31"))
+      Global.dayElecQuantity31 = jsonParse(store.get("dayElecQuantity31"));
+  } catch (e) {
+    if (store.get("dayElecQuantity31"))
+      Global.dayElecQuantity31 = jsonParse(store.get("dayElecQuantity31"));
+    return console.log("获取32日用电量失败: " + e);
+  } finally {
+    console.log("🔚 获取32日用电量结束");
+  }
+}
+async function getMonthElecQuantity(e) {
+  console.log("⏳ 获取月用电量...");
+  const o = bindInfo.powerUserList[e],
+    [r] = bizrt.userInfo;
+  try {
+    let e = {
+      url: `/api${$api.busInfoApi}`,
+      method: "post",
+      headers: { ...requestKey, token: bizrt.token, acctoken: accessToken },
+      data: {
+        params1: {
+          serviceCode: $configuration.serviceCode,
+          source: $configuration.source,
+          target: $configuration.target,
+          uscInfo: {
+            member: $configuration.uscInfo.member,
+            devciceIp: $configuration.uscInfo.devciceIp,
+            devciceId: $configuration.uscInfo.devciceId,
+            tenant: $configuration.uscInfo.tenant,
+          },
+          quInfo: { userId: r.userId },
+          token: bizrt.token,
+        },
+        params3: {
+          data: {
+            acctId: r.userId,
+            consNo: o.consNo_dst,
+            consType: "02" == o.constType ? "02" : "01",
+            orgNo: o.orgNo,
+            proCode: o.proNo || o.provinceId,
+            provinceCode: o.proNo || o.provinceId,
+            queryYear: new Date().getFullYear().toString(),
+            serialNo: "",
+            srvCode: "",
+            userName: r.nickname ? r.nickname : r.loginAccount,
+            funcCode: $configuration.mouthOut.funcCode,
+            channelCode: $configuration.mouthOut.channelCode,
+            clearCache: $configuration.mouthOut.clearCache,
+            promotCode: $configuration.mouthOut.promotCode,
+            promotType: $configuration.mouthOut.promotType,
+          },
+          serviceCode: $configuration.mouthOut.serviceCode,
+          source: $configuration.mouthOut.source,
+          target: o.proNo || o.provinceId,
+        },
+        params4: "010102",
+      },
+    };
+    const s = await request(e);
+    log.info("✅ 获取月用电量成功"),
+      log.debug(jsonStr(s, null, 2)),
+      (Global.monthElecQuantity = s);
+    if (Global.monthElecQuantity.mothEleList)
+      store.set("monthElecQuantity", jsonStr(Global.monthElecQuantity));
+    else if (store.get("monthElecQuantity"))
+      Global.monthElecQuantity = jsonParse(store.get("monthElecQuantity"));
+  } catch (e) {
+    if (store.get("monthElecQuantity"))
+      Global.monthElecQuantity = jsonParse(store.get("monthElecQuantity"));
+    return console.log(`获取月用电量失败: ${e}`);
+  } finally {
+    console.log("🔚 获取月用电量结束");
+  }
+}
+
+async function getLastYearElecQuantity(e) {
+  console.log("⏳ 获取去年用电量...");
+  const o = bindInfo.powerUserList[e],
+    [r] = bizrt.userInfo;
+  try {
+    let e = {
+      url: `/api${$api.busInfoApi}`,
+      method: "post",
+      headers: { ...requestKey, token: bizrt.token, acctoken: accessToken },
+      data: {
+        params1: {
+          serviceCode: $configuration.serviceCode,
+          source: $configuration.source,
+          target: $configuration.target,
+          uscInfo: {
+            member: $configuration.uscInfo.member,
+            devciceIp: $configuration.uscInfo.devciceIp,
+            devciceId: $configuration.uscInfo.devciceId,
+            tenant: $configuration.uscInfo.tenant,
+          },
+          quInfo: { userId: r.userId },
+          token: bizrt.token,
+        },
+        params3: {
+          data: {
+            acctId: r.userId,
+            consNo: o.consNo_dst,
+            consType: "02" == o.constType ? "02" : "01",
+            orgNo: o.orgNo,
+            proCode: o.proNo || o.provinceId,
+            provinceCode: o.proNo || o.provinceId,
+            queryYear: (new Date().getFullYear() - 1).toString(),
+            serialNo: "",
+            srvCode: "",
+            userName: r.nickname ? r.nickname : r.loginAccount,
+            funcCode: $configuration.mouthOut.funcCode,
+            channelCode: $configuration.mouthOut.channelCode,
+            clearCache: $configuration.mouthOut.clearCache,
+            promotCode: $configuration.mouthOut.promotCode,
+            promotType: $configuration.mouthOut.promotType,
+          },
+          serviceCode: $configuration.mouthOut.serviceCode,
+          source: $configuration.mouthOut.source,
+          target: o.proNo || o.provinceId,
+        },
+        params4: "010102",
+      },
+    };
+    const s = await request(e);
+    log.info("✅ 获取去年电量成功"),
+      log.debug(jsonStr(s, null, 2)),
+      (Global.lastYearElecQuantity = s);
+    if (Global.lastYearElecQuantity.dataInfo)
+      store.set("lastYearElecQuantity", jsonStr(Global.lastYearElecQuantity));
+    else if (store.get("lastYearElecQuantity"))
+      Global.lastYearElecQuantity = jsonParse(
+        store.get("lastYearElecQuantity")
+      );
+  } catch (e) {
+    if (store.get("lastYearElecQuantity"))
+      Global.lastYearElecQuantity = jsonParse(
+        store.get("lastYearElecQuantity")
+      );
+    return console.log(`获取月用电量失败: ${e}`);
+  } finally {
+    console.log("🔚 获取月用电量结束");
+  }
+}
+
+async function getSegmentDate(e, o) {
+  console.log("⏳ 江苏地区特殊处理...");
+  try {
+    let r = {
+      url: `/api${$api.segmentDate}`,
+      method: "post",
+      headers: {
+        ...requestKey,
+        token: bizrt.token,
+        acctoken: accessToken,
+      },
+      data: {
+        data: {
+          acctId: "acctid01",
+          channelCode: "SGAPP",
+          consNo: e.consNo_dst,
+          funcCode: "A10079078",
+          promotCode: "1",
+          promotType: "1",
+          provinceCode: "32101",
+          serialNo: "",
+          srvCode: "123",
+          userName: "acctid01",
+          year: o.year,
+        },
+        serviceCode: "0101798",
+        source: "app",
+        target: e.proNo,
+      },
+    };
+    const s = await request(r);
+    log.info("✅ 江苏地区特殊处理成功"), log.debug(jsonStr(s, null, 2));
+    let t = s.billList;
+    return t[t.length - 1];
+  } catch (e) {
+    throw new Error(`江苏地区特殊处理失败: ${e}`);
+  } finally {
+    console.log("🔚 江苏地区特殊处理结束");
+  }
+}
+
+async function getStepElecQuantity(e, months) {
+  console.log("⏳ 获取阶梯用电...");
+  try {
+    const o = bindInfo.powerUserList[e],
+      [r] = bizrt.userInfo;
+    let s = new Date(),
+      t = { year: s.getFullYear(), months: months || s.getMonth() },
+      n = "",
+      c = "",
+      a = t.months;
+    a <= 9 ? (n = t.year + "-0" + a) : a > 9 && (n = t.year + "-" + a);
+    let i = "";
+    "32101" === o.proNo
+      ? ((c = await getSegmentDate(o, t)), (i = t.year + "-" + a))
+      : (i = n);
+    const m = {
+        url: `/api/${
+          "33101" == (o.orgNo || o.provinceId)
+            ? "01" == o.constType
+              ? $api.HideelectBill
+              : $api.LowelectBill
+            : $api.electBill
+        }`,
+        method: "post",
+        headers: { ...requestKey, token: bizrt.token, acctoken: accessToken },
+        data: {
+          data: {
+            channelCode: $configuration.stepelect.channelCode,
+            funcCode: $configuration.stepelect.funcCode,
+            promotType: $configuration.stepelect.promotType,
+            clearCache: $configuration.stepelect.clearCache,
+            consNo: o.consNo_dst,
+            promotCode: o.proNo || o.provinceId,
+            orgNo: o.orgNo || n.orgNo,
+            queryDate: i,
+            provinceCode: o.proNo || o.provinceId,
+            consType: o.constType || o.consSortCode,
+            userAccountId: r.userId,
+            serialNo: "",
+            srvCode: "",
+            calcId: c ? c.calcId : void 0,
+            userName: r.nickname || r.loginAccount,
+            acctId: r.userId,
+          },
+          serviceCode: $configuration.stepelect.serviceCode,
+          source: $configuration.stepelect.source,
+          target: o.proNo || o.provinceId,
+        },
+      },
+      g = await request(m);
+    if (
+      (log.info("✅ 获取阶梯用电成功"),
+      log.debug(jsonStr(g, null, 2)),
+      "1" !== g.rtnCode)
+    )
+      return Promise.reject(g.rtnMsg);
+    Global.stepElecQuantity = g.list || {};
+
+    if (Global.stepElecQuantity.sevenEleList)
+      store.set("stepElecQuantity", jsonStr(Global.stepElecQuantity));
+    else if (store.get("stepElecQuantity"))
+      Global.stepElecQuantity = jsonParse(store.get("stepElecQuantity"));
+  } catch (e) {
+    if (store.get("stepElecQuantity"))
+      Global.stepElecQuantity = jsonParse(store.get("stepElecQuantity"));
+    return console.log(`获取阶梯用电失败: ${e}`);
+  } finally {
+    console.log("🔚 获取阶梯用电结束");
+  }
+}
+
+async function doLogin() {
+  const { code: e, ticket: o } = await getVerifyCode();
+  await login(o, e);
+}
+async function showNotice() {
+  console.log(""),
+    console.log("1. 本脚本仅用于学习研究，禁止用于商业用途"),
+    console.log("2. 本脚本不保证准确性、可靠性、完整性和及时性"),
+    console.log("3. 任何个人或组织均可无需经过通知而自由使用"),
+    console.log("4. 作者对任何脚本问题概不负责，包括由此产生的任何损失"),
+    console.log(
+      "5. 如果任何单位或个人认为该脚本可能涉嫌侵犯其权利，应及时通知并提供身份证明、所有权证明，我将在收到认证文件确认后删除"
+    ),
+    console.log("6. 请勿将本脚本用于商业用途，由此引起的问题与作者无关"),
+    console.log("7. 本脚本及其更新版权归作者所有"),
+    console.log("");
+}
+async function sendMsg(e, o, r, s) {
+  const n = s?.["open-url"] || s?.openUrl || s?.$open || s?.url,
+    c = s?.["media-url"] || s?.mediaUrl || s?.$media;
+  isNode()
+    ? ((r += n ? `\n点击跳转: ${n}` : ""),
+      (r += c ? `\n多媒体: ${c}` : ""),
+      console.log(`${e}\n${o}\n${r}\n`),
+      await Notify.sendNotify(`${e}\n${o}`, r))
+    : notify(e, o, r, s);
+}
+
+function getDataSource(o) {
+  const params = getUrlParams($request.url);
+  if (!Object.keys(params).length)
+    return Promise.all([
+      getElcFee(o),
+      getDayElecQuantity(o),
+      getDay31ElecQuantity(o),
+      getMonthElecQuantity(o),
+      getLastYearElecQuantity(o),
+      getStepElecQuantity(o),
+    ]);
+  const requestData = [];
+  if (params.eleBill) requestData.push(getElcFee(o));
+  if (params.dayElecQuantity) requestData.push(getDayElecQuantity(o));
+  if (params.dayElecQuantity31) requestData.push(getDay31ElecQuantity(o));
+  if (params.monthElecQuantity) requestData.push(getMonthElecQuantity(o));
+  if (params.lastYearElecQuantity) requestData.push(getLastYearElecQuantity(o));
+  if (params.stepElecQuantity) requestData.push(getStepElecQuantity(o));
+  return Promise.all(requestData);
+}
+
+
+
+// ===== Egern 小组件渲染 =====
+async function renderWidget(data) {
+  const safeCtx = (typeof ctx !== "undefined") ? ctx : {};
+  const w = new ListWidget();
+
+  if (!data || data.length === 0) {
+    const t = w.addText("暂无数据，请检查账号密码");
+    t.font = Font.systemFont(14);
+    t.textColor = Color.dynamic(new Color("#666666"), new Color("#999999"));
+    return w;
   }
 
-  const today = daily3d && daily3d[0];
-  const tomorrow = daily3d && daily3d[1];
-  const dayAfter = daily3d && daily3d[2];
+  const d = data[0];
+  const eleBill = d.eleBill || {};
+  const userInfo = d.userInfo || {};
+  const dayQty = d.dayElecQuantity || [];
 
-  const dayCard = (label, dayInfo) => {
-    if (!dayInfo) return { type: 'stack', flex: 1, children: [] };
-    const s = getWeatherStyle(dayInfo.iconDay);
-    return {
-      type: 'stack', direction: 'row', alignItems: 'center', flex: 1, gap: 6,
-      children: [
-        { type: 'text', text: label, font: { size: 13 }, textColor: S },
-        { type: 'image', src: `sf-symbol:${s.icon}`, width: 22, height: 22, color: s.color },
-        { type: 'text', text: `${dayInfo.tempMin}°-${dayInfo.tempMax}°`, font: { size: 13, weight: 'semibold' }, textColor: T },
-      ]
-    };
-  };
+  const nameText = userInfo.elecAddr || userInfo.consName || "网上国网";
+  const name = w.addText(nameText);
+  name.font = Font.boldSystemFont(15);
+  name.textColor = Color.dynamic(new Color("#1a1a1a"), new Color("#ffffff"));
+  name.maxLines = 1;
+  w.addSpacer(4);
 
-  return {
-    type: 'widget',
-    padding: [12, 12, 4, 12],
-    gap: 8,
-    children: [
-      // 顶栏
-      {
-        type: 'stack', direction: 'row', alignItems: 'center',
-        children: [
-          {
-            type: 'stack', direction: 'column', gap: 4, alignItems: 'start',
-            children: [
-              { type: 'text', text: `${d.getFullYear()} ${d.getMonth() + 1}月`, font: { size: 22, weight: 'bold' }, textColor: T },
-              {
-                type: 'stack',
-                backgroundColor: { light: '#AF52DE25', dark: '#BF5AF230' },
-                borderRadius: 6, padding: [2, 8, 2, 8],
-                children: [{ type: 'text', text: '日程', font: { size: 12, weight: 'bold' },
-                  textColor: { light: '#AF52DE', dark: '#BF5AF2' } }]
-              },
-              ...schedules.map((s, i) => ({
-                type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
-                children: [
-                  { type: 'stack', width: 3, height: 28,
-                    backgroundColor: i === 0 ? { light: '#34C75960', dark: '#30D15860' } : { light: '#FF950060', dark: '#FF9F0A60' },
-                    borderRadius: 2 },
-                  { type: 'text', text: `${s.name} ${s.md}`, font: { size: 13 }, textColor: T, maxLines: 1 },
-                ]
-              })),
-            ]
-          },
-          { type: 'spacer' },
-          { type: 'image', src: clockSrc, width: 88, height: 88 },
-          { type: 'spacer' },
-          {
-            type: 'stack', direction: 'column', alignItems: 'center',
-            children: [
-              { type: 'text', text: String(d.getDate()), font: { size: 68, weight: 'bold' }, textColor: T },
-              { type: 'text', text: greeting + '!', font: { size: 14, weight: 'semibold' }, textColor: S },
-            ]
-          },
-        ]
-      },
-      // 星期条（周几+日期）
-      { type: 'stack', direction: 'row', gap: 4, children: weekCells },
-      // 天气
-      {
-        type: 'stack', direction: 'row', alignItems: 'center', gap: 10,
-        children: [
-          { type: 'image', src: `sf-symbol:${icon}`, width: 36, height: 36, color },
-          { type: 'text', text: `${now.temp}°`, font: { size: 36, weight: 'bold' }, textColor: T },
-          {
-            type: 'stack', direction: 'column', gap: 1,
-            children: [
-              { type: 'text', text: today ? `${today.tempMax}°-${today.tempMin}°` : '', font: { size: 14 }, textColor: S },
-              { type: 'text', text: `${city} ${now.text}`, font: { size: 13 }, textColor: S },
-            ]
-          },
-          { type: 'spacer' },
-          {
-            type: 'stack', direction: 'column', alignItems: 'end', gap: 1,
-            children: [
-              { type: 'text', text: `体感${now.feelsLike}°`, font: { size: 12 }, textColor: S },
-              { type: 'text', text: `湿度${now.humidity}%`, font: { size: 12 }, textColor: S },
-            ]
-          },
-        ]
-      },
-      // 明后天（中间）
-      { type: 'stack', direction: 'row', gap: 16, children: [ dayCard('明天', tomorrow), dayCard('后天', dayAfter) ] },
-      // 弹性空隙：把曲线推到底部
-      { type: 'spacer' },
-      // 曲线（最下面，宽度自适应）
-      ...(curveSrc ? [{
-        type: 'image', src: curveSrc, height: 112
-      }] : []),
-    ]
-  };
+  const balance = parseFloat(eleBill.balance || "0");
+  const owe = parseFloat(eleBill.historyOwe || "0");
+  const row = w.addStack();
+  row.layoutHorizontally();
+
+  const balCol = row.addStack();
+  balCol.layoutVertically();
+  const balLabel = balCol.addText("余额");
+  balLabel.font = Font.systemFont(11);
+  balLabel.textColor = Color.dynamic(new Color("#8e8e93"), new Color("#98989f"));
+  const balVal = balCol.addText("¥" + balance.toFixed(2));
+  balVal.font = Font.boldSystemFont(22);
+  balVal.textColor = balance < 0
+    ? Color.dynamic(new Color("#D43028"), new Color("#FF6B62"))
+    : Color.dynamic(new Color("#2E8B57"), new Color("#4CD964"));
+
+  row.addSpacer();
+
+  const oweCol = row.addStack();
+  oweCol.layoutVertically();
+  const oweLabel = oweCol.addText("待缴");
+  oweLabel.font = Font.systemFont(11);
+  oweLabel.textColor = Color.dynamic(new Color("#8e8e93"), new Color("#98989f"));
+  const oweVal = oweCol.addText("¥" + owe.toFixed(2));
+  oweVal.font = Font.boldSystemFont(22);
+  oweVal.textColor = owe > 0
+    ? Color.dynamic(new Color("#D43028"), new Color("#FF6B62"))
+    : Color.dynamic(new Color("#8e8e93"), new Color("#98989f"));
+
+  w.addSpacer(6);
+
+  if (dayQty.length > 0) {
+    const title = w.addText("近7日用电 (kWh)");
+    title.font = Font.systemFont(11);
+    title.textColor = Color.dynamic(new Color("#8e8e93"), new Color("#98989f"));
+    w.addSpacer(2);
+    const recent = dayQty.slice(-7);
+    const maxVal = Math.max.apply(null, recent.map(function(x){ return parseFloat(x.dayElecQuantity || 0); }).concat([1]));
+    const chartRow = w.addStack();
+    chartRow.layoutHorizontally();
+    chartRow.spacing = 4;
+    recent.forEach(function(x) {
+      const val = parseFloat(x.dayElecQuantity || 0);
+      const barH = Math.max(4, Math.round((val / maxVal) * 36));
+      const col = chartRow.addStack();
+      col.layoutVertically();
+      col.addSpacer();
+      const bar = col.addStack();
+      bar.backgroundColor = new Color("#007AFF", 0.65);
+      bar.cornerRadius = 2;
+      bar.size = new Size(0, barH);
+      col.addSpacer(2);
+      const dl = col.addText(String(x.day || "").slice(-2));
+      dl.font = Font.systemFont(8);
+      dl.textColor = Color.dynamic(new Color("#8e8e93"), new Color("#98989f"));
+    });
+    chartRow.addSpacer();
+  }
+
+  w.addSpacer(4);
+  const now = new Date();
+  const ts = w.addText("更新于 " + now.getHours() + ":" + String(now.getMinutes()).padStart(2, "0"));
+  ts.font = Font.systemFont(10);
+  ts.textColor = Color.dynamic(new Color("#aeaeb2"), new Color("#636366"));
+  ts.centerAlignText();
+
+  w.refreshAfter = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  return w;
 }
+
+// ===== 主流程（小组件模式）=====
+(async () => {
+  // 写入账号密码
+  if (typeof $persistentStore !== "undefined") {
+    if (SGCC_USERNAME) $persistentStore.write(SGCC_USERNAME, "95598_username");
+    if (SGCC_PASSWORD) $persistentStore.write(SGCC_PASSWORD, "95598_password");
+  }
+  if (!SGCC_USERNAME || !SGCC_PASSWORD) {
+    const w = new ListWidget();
+    const t = w.addText("请先在脚本开头填写\n95598 账号密码");
+    t.font = Font.systemFont(14);
+    t.textColor = Color.dynamic(new Color("#666666"), new Color("#999999"));
+    if (typeof config !== "undefined" && config.runsInWidget) { Script.setWidget(w); }
+    else { await w.presentSmall(); }
+    Script.complete();
+    return;
+  }
+  await getKeyCode();
+  const _bizrt = (typeof Global !== "undefined" && Global.bizrt) ? Global.bizrt : {};
+  if (!(_bizrt.token && _bizrt.userInfo)) { await doLogin(); }
+  await getAuthcode();
+  await getAccessToken();
+  await getBindInfo();
+  const _e = new Array(bindInfo.powerUserList.length);
+  for (let _o = 0; _o < bindInfo.powerUserList.length; _o++) {
+    try { await getDataSource(_o); }
+    catch (error) {
+      let _m = new Date().getMonth() - 1;
+      if (_m === -1) _m = 11;
+      await getStepElecQuantity(_o, _m);
+    }
+    const _r = bindInfo.powerUserList[_o];
+    const _c = Number(Global.eleBill?.historyOwe || "0") > 0 || Number(Global.eleBill?.sumMoney || "0") < 0;
+    _e[_o] = {
+      eleBill: Global.eleBill,
+      userInfo: _r,
+      dayElecQuantity: Global.dayElecQuantity,
+      dayElecQuantity31: Global.dayElecQuantity31,
+      monthElecQuantity: Global.monthElecQuantity,
+      lastYearElecQuantity: Global.lastYearElecQuantity,
+      stepElecQuantity: Global.stepElecQuantity,
+      arrearsOfFees: _c,
+    };
+  }
+  const widget = await renderWidget(_e);
+  if (typeof config !== "undefined" && config.runsInWidget) { Script.setWidget(widget); }
+  else { await widget.presentSmall(); }
+  Script.complete();
+})().catch((e) => {
+  console.log("错误: " + e);
+  Script.complete();
+});
