@@ -1,21 +1,8 @@
-/** 万年历
-*/
+// 双周日历小组件
+// 顶栏：月份 | 农历 | 年份 | 周数
+// 两周日期，农历/节日/节气显示，今天蓝色高亮
 
 export default async function(ctx) {
-  // --- 辅助函数：计算当前是第几周 ---
-  function getWeekNumber(date) {
-    const target = new Date(date.valueOf());
-    const dayNr = (date.getDay() + 6) % 7;
-    target.setDate(target.getDate() - dayNr + 3);
-    const firstThursday = target.valueOf();
-    target.setMonth(0, 1);
-    if (target.getDay() !== 4) {
-      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
-    }
-    return 1 + Math.ceil((firstThursday - target) / 604800000);
-  }
-
-  // --- 真实农历核心算法 ---
   const lunarInfo = [
     0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,
     0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,
@@ -33,10 +20,9 @@ export default async function(ctx) {
     0x05aa0,0x076a3,0x096d0,0x04afb,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,
     0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0
   ];
-
   function lYearDays(y) {
-    let i, sum = 348;
-    for (i = 0x8000; i > 0x8; i >>= 1) sum += (lunarInfo[y - 1900] & i) ? 1 : 0;
+    let sum = 348;
+    for (let i = 0x8000; i > 0x8; i >>= 1) sum += (lunarInfo[y - 1900] & i) ? 1 : 0;
     return sum + leapDays(y);
   }
   function leapDays(y) {
@@ -45,25 +31,17 @@ export default async function(ctx) {
   }
   function leapMonth(y) { return lunarInfo[y - 1900] & 0xf; }
   function monthDays(y, m) { return (lunarInfo[y - 1900] & (0x10000 >> m)) ? 30 : 29; }
-
   function getLunarDate(dObj) {
     let baseDate = new Date(Date.UTC(1900, 0, 31));
     let objDate = new Date(Date.UTC(dObj.getFullYear(), dObj.getMonth(), dObj.getDate()));
     let offset = Math.floor((objDate - baseDate) / 86400000);
     let y, m, i, days = 0;
-    for (y = 1900; y < 2050 && offset > 0; y++) {
-      days = lYearDays(y);
-      offset -= days;
-    }
+    for (y = 1900; y < 2050 && offset > 0; y++) { days = lYearDays(y); offset -= days; }
     if (offset < 0) { offset += days; y--; }
-    let leap = leapMonth(y);
-    let isLeap = false;
+    let leap = leapMonth(y), isLeap = false;
     for (i = 1; i < 13 && offset > 0; i++) {
-      if (leap > 0 && i === (leap + 1) && !isLeap) {
-        --i; isLeap = true; days = leapDays(y);
-      } else {
-        days = monthDays(y, i);
-      }
+      if (leap > 0 && i === (leap + 1) && !isLeap) { --i; isLeap = true; days = leapDays(y); }
+      else days = monthDays(y, i);
       if (isLeap && i === (leap + 1)) isLeap = false;
       offset -= days;
     }
@@ -71,305 +49,258 @@ export default async function(ctx) {
       if (isLeap) isLeap = false; else { isLeap = true; --i; }
     }
     if (offset < 0) { offset += days; --i; }
-    return { year: y, month: i, day: offset + 1, isLeap: isLeap };
+    return { year: y, month: i, day: offset + 1, isLeap };
   }
-
-  const lunarMonths = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月'];
-  const lunarDaysStr = ['初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十', '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十', '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'];
-
-  function getRealLunarFull(dObj) {
-    const l = getLunarDate(dObj);
-    return (l.isLeap ? '闰' : '') + lunarMonths[l.month - 1] + lunarDaysStr[l.day - 1];
-  }
-  
-  function getRealLunarDay(dObj) {
-    const l = getLunarDate(dObj);
+  const lunarMonths = ['正月','二月','三月','四月','五月','六月','七月','八月','九月','十月','冬月','腊月'];
+  const lunarDaysStr = ['初一','初二','初三','初四','初五','初六','初七','初八','初九','初十','十一','十二','十三','十四','十五','十六','十七','十八','十九','二十','廿一','廿二','廿三','廿四','廿五','廿六','廿七','廿八','廿九','三十'];
+  function lunarDayStr(d) {
+    const l = getLunarDate(d);
     if (l.day === 1) return (l.isLeap ? '闰' : '') + lunarMonths[l.month - 1];
     return lunarDaysStr[l.day - 1];
   }
+  function lunarFullStr(d) {
+    const l = getLunarDate(d);
+    return (l.isLeap ? '闰' : '') + lunarMonths[l.month - 1] + lunarDaysStr[l.day - 1];
+  }
 
-  // --- 初始化日期 ---
+  const SOLAR_TERM_NAMES = ['小寒','大寒','立春','雨水','惊蛰','春分','清明','谷雨','立夏','小满','芒种','夏至','小暑','大暑','立秋','处暑','白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至'];
+  const SOLAR_TERM_OFFSETS = [0,21208,42467,63836,85337,107014,128867,150921,173149,195551,218072,240693,263343,285989,308563,331033,353350,375494,397447,419210,440795,462224,483532,504758];
+  function getSolarTerm(y, m, d) {
+    for (let i = 0; i < 24; i++) {
+      const ms = Date.UTC(1900,0,6,2,5,0) + 365.24219878*86400000*(y-1900) + SOLAR_TERM_OFFSETS[i]*60000;
+      const t = new Date(ms);
+      if (t.getUTCFullYear() === y && t.getUTCMonth()+1 === m && t.getUTCDate() === d) return SOLAR_TERM_NAMES[i];
+    }
+    return null;
+  }
+
+  const LUNAR_HOLIDAYS = { '1-1':'春节','1-15':'元宵节','5-5':'端午节','7-7':'七夕节','8-15':'中秋节','9-9':'重阳节','12-8':'腊八节' };
+  const SOLAR_HOLIDAYS = { '1-1':'元旦','3-8':'妇女节','5-1':'劳动节','6-1':'儿童节','10-1':'国庆节','10-24':'程序员节','12-25':'圣诞节' };
+  function getHoliday(d) {
+    const l = getLunarDate(d);
+    const lk = `${l.month}-${l.day}`;
+    if (LUNAR_HOLIDAYS[lk]) return { text: LUNAR_HOLIDAYS[lk], type: 'holiday' };
+    const sk = `${d.getMonth()+1}-${d.getDate()}`;
+    if (SOLAR_HOLIDAYS[sk]) return { text: SOLAR_HOLIDAYS[sk], type: 'holiday' };
+    const term = getSolarTerm(d.getFullYear(), d.getMonth()+1, d.getDate());
+    if (term) return { text: term, type: 'term' };
+    return null;
+  }
+
+  function getWeekNumber(date) {
+    const target = new Date(date.valueOf());
+    const dayNr = (date.getDay() + 6) % 7;
+    target.setDate(target.getDate() - dayNr + 3);
+    const firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    return 1 + Math.ceil((firstThursday - target) / 604800000);
+  }
+
+  const safeCtx = ctx || {};
+  const widgetFamily = safeCtx.widgetFamily || 'systemMedium';
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const date = now.getDate();
-  const day = now.getDay();
-  
-  const currentWeekNum = getWeekNumber(now);
-  const currentLunarStr = getRealLunarFull(now);
+  const todayY = now.getFullYear(), todayM = now.getMonth(), todayD = now.getDate();
+  const monthNames = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
-  const themeRed = { light: '#C83C3C', dark: '#C83C3C' }; 
-  const textRed = { light: '#C83C3C', dark: '#FF6B6B' };  
-  const textMain = { light: '#333333', dark: '#FFFFFF' }; 
-  const textSub = { light: '#888888', dark: '#CCCCCC' };  
-  const textFade = { light: '#C7C7CC', dark: '#777777' }; 
+  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
+  const S = { light: '#8E8E93', dark: '#AEAEB2' };
+  const BLUE = { light: '#007AFF', dark: '#0A84FF' };
+  const RED = { light: '#D43028', dark: '#FF6B62' };
 
-  const family = ctx.widgetFamily || 'systemLarge';
-  const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
-  const isTodayWeekend = day === 0 || day === 6;
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() - now.getDay());
 
-  // ==========================================
-  // 小号组件 (Small) - 今日聚焦
-  // ==========================================
-  if (family === 'systemSmall') {
+  if (widgetFamily === 'accessoryCircular') {
     return {
-      type: 'widget',
-      url: 'calshow://',
-      padding: 0,
+      type: 'widget', padding: 4,
+      children: [{
+        type: 'stack', direction: 'column', alignItems: 'center', gap: 0,
+        children: [
+          { type: 'text', text: String(todayD), font: { size: 28, weight: 'bold' }, textColor: T },
+          { type: 'text', text: lunarDayStr(now), font: { size: 10 }, textColor: S, maxLines: 1 }
+        ]
+      }]
+    };
+  }
 
+  if (widgetFamily === 'accessoryRectangular' || widgetFamily === 'accessoryInline') {
+    const holiday = getHoliday(now);
+    const sub = holiday ? holiday.text : lunarDayStr(now);
+    return {
+      type: 'widget', padding: 4,
+      children: [{
+        type: 'stack', direction: 'column', alignItems: 'start', gap: 2,
+        children: [
+          { type: 'text', text: `${monthNames[todayM]}${todayD}日`, font: { size: 16, weight: 'bold' }, textColor: T, maxLines: 1 },
+          { type: 'text', text: `${sub} · 第${getWeekNumber(now)}周`, font: { size: 12 }, textColor: S, maxLines: 1 }
+        ]
+      }]
+    };
+  }
+
+  const header = {
+    type: 'stack', direction: 'row', alignItems: 'center',
+    children: [
+      { type: 'text', text: monthNames[todayM], font: { size: 22, weight: 'bold' }, textColor: BLUE },
+      { type: 'spacer' },
+      { type: 'text', text: `${lunarFullStr(now)}  |  ${todayY}  |  第${getWeekNumber(now)}周`, font: { size: 13 }, textColor: S, maxLines: 1 }
+    ]
+  };
+
+  const weekNames = ['日','一','二','三','四','五','六'];
+  const weekHeader = {
+    type: 'stack', direction: 'row', gap: 4,
+    children: weekNames.map((w, i) => ({
+      type: 'stack', direction: 'column', alignItems: 'center', flex: 1,
+      padding: [0, 2, 0, 2],
       children: [
-        {
-          type: 'stack',
-          direction: 'row',
+        { type: 'text', text: w, font: { size: 14, weight: 'medium' }, textColor: (i === 0 || i === 6) ? BLUE : T }
+      ]
+    }))
+  };
 
-          padding: [8, 12, 8, 12], 
-          children: [
-            {
-              type: 'stack',
-              backgroundColor: { light: '#34C75915', dark: '#30D15820' },
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: { light: '#34C75950', dark: '#30D15860' },
-              padding: [4, 10, 4, 10],
-              children: [
-                { type: 'text', text: `${year}年${month + 1}月`, font: { size: 11, weight: 'bold' }, textColor: { light: '#2E8B57', dark: '#4CD964' } },
-              ]
-            },
-            { type: 'spacer' },
-            {
-              type: 'stack',
-              backgroundColor: { light: '#34C75915', dark: '#30D15820' },
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: { light: '#34C75950', dark: '#30D15860' },
-              padding: [4, 10, 4, 10],
-              children: [
-                { type: 'text', text: `周${weekdays[day === 0 ? 6 : day - 1]}`, font: { size: 11, weight: 'bold' }, textColor: { light: '#2E8B57', dark: '#4CD964' } },
-              ]
-            }
-          ]
-        },
-        {
-          type: 'stack',
-          direction: 'column',
-          alignItems: 'center',
-          flex: 1,
-          children: [
-            { type: 'spacer' },
-            { type: 'text', text: String(date), font: { size: 46, weight: 'medium' }, textColor: isTodayWeekend ? textRed : textMain },
-            { type: 'spacer', length: 2 },
-            { type: 'text', text: currentLunarStr, font: { size: 14, weight: 'medium' }, textColor: textSub },
-            { type: 'spacer' }
-          ]
-        }
+  function dateCell(d, compact) {
+    const isToday = d.getFullYear() === todayY && d.getMonth() === todayM && d.getDate() === todayD;
+    const holiday = getHoliday(d);
+    const sub = holiday ? holiday.text : lunarDayStr(d);
+    const subColor = holiday ? (holiday.type === 'holiday' ? RED : BLUE) : S;
+
+    const cap = isToday
+      ? { bg: { light: '#FF3B3015', dark: '#FF453A20' }, border: { light: '#FF3B3050', dark: '#FF453A60' }, text: RED }
+      : { bg: { light: '#34C75915', dark: '#30D15820' }, border: { light: '#34C75950', dark: '#30D15860' }, text: T };
+    return {
+      type: 'stack', direction: 'column', alignItems: 'center', flex: 1, gap: 0,
+      padding: compact ? [2, 1, 2, 1] : [3, 2, 3, 2],
+      backgroundColor: cap.bg,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: cap.border,
+      children: [
+        { type: 'text', text: String(d.getDate()), font: { size: compact ? 16 : 18, weight: isToday ? 'bold' : 'regular' }, textColor: cap.text },
+        { type: 'text', text: sub, font: { size: compact ? 8 : 9 }, textColor: isToday ? RED : subColor, maxLines: 1 }
       ]
     };
   }
 
-  // ==========================================
-  // 中号/大号组件 (Medium / Large) - 动态自适应网格
-  // ==========================================
-  
-  let ui = {
-    headerPad: [12, 16, 10, 16], headerTitle: 15, headerLunar: 16,
-    weekPad: [0, 0, 6, 0], weekSize: 12, gridPad: [8, 16, 12, 16],
-    rowGap: 4, dateSize: 16, lunarSize: 10, innerGap: 1,
-    circleSize: 32 // 大号组件的圆圈宽高
-  };
+  function buildWeeks(count, compact) {
+    const result = [];
+    for (let w = 0; w < count; w++) {
+      const cells = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(sunday);
+        d.setDate(sunday.getDate() + w * 7 + i);
+        cells.push(dateCell(d, compact));
+      }
+      result.push({ type: 'stack', direction: 'row', gap: 4, children: cells });
+      if (w < count - 1) result.push({ type: 'spacer', length: compact ? 8 : 16 });
+    }
+    return result;
+  }
 
-  if (family === 'systemMedium') {
-    ui = {
-      headerPad: [4, 16, 2, 16], // 极致压缩顶部空间，给日历网格留足高度
-      headerTitle: 11, 
-      headerLunar: 11,
-      weekPad: [0, 0, 2, 0], 
-      weekSize: 9, 
-      gridPad: [2, 16, 2, 16], 
-      rowGap: 0, 
-      dateSize: 11,            
-      lunarSize: 7,            
-      innerGap: 0,
-      circleSize: 20 // 【核心修改】精准控制到 20x20，绝对安全的高度，不会重叠！
+  if (widgetFamily === 'systemSmall') {
+    const firstDay = new Date(todayY, todayM, 1);
+    const startWeekday = firstDay.getDay();
+    const daysInMonth = new Date(todayY, todayM + 1, 0).getDate();
+    const smallWeekHeader = {
+      type: 'stack', direction: 'row',
+      children: weekNames.map((w, i) => ({
+        type: 'text', text: w, font: { size: 14 }, flex: 1,
+        textColor: (i === 0 || i === 6) ? S : T,
+        align: 'center'
+      }))
     };
-  } 
 
-  const headerSection = {
-    type: 'stack',
-    direction: 'row',
-    alignItems: 'center', 
-
-    padding: ui.headerPad,
-    children: [
-      {
-        type: 'stack',
-        backgroundColor: { light: '#34C75915', dark: '#30D15820' },
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: { light: '#34C75950', dark: '#30D15860' },
-        padding: [4, 10, 4, 10],
-        children: [{
-          type: 'text',
-          text: `${year}年${month + 1}月 第${currentWeekNum}周`,
-          font: { size: ui.headerTitle, weight: 'medium' },
-          textColor: { light: '#2E8B57', dark: '#4CD964' }
-        }]
-      },
-      { type: 'spacer' },
-      {
-        type: 'stack',
-        backgroundColor: { light: '#34C75915', dark: '#30D15820' },
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: { light: '#34C75950', dark: '#30D15860' },
-        padding: [4, 10, 4, 10],
-        children: [{
-          type: 'text',
-          text: currentLunarStr, 
-          font: { size: ui.headerLunar, weight: 'medium' },
-          textColor: { light: '#2E8B57', dark: '#4CD964' }
-        }]
+    function monthCell(dayNum, weekday) {
+      const isToday = dayNum === todayD;
+      const isWeekend = weekday === 0 || weekday === 6;
+      if (dayNum === 0) {
+        return { type: 'text', text: '', font: { size: 16 }, flex: 1 };
       }
-    ]
-  };
-
-  const weekdayHeaderStack = {
-    type: 'stack',
-    direction: 'row',
-    gap: 0,
-    padding: ui.weekPad, 
-    children: weekdays.map((wd, index) => {
-      const isWeekend = index === 5 || index === 6; 
-      return {
-        type: 'stack',
-        flex: 1,
-        alignItems: 'center',
-        children: [{
-          type: 'text',
-          text: wd,
-          font: { size: ui.weekSize, weight: 'medium' },
-          textColor: isWeekend ? textRed : textMain
-        }]
+      const cell = {
+        type: 'stack', alignItems: 'center', flex: 1,
+        padding: [3, 0, 3, 0],
+        children: [
+          {
+            type: 'text', text: String(dayNum),
+            font: { size: 12, weight: isToday ? 'bold' : 'regular' },
+            textColor: isToday ? { light: '#FFFFFF', dark: '#FFFFFF' } : (isWeekend ? S : T)
+          }
+        ]
       };
-    })
-  };
-
-  const firstDayIndex = (new Date(year, month, 1).getDay() + 6) % 7; 
-  const daysInMonth = new Date(year, month + 1, 0).getDate(); 
-  
-  const weekStacks = [];
-  let currentDayOffset = 1 - firstDayIndex; 
-
-  for (let r = 0; r < 5; r++) {
-    const dayCells = [];
-    for (let c = 0; c < 7; c++) {
-      const cellDateObj = new Date(year, month, currentDayOffset);
-      const displayDate = cellDateObj.getDate();
-      
-      let isToday = false;
-      let isCurrentMonth = false;
-      const isWeekend = c === 5 || c === 6;
-
-      if (cellDateObj.getMonth() === month) {
-        isCurrentMonth = true;
-        if (displayDate === date) isToday = true;
-      }
-
-      let primaryColor, secondaryColor;
       if (isToday) {
-        primaryColor = { light: '#C83C3C', dark: '#FF6B6B' };
-        secondaryColor = { light: '#C83C3C', dark: '#FF6B6B' }; 
-      } else if (isCurrentMonth) {
-        primaryColor = isWeekend ? textRed : textMain;
-        secondaryColor = isWeekend ? textRed : textSub;
-      } else {
-        primaryColor = textFade;
-        secondaryColor = textFade;
+        cell.backgroundColor = { light: '#D43028', dark: '#FF453A' };
+        cell.borderRadius = 18;
       }
+      return cell;
+    }
 
-      // --- 🌟 完美正圆 + 笔直对齐列 🌟 ---
-      let textContent = [
-        { type: 'spacer' }, // 顶部弹性占位（用于强制垂直居中）
-        {
-          type: 'text',
-          text: String(displayDate),
-          font: { size: ui.dateSize, weight: isToday ? 'bold' : 'regular' },
-          textColor: primaryColor,
-          minScale: 0.8
-        }
-      ];
-
-      if (ui.innerGap > 0) {
-        textContent.push({ type: 'spacer', length: ui.innerGap });
+    const rows = [];
+    let day = 1 - startWeekday;
+    while (day <= daysInMonth) {
+      const cells = [];
+      for (let i = 0; i < 7; i++) {
+        const dNum = day + i;
+        cells.push(monthCell(dNum > 0 && dNum <= daysInMonth ? dNum : 0, i));
       }
-
-      textContent.push({
-        type: 'text',
-        text: getRealLunarDay(cellDateObj),
-        font: { size: ui.lunarSize, weight: 'regular' },
-        textColor: secondaryColor,
-        minScale: 0.8
-      });
-      
-      textContent.push({ type: 'spacer' }); // 底部弹性占位（用于强制垂直居中）
-
-      // 无论是不是今天，都给它套上一个绝对等宽、等高的隐形正方形盒子！
-      // 胶囊配色照抄节假日：普通绿、今天红
-      let innerCell = {
-        type: 'stack',
-        direction: 'column',
-        alignItems: 'center',
-        width: ui.circleSize,  // 【关键修复】统一定义宽度，杜绝文字长短撑开导致列弯曲！
-        height: ui.circleSize, // 【关键修复】统一定义高度（中号 20px，绝不重叠）
-
-        borderRadius: 100, // 给个极大的数值，iOS 会完美切成正圆
-        backgroundColor: isToday
-          ? { light: '#FF3B3015', dark: '#FF453A25' }
-          : { light: '#34C75915', dark: '#30D15820' },
-        borderWidth: 1,
-        borderColor: isToday
-          ? { light: '#FF3B3050', dark: '#FF453A60' }
-          : { light: '#34C75950', dark: '#30D15860' },
-        children: textContent
-      };
-
-      // 外层用于按列均分布局
-      let cellObj = {
-        type: 'stack',
-        flex: 1,
-        direction: 'column',
-        alignItems: 'center',
-        children: [ innerCell ]
-      };
-
-      dayCells.push(cellObj);
-      currentDayOffset++;
+      rows.push({ type: 'stack', direction: 'row', children: cells });
+      day += 7;
     }
     
-    weekStacks.push({
-      type: 'stack',
-      direction: 'row',
-      gap: 0,
-      children: dayCells
+    const spacedRows = [];
+    rows.forEach((r, idx) => {
+      spacedRows.push(r);
+      if (idx < rows.length - 1) spacedRows.push({ type: 'spacer' });
     });
+
+    return {
+      type: 'widget',
+      padding: [10, 10, 10, 10],
+      children: [
+        {
+          type: 'stack', direction: 'row', alignItems: 'center',
+          children: [
+            { type: 'text', text: monthNames[todayM], font: { size: 16, weight: 'bold' }, textColor: RED },
+            { type: 'spacer' },
+            { type: 'text', text: lunarFullStr(now), font: { size: 12 }, textColor: S }
+          ]
+        },
+        { type: 'spacer', length: 4 },
+        smallWeekHeader,
+        { type: 'spacer' },
+        ...spacedRows,
+        { type: 'spacer' }
+      ]
+    };
   }
+
+  if (widgetFamily === 'systemLarge') {
+    return {
+      type: 'widget',
+      padding: [14, 12, 14, 12],
+      children: [
+        header,
+        { type: 'spacer', length: 8 },
+        weekHeader,
+        { type: 'spacer', length: 8 },
+        ...buildWeeks(4, false),
+        { type: 'spacer' }
+      ]
+    };
+  }
+
+  const weeks = buildWeeks(2, false);
 
   return {
     type: 'widget',
-    url: 'calshow://',
-    padding: 0, 
-
+    padding: [10, 12, 10, 12],
     children: [
-      headerSection, 
-      {
-        type: 'stack',
-        direction: 'column',
-        padding: ui.gridPad, 
-        gap: ui.rowGap, 
-        children: [
-          weekdayHeaderStack,
-          ...weekStacks
-        ]
-      }
+      header,
+      { type: 'spacer', length: 6 },
+      weekHeader,
+      { type: 'spacer', length: 6 },
+      ...weeks,
+      { type: 'spacer' }
     ]
   };
 }
