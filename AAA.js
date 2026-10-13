@@ -52,7 +52,11 @@ export default async function (ctx) {
       return renderAccessory(now, city, widgetFamily);
     }
     if (widgetFamily === 'systemSmall') {
-      return renderSmall(now, city);
+      const [daily3d, airSmall] = await Promise.all([
+        fetchDaily3d(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
+        fetchAirQuality(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
+      ]);
+      return renderSmall(now, city, daily3d, airSmall);
     }
     if (widgetFamily === 'systemLarge') {
       const [daily3d, hourly24h] = await Promise.all([
@@ -147,33 +151,58 @@ function renderMedium(now, air, city) {
   };
 }
 
-function renderSmall(now, city) {
+function renderSmall(now, city, daily3d, air) {
   const { icon, color: iconColor } = getWeatherStyle(now.icon);
+  const today = daily3d && daily3d[0];
+  const tomorrow = daily3d && daily3d[1];
+  const hiLo = today ? `${today.tempMax}°-${today.tempMin}°` : '';
+  const tomorrowText = tomorrow ? `明天 ${tomorrow.textDay} ${tomorrow.tempMax}°-${tomorrow.tempMin}°` : '';
+  // AQI 徽章颜色
+  const aqiNum = air && air.aqi !== '--' ? Number(air.aqi) : null;
+  const aqiBg = aqiNum == null ? { light: '#8E8E9320', dark: '#AEAEB230' }
+    : aqiNum <= 50 ? { light: '#34C75925', dark: '#30D15830' }
+    : aqiNum <= 100 ? { light: '#FFCC0025', dark: '#FFD60A30' }
+    : aqiNum <= 150 ? { light: '#FF950025', dark: '#FF9F0A30' }
+    : { light: '#FF3B3025', dark: '#FF453A30' };
+  const aqiFg = aqiNum == null ? { light: '#8E8E93', dark: '#AEAEB2' }
+    : aqiNum <= 50 ? { light: '#2E8B57', dark: '#4CD964' }
+    : aqiNum <= 100 ? { light: '#9A7B00', dark: '#FFD60A' }
+    : aqiNum <= 150 ? { light: '#C86A00', dark: '#FF9F0A' }
+    : { light: '#D43028', dark: '#FF6B62' };
+  const aqiLabel = aqiNum == null ? 'AQI --' : `AQI ${aqiNum}${air.category || ''}`;
   return {
     type: 'widget',
     padding: 14,
     children: [
-      capsuleTag(city, { light: '#FF3B30', dark: '#FF453A' }, { light: '#FF3B3015', dark: '#FF453A25' }),
-      { type: 'spacer' },
+      // 顶栏：城市+天气图标 | AQI徽章
       {
-        type: 'stack', direction: 'row', alignItems: 'center', gap: 8,
+        type: 'stack', direction: 'row', alignItems: 'center',
         children: [
+          capsuleTag(city, { light: '#FF3B30', dark: '#FF453A' }, { light: '#FF3B3015', dark: '#FF453A25' }),
+          { type: 'spacer', length: 6 },
+          { type: 'image', src: `sf-symbol:${icon}`, width: 22, height: 22, color: iconColor },
+          { type: 'spacer' },
           {
-            type: 'image',
-            src: `sf-symbol:${icon}`,
-            width: 44,
-            height: 44,
-            color: iconColor
-          },
-          {
-            type: 'text',
-            text: `${now.temp}°`,
-            font: { size: 40, weight: 'bold' },
-            textColor: { light: '#1C1C1E', dark: '#F2F2F7' }
+            type: 'stack', backgroundColor: aqiBg, cornerRadius: 10, padding: [4, 8, 4, 8],
+            children: [
+              { type: 'text', text: aqiLabel, font: { size: 11, weight: 'semibold' }, textColor: aqiFg }
+            ]
           }
         ]
       },
-      { type: 'spacer', length: 4 },
+      { type: 'spacer' },
+      // 大温度
+      {
+        type: 'text',
+        text: `${now.temp}°`,
+        font: { size: 44, weight: 'bold' },
+        textColor: { light: '#1C1C1E', dark: '#F2F2F7' }
+      },
+      hiLo ? {
+        type: 'text', text: `今日 ${hiLo}`,
+        font: { size: 13 }, textColor: { light: '#8E8E93', dark: '#98989F' }
+      } : { type: 'spacer', length: 0 },
+      { type: 'spacer', length: 6 },
       {
         type: 'text',
         text: `${now.text} · 体感${now.feelsLike}°`,
@@ -187,6 +216,13 @@ function renderSmall(now, city) {
         font: { size: 12 },
         textColor: { light: '#8E8E93', dark: '#98989F' }
       },
+      tomorrowText ? { type: 'spacer', length: 2 } : { type: 'spacer', length: 0 },
+      tomorrowText ? {
+        type: 'text',
+        text: tomorrowText,
+        font: { size: 12 },
+        textColor: { light: '#8E8E93', dark: '#98989F' }
+      } : { type: 'spacer', length: 0 },
       { type: 'spacer' }
     ]
   };
