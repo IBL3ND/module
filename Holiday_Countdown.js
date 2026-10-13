@@ -284,11 +284,11 @@ export default async function(ctx) {
       for (let i = 0; i < Math.min(items.length, limit); i += cols) {
         const chunk = items.slice(i, i + cols);
         rows.push({
-          type: 'stack', direction: 'row', alignItems: 'center', justifyContent: 'space-between', gap: CONFIG.itemGap,
+          type: 'stack', direction: 'row', alignItems: 'center', gap: CONFIG.itemGap,
           children: chunk.map(c => {
             const dayText = c.days === 0 ? '今天' : `${c.days}天`;
             return {
-              type: 'stack', direction: 'row', alignItems: 'center', justifyContent: 'center', flex: 1,
+              type: 'stack', direction: 'row', alignItems: 'center', flex: 1,
               padding: [5, 8, 5, 8], backgroundColor: getCapsuleColor(c.days).bg, borderRadius: 10,
               borderWidth: 1, borderColor: getCapsuleColor(c.days).border,
               children: [{
@@ -308,23 +308,53 @@ export default async function(ctx) {
     };
 
     if (widgetFamily === 'accessoryCircular') {
-      const next = getCountdowns()[0];
-      const c = getCapsuleColor(next?.days ?? 999);
-      const displayText = next?.days === 0 ? '今' : (next ? String(next.days) : '--');
-      return { type: 'widget', padding: 6, children: [{ type: 'stack', direction: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, children: [
-        { type: 'image', src: 'sf-symbol:calendar.circle.fill', width: 22, height: 22, color: c.text },
-        { type: 'text', text: displayText, font: { size: 16, weight: 'bold' }, textColor: c.text, textAlign: 'center' }
-      ]}] };
+      const items = getCountdowns().slice(0, 2);
+      return {
+        type: 'widget', padding: 4,
+        children: [{
+          type: 'stack', direction: 'column', alignItems: 'center', gap: 1,
+          children: items.map((next, idx) => {
+            const c = getCapsuleColor(next?.days ?? 999);
+            const displayText = next?.days === 0 ? '今' : (next ? String(next.days) : '--');
+            return {
+              type: 'stack', direction: 'row', alignItems: 'center', gap: 2,
+              children: [
+                { type: 'text', text: (next?.name || '').slice(0, 2), font: { size: 8, weight: 'medium' }, textColor: c.text, maxLines: 1 },
+                { type: 'text', text: displayText, font: { size: 10, weight: 'bold' }, textColor: c.text, maxLines: 1 }
+              ]
+            };
+          })
+        }]
+      };
     }
 
     if (widgetFamily === 'accessoryRectangular' || widgetFamily === 'accessoryInline') {
-      const next = getCountdowns()[0];
-      const c = getCapsuleColor(next?.days ?? 999);
-      const displayText = next ? (next.days === 0 ? `${next.name} 今天` : `${next.name} ${next.days}天`) : '节日倒计时';
-      return { type: 'widget', padding: 8, children: [{ type: 'stack', direction: 'row', alignItems: 'center', gap: 6, children: [
-        { type: 'image', src: 'sf-symbol:calendar', width: 18, height: 18, color: c.text },
-        { type: 'text', text: displayText, font: { size: 12, weight: 'medium' }, textColor: c.text, flex: 1, maxLines: 1, textAlign: 'left' }
-      ]}] };
+      const items = getCountdowns().slice(0, 9);
+      const miniPill = (c) => {
+        const cc = getCapsuleColor(c.days);
+        return {
+          type: 'stack', direction: 'row', alignItems: 'center', flex: 1,
+          padding: [1, 4, 1, 4], backgroundColor: cc.bg, borderRadius: 6,
+          children: [{
+            type: 'text',
+            text: `${c.name}${c.days === 0 ? "今" : c.days + "天"}`,
+            font: { size: 9, weight: "medium" },
+            textColor: cc.text, textAlign: "center",
+            maxLines: 1, minScale: 0.5
+          }]
+        };
+      };
+      const rows = [];
+      for (let i = 0; i < items.length; i += 3) {
+        rows.push({
+          type: 'stack', direction: 'row', flex: 1, gap: 3,
+          children: items.slice(i, i + 3).map(miniPill)
+        });
+      }
+      return {
+        type: 'widget', padding: 4, gap: 3,
+        children: rows
+      };
     }
 
     const genWidget = (size) => {
@@ -340,7 +370,46 @@ export default async function(ctx) {
       return { type: 'widget', padding: CONFIG.padding, children: renderGrid(filtered, size.cols, size.font) };
     };
 
-    if (widgetFamily === 'systemSmall') return genWidget({ cols: 4, font: CONFIG.fontSize.small });
+    if (widgetFamily === 'systemSmall') {
+      const items = getCountdowns().slice(0, 6);
+      const pillCard = (c) => {
+        const cc = getCapsuleColor(c.days);
+        return {
+          type: 'stack', direction: 'column', alignItems: 'center', flex: 1,
+          padding: [4, 4, 4, 4], backgroundColor: cc.bg, borderRadius: 16,
+          children: [
+            { type: "spacer" },
+            {
+              type: 'text', text: c.name,
+              font: { size: "headline", weight: "bold" },
+              textColor: cc.text, textAlign: "center",
+              maxLines: 1, minScale: 0.6
+            },
+            {
+              type: 'text', text: c.days === 0 ? "今天" : `还有${c.days}天`,
+              font: { size: "subheadline", weight: "medium" },
+              textColor: { light: cc.text.light + "99", dark: cc.text.dark + "99" },
+              textAlign: "center",
+              maxLines: 1, minScale: 0.6
+            },
+            { type: "spacer" }
+          ]
+        };
+      };
+      const rows = [];
+      for (let i = 0; i < items.length; i += 2) {
+        const pair = items.slice(i, i + 2);
+        rows.push({
+          type: 'stack', direction: 'row', flex: 1, gap: 8,
+          children: pair.map(pillCard)
+        });
+      }
+      return {
+        type: 'widget', padding: 10, gap: 8,
+        refreshAfter: new Date(Date.now() + 60*60*1000).toISOString(),
+        children: rows
+      };
+    }
     if (widgetFamily === 'systemMedium') return genWidget({ cols: 5, font: CONFIG.fontSize.medium });
     return genWidget({ cols: 6, font: CONFIG.fontSize.large });
 
