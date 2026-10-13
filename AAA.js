@@ -27,8 +27,6 @@ export default async function (ctx) {
   const env = safeCtx.env || {};
   const widgetFamily = safeCtx.widgetFamily || 'systemMedium';
 
-  // 本地直测：key/host 写死在文件里，复制到 Egern 脚本编辑器直接运行
-  // ⚠️ 推公开仓库前记得删掉！
   const apiKey     = (env.KEY || '').trim();
   const apiHostRaw = (env.API_HOST || '').trim();
   const location   = (env.LOCATION || '').trim();
@@ -157,7 +155,6 @@ function renderSmall(now, city, daily3d, air) {
   const S = { light: '#8E8E93', dark: '#AEAEB2' };
   const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-  // 顶栏：城市名 + 天气图标右对齐
   const header = {
     type: 'stack', direction: 'row', alignItems: 'center',
     children: [
@@ -167,7 +164,6 @@ function renderSmall(now, city, daily3d, air) {
     ]
   };
 
-  // 今日行：大温度 + 高低温
   const today = daily3d && daily3d[0];
   const todayRow = {
     type: 'stack', direction: 'row', alignItems: 'center',
@@ -180,7 +176,6 @@ function renderSmall(now, city, daily3d, air) {
     ]
   };
 
-  // 预报行：明天、后天
   const rows = [];
   const labels = ['明天'];
   for (let i = 1; i < 3 && daily3d && daily3d[i]; i++) {
@@ -440,7 +435,6 @@ async function fetchWeatherNow(ctx, key, lon, lat, host) {
   };
 }
 
-// 3 天预报：拿今明后三天的高低温 + 白天图标
 async function fetchDaily3d(ctx, key, lon, lat, host) {
   const url = `${host}/v7/weather/3d?location=${lon},${lat}&key=${key}&lang=zh`;
   const resp = await ctx.http.get(url, { timeout: 8000 });
@@ -455,7 +449,6 @@ async function fetchDaily3d(ctx, key, lon, lat, host) {
   }));
 }
 
-// 24 小时预报：拿逐小时温度画曲线
 async function fetchHourly24h(ctx, key, lon, lat, host) {
   const url = `${host}/v7/weather/24h?location=${lon},${lat}&key=${key}&lang=zh`;
   const resp = await ctx.http.get(url, { timeout: 8000 });
@@ -467,7 +460,6 @@ async function fetchHourly24h(ctx, key, lon, lat, host) {
   }));
 }
 
-// 接口报错诊断：带上 HTTP 状态码和返回体摘要，方便定位是 host/key/套餐问题
 function describeApiError(tag, resp, data) {
   const status = resp ? resp.status : 'no-response';
   let snippet = '';
@@ -494,11 +486,6 @@ async function fetchAirQuality(ctx, key, lon, lat, host) {
   return { aqi: '--', category: '--' };
 }
 
-
-/* ===================== 节假日/农历数据（自 Holiday_Countdown 移植） ===================== */
-/**
- * 📅 节日倒计时小组件
- */
 const HOLIDAYS = {
   '01-01': { name: '元旦', type: 'holiday' },
   '02-14': { name: '情人节', type: 'holiday' },
@@ -527,7 +514,6 @@ const FLOATING_HOLIDAYS = {
   'father': { name: '父亲节', calc: (y) => getNthWeekday(y, 6, 0, 3) },
 };
 
-/* ===================== 农历核心算法(修正版) ===================== */
 const LUNAR_INFO = [
   0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
   0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255, 0x0b540, 0x0d6a0, 0x0ada2, 0x095b0, 0x14977,
@@ -629,7 +615,6 @@ const Lunar = {
   solarToLunar
 };
 
-/* ===================== 24节气(修正版) ===================== */
 const SOLAR_TERM_NAMES = [
   '小寒', '大寒', '立春', '雨水', '惊蛰', '春分',
   '清明', '谷雨', '立夏', '小满', '芒种', '夏至',
@@ -651,7 +636,6 @@ function getSolarTermDate(year, termIndex) {
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
 }
 
-/* ===================== 通用日期工具 ===================== */
 function getNthWeekday(year, month, weekday, n) {
   const first = new Date(year, month - 1, 1);
   const diff = (weekday - first.getDay() + 7) % 7;
@@ -664,7 +648,6 @@ function daysDiff(from, to) {
   return Math.floor((t - f) / 86400000);
 }
 
-// 在给定公历年份 ~ 次年3月10日范围内，找到对应"农历 targetLunarMonth月targetLunarDay日"(非闰月)的公历日期
 function findSolarDateByLunar(targetLunarMonth, targetLunarDay, year) {
   const start = new Date(year, 0, 1);
   const end = new Date(year + 1, 2, 10);
@@ -677,7 +660,6 @@ function findSolarDateByLunar(targetLunarMonth, targetLunarDay, year) {
   return null;
 }
 
-/* ===================== 汇总所有倒计时 ===================== */
 function getCountdowns(customToday) {
   const now = customToday || new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -731,9 +713,6 @@ function getCountdowns(customToday) {
   return results.filter(r => !seen.has(r.name) && seen.add(r.name));
 }
 
-/* ===================== SVG 构建器 ===================== */
-
-// 模拟时钟 SVG（200x200）
 function buildClockSVG(hour, minute, second) {
   const cx = 100, cy = 100, r = 92;
   let ticks = '';
@@ -767,8 +746,6 @@ function buildClockSVG(hour, minute, second) {
     `</svg>`;
   return 'data:image/svg+xml,' + svg;
 }
-
-// 逐小时温度曲线 SVG（360x120）
 function buildTempCurveSVG(hourly) {
   const W = 360, H = 120, padL = 8, padR = 8, padT = 22, padB = 16;
   const pts = hourly.slice(0, 9);
@@ -801,8 +778,6 @@ function buildTempCurveSVG(hourly) {
   return 'data:image/svg+xml,' + svg;
 }
 
-/* ===================== 大尺寸多合一 ===================== */
-
 function getGreeting(hour) {
   if (hour >= 5 && hour < 9) return '早晨好';
   if (hour >= 9 && hour < 12) return '上午好';
@@ -811,8 +786,6 @@ function getGreeting(hour) {
   if (hour >= 18 && hour < 23) return '晚上好';
   return '夜深了';
 }
-
-/* ===================== 大尺寸（简化测试版） ===================== */
 
 function renderLarge(now, city, daily3d, hourly24h, userName) {
   const T = { light: '#1C1C1E', dark: '#F2F2F7' };
@@ -878,7 +851,6 @@ function renderLarge(now, city, daily3d, hourly24h, userName) {
     padding: [12, 12, 4, 12],
     gap: 8,
     children: [
-      // 顶栏
       {
         type: 'stack', direction: 'row', alignItems: 'center',
         children: [
@@ -916,9 +888,7 @@ function renderLarge(now, city, daily3d, hourly24h, userName) {
           },
         ]
       },
-      // 星期条（周几+日期）
       { type: 'stack', direction: 'row', gap: 4, children: weekCells },
-      // 天气
       {
         type: 'stack', direction: 'row', alignItems: 'center', gap: 10,
         children: [
@@ -941,11 +911,8 @@ function renderLarge(now, city, daily3d, hourly24h, userName) {
           },
         ]
       },
-      // 明后天（中间）
       { type: 'stack', direction: 'row', gap: 16, children: [ dayCard('明天', tomorrow), dayCard('后天', dayAfter) ] },
-      // 弹性空隙：把曲线推到底部
       { type: 'spacer' },
-      // 曲线（最下面，宽度自适应）
       ...(curveSrc ? [{
         type: 'image', src: curveSrc, height: 112
       }] : []),
