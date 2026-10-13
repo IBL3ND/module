@@ -54,7 +54,7 @@ scriptings:
       CT_TITLE: '{{{ctTitle}}}'
 - http_request:
     name: 中国电信自动捕获
-    match: '^https://e\.dli[{{{ctCapture}}}]e\.cn/'
+    match: '^ht[{{{ctCapture}}}]ps://e\.dlife\.cn/'
     script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CT_Widget.JS
 - schedule:
     name: 中国电信保活
