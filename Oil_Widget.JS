@@ -218,7 +218,6 @@ export default async function (ctx) {
       type:"stack",
       direction:"column",
       alignItems:"center",
-      justifyContent:"center",
       flex:1,
       padding:[8,4,8,4],
       backgroundColor: COLORS.card,
@@ -230,7 +229,6 @@ export default async function (ctx) {
           type:"stack",
           direction:"row",
           alignItems:"center",
-          justifyContent:"center",
           width:44,
           height:22,
           backgroundColor: {
@@ -257,7 +255,7 @@ export default async function (ctx) {
           font:{size:"title3",weight:"semibold"},
           textColor: COLORS.primary,
           textAlign:"center",
-          lineLimit:1,
+          maxLines:1,
           minScale:0.7
         }
       ]
@@ -286,7 +284,7 @@ export default async function (ctx) {
           type:"text",
           text: fetchError ? `油价 ${errorMsg}` : "暂无油价数据",
           font:{size:"caption1",weight:"medium"},
-          lineLimit:1,
+          maxLines:1,
           minScale:0.5
         }]
       };
@@ -301,7 +299,7 @@ export default async function (ctx) {
           type:"text",
           text:`${place} ${rows.slice(0, 2).map(r => `${short(r.label)} ${r.price.toFixed(2)}`).join(" · ")}`,
           font:{size:"caption1",weight:"medium"},
-          lineLimit:1,
+          maxLines:1,
           minScale:0.5
         }]
       };
@@ -316,9 +314,9 @@ export default async function (ctx) {
         refreshAfter:refreshTime,
         children:[
           {type:"spacer"},
-          {type:"text",text:short(r0.label),font:{size:"caption2",weight:"medium"},textColor:SUB,textAlign:"center",lineLimit:1},
-          {type:"text",text:r0.price.toFixed(2),font:{size:"headline",weight:"bold"},textAlign:"center",lineLimit:1,minScale:0.5},
-          {type:"text",text:"元/升",font:{size:"caption2"},textColor:SUB,textAlign:"center",lineLimit:1},
+          {type:"text",text:short(r0.label),font:{size:"caption2",weight:"medium"},textColor:SUB,textAlign:"center",maxLines:1},
+          {type:"text",text:r0.price.toFixed(2),font:{size:"headline",weight:"bold"},textAlign:"center",maxLines:1,minScale:0.5},
+          {type:"text",text:"元/升",font:{size:"caption2"},textColor:SUB,textAlign:"center",maxLines:1},
           {type:"spacer"}
         ]
       };
@@ -332,9 +330,9 @@ export default async function (ctx) {
       flex:1,
       gap:4,
       children:[
-        {type:"text",text:short(r.label),font:{size:"caption2",weight:"medium"},textColor:SUB,lineLimit:1},
+        {type:"text",text:short(r.label),font:{size:"caption2",weight:"medium"},textColor:SUB,maxLines:1},
         {type:"spacer"},
-        {type:"text",text:r.price.toFixed(2),font:{size:"caption1",weight:"bold"},lineLimit:1,minScale:0.6}
+        {type:"text",text:r.price.toFixed(2),font:{size:"caption1",weight:"bold"},maxLines:1,minScale:0.6}
       ]
     });
 
@@ -354,9 +352,9 @@ export default async function (ctx) {
           gap:4,
           children:[
             {type:"image",src:"sf-symbol:fuelpump.fill",width:11,height:11},
-            {type:"text",text:place,font:{size:"caption2",weight:"semibold"},lineLimit:1,minScale:0.7},
+            {type:"text",text:place,font:{size:"caption2",weight:"semibold"},maxLines:1,minScale:0.7},
             {type:"spacer"},
-            ...(lockDate ? [{type:"text",text:lockDate,font:{size:"caption2"},textColor:SUB,lineLimit:1}] : [])
+            ...(lockDate ? [{type:"text",text:lockDate,font:{size:"caption2"},textColor:SUB,maxLines:1}] : [])
           ]
         },
         ...lockPairs.map(pair => ({
@@ -376,10 +374,9 @@ export default async function (ctx) {
       type:"stack",
       direction:"column",
       alignItems:"center",
-      justifyContent:"center",
       flex:1,
-      gap:1,
-      padding:[3,2,3,2],
+      gap:0,
+      padding:[2,4,2,4],
       backgroundColor: COLORS.card,
       borderRadius:10,
       borderWidth:0.5,
@@ -389,19 +386,12 @@ export default async function (ctx) {
           type:"stack",
           direction:"row",
           alignItems:"center",
-          justifyContent:"center",
-          width:44,
-          height:22,
+          padding:[1,8,1,8],
           backgroundColor: {
             light: row.color.light + "28",
             dark: row.color.dark + "28"
           },
           borderRadius:6,
-          borderWidth:0.5,
-          borderColor: {
-            light: row.color.light + "55",
-            dark: row.color.dark + "55"
-          },
           children:[{
             type:"text",
             text:row.label,
@@ -413,29 +403,21 @@ export default async function (ctx) {
         {
           type:"text",
           text:row.price.toFixed(2),
-          font:{size:"callout",weight:"semibold"},
+          font:{size:"headline",weight:"bold"},
           textColor: COLORS.primary,
           textAlign:"center",
-          lineLimit:1,
+          maxLines:1,
           minScale:0.7
         }
       ]
     });
     const pairs = [];
     for (let i = 0; i < rows.length; i += 2) pairs.push(rows.slice(i, i + 2));
-    let dateText = "";
-    const dm = trendInfo.match(/(\d{1,2})月(\d{1,2})日/);
-    if (SHOW_TREND && dm) {
-      dateText = `${dm[1].padStart(2,"0")}-${dm[2].padStart(2,"0")}`;
-    }
-    const infoText = fetchError ? errorMsg : "";
-    const infoColor = COLORS.p98;
 
     return {
       type:"widget",
-      padding:[8,8,8,8],
-      gap:4,
-      
+      padding:[10,10,10,10],
+      gap:2,
       refreshAfter:refreshTime,
       children:[
         {
@@ -444,24 +426,27 @@ export default async function (ctx) {
           alignItems:"center",
           gap:4,
           children:[
-            {type:"image",src:"sf-symbol:fuelpump.fill",width:12,height:12,color:COLORS.p92},
-            {type:"text",text:regionName || "油价",font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary,lineLimit:1,minScale:0.7},
+            {type:"image",src:"sf-symbol:fuelpump.fill",width:16,height:16,color:COLORS.p92},
+            {type:"text",text:`${regionName || ""}油价`,font:{size:"headline",weight:"bold"},textColor:COLORS.primary,maxLines:1,minScale:0.7},
             {type:"spacer"},
-            ...(dateText ? [{
-              type:"text",
-              text:dateText,
-              font:{size:"caption2"},
-              textColor:COLORS.secondary,
-              lineLimit:1
-            }] : [])
+            {type:"image",src:"sf-symbol:arrow.clockwise",width:12,height:12,color:COLORS.tertiary},
+            {type:"text",text:timeStr,font:{size:"callout"},textColor:COLORS.tertiary,maxLines:1}
           ]
         },
-        ...(infoText ? [{
+        ...(SHOW_TREND && trendInfo ? [{
           type:"text",
-          text:infoText,
+          text:trendInfo.replace(/\s+/g, ""),
+          font:{size:"caption1"},
+          textColor:COLORS.secondary,
+          maxLines:1,
+          minScale:0.5
+        }] : []),
+        ...(fetchError ? [{
+          type:"text",
+          text:errorMsg,
           font:{size:"caption2"},
-          textColor:infoColor,
-          lineLimit:1,
+          textColor:COLORS.p98,
+          maxLines:1,
           minScale:0.6
         }] : []),
         rows.length > 0 ? {
@@ -472,30 +457,18 @@ export default async function (ctx) {
           children: pairs.map(pair => ({
             type:"stack",
             direction:"row",
-            flex:1,
-            gap:4,
+            gap:6,
             children: pair.map(smallCard)
           }))
         } : {
           type:"stack",
           direction:"column",
           alignItems:"center",
-          justifyContent:"center",
           flex:1,
           gap:4,
           children:[
             {type:"image",src:"sf-symbol:exclamationmark.triangle.fill",width:20,height:20,color:COLORS.p98},
             {type:"text",text:fetchError?"数据获取失败":"暂无数据",font:{size:"caption2"},textColor:COLORS.secondary}
-          ]
-        },
-        {
-          type:"stack",
-          direction:"row",
-          alignItems:"center",
-          children:[
-            {type:"text",text:`${timeStr} 更新`,font:{size:"caption2"},textColor:COLORS.tertiary},
-            {type:"spacer"},
-            {type:"text",text:"元/升",font:{size:"caption2"},textColor:COLORS.tertiary}
           ]
         }
       ]
@@ -525,7 +498,7 @@ export default async function (ctx) {
             font:{size:"caption2"},
             textColor: COLORS.trend,
             textAlign:"right",
-            lineLimit:1,
+            maxLines:1,
             minScale: 0.8
           }] : []),
           ...(fetchError ? [{
@@ -537,7 +510,6 @@ export default async function (ctx) {
         type:"stack",
         direction:"row",
         alignItems:"center",
-        justifyContent:"space-between",
         gap:6,
         padding:[6,0,6,0],
         children: rows.map(priceCard)
@@ -545,7 +517,6 @@ export default async function (ctx) {
         type:"stack",
         direction:"column",
         alignItems:"center",
-        justifyContent:"center",
         padding:[20,10,20,10],
         children:[
           {type:"image",src:"sf-symbol:exclamationmark.triangle.fill",width:24,height:24,color:COLORS.p98},
