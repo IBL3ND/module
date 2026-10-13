@@ -151,30 +151,43 @@ function renderSmall(now, city) {
   const { icon, color: iconColor } = getWeatherStyle(now.icon);
   return {
     type: 'widget',
-    
     padding: 14,
-    gap: 8,
     children: [
       capsuleTag(city, { light: '#FF3B30', dark: '#FF453A' }, { light: '#FF3B3015', dark: '#FF453A25' }),
+      { type: 'spacer' },
       {
-        type: 'image',
-        src: `sf-symbol:${icon}`,
-        width: 40,
-        height: 40,
-        color: iconColor
+        type: 'stack', direction: 'row', alignItems: 'center', gap: 8,
+        children: [
+          {
+            type: 'image',
+            src: `sf-symbol:${icon}`,
+            width: 44,
+            height: 44,
+            color: iconColor
+          },
+          {
+            type: 'text',
+            text: `${now.temp}°`,
+            font: { size: 40, weight: 'bold' },
+            textColor: { light: '#1C1C1E', dark: '#F2F2F7' }
+          }
+        ]
       },
+      { type: 'spacer', length: 4 },
       {
         type: 'text',
-        text: `${now.temp}°`,
-        font: { size: 36, weight: 'bold' },
-        textColor: { light: '#1C1C1E', dark: '#F2F2F7' }
-      },
-      {
-        type: 'text',
-        text: now.text,
+        text: `${now.text} · 体感${now.feelsLike}°`,
         font: { size: 13 },
         textColor: { light: '#6E6E73', dark: '#AEAEB2' }
-      }
+      },
+      { type: 'spacer', length: 2 },
+      {
+        type: 'text',
+        text: `湿度${now.humidity}% · ${now.windDir}${now.windScale}级`,
+        font: { size: 12 },
+        textColor: { light: '#8E8E93', dark: '#98989F' }
+      },
+      { type: 'spacer' }
     ]
   };
 }
