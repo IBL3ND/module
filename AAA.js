@@ -153,78 +153,59 @@ function renderMedium(now, air, city) {
 
 function renderSmall(now, city, daily3d, air) {
   const { icon, color: iconColor } = getWeatherStyle(now.icon);
+  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
+  const S = { light: '#8E8E93', dark: '#AEAEB2' };
+  const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+  // 顶栏：城市名 + 天气图标右对齐
+  const header = {
+    type: 'stack', direction: 'row', alignItems: 'center',
+    children: [
+      { type: 'text', text: city, font: { size: 17, weight: 'semibold' }, textColor: T, maxLines: 1 },
+      { type: 'spacer' },
+      { type: 'image', src: `sf-symbol:${icon}`, width: 28, height: 28, color: iconColor }
+    ]
+  };
+
+  // 今日行：大温度 + 高低温
   const today = daily3d && daily3d[0];
-  const tomorrow = daily3d && daily3d[1];
-  const hiLo = today ? `${today.tempMax}°-${today.tempMin}°` : '';
-  const tomorrowText = tomorrow ? `明天 ${tomorrow.textDay} ${tomorrow.tempMax}°-${tomorrow.tempMin}°` : '';
-  // AQI 徽章颜色
-  const aqiNum = air && air.aqi !== '--' ? Number(air.aqi) : null;
-  const aqiBg = aqiNum == null ? { light: '#8E8E9320', dark: '#AEAEB230' }
-    : aqiNum <= 50 ? { light: '#34C75925', dark: '#30D15830' }
-    : aqiNum <= 100 ? { light: '#FFCC0025', dark: '#FFD60A30' }
-    : aqiNum <= 150 ? { light: '#FF950025', dark: '#FF9F0A30' }
-    : { light: '#FF3B3025', dark: '#FF453A30' };
-  const aqiFg = aqiNum == null ? { light: '#8E8E93', dark: '#AEAEB2' }
-    : aqiNum <= 50 ? { light: '#2E8B57', dark: '#4CD964' }
-    : aqiNum <= 100 ? { light: '#9A7B00', dark: '#FFD60A' }
-    : aqiNum <= 150 ? { light: '#C86A00', dark: '#FF9F0A' }
-    : { light: '#D43028', dark: '#FF6B62' };
-  const aqiLabel = aqiNum == null ? 'AQI --' : `AQI ${aqiNum}${air.category || ''}`;
+  const todayRow = {
+    type: 'stack', direction: 'row', alignItems: 'center',
+    children: [
+      { type: 'text', text: `${now.temp}°`, font: { size: 38, weight: 'bold' }, textColor: T },
+      { type: 'spacer' },
+      today ? { type: 'text', text: `${today.tempMin}°`, font: { size: 20 }, textColor: S } : { type: 'spacer', length: 0 },
+      today ? { type: 'spacer', length: 12 } : { type: 'spacer', length: 0 },
+      today ? { type: 'text', text: `${today.tempMax}°`, font: { size: 20, weight: 'semibold' }, textColor: T } : { type: 'spacer', length: 0 }
+    ]
+  };
+
+  // 预报行：明天、后天
+  const rows = [];
+  const labels = ['明天'];
+  for (let i = 1; i < 3 && daily3d && daily3d[i]; i++) {
+    const d = daily3d[i];
+    const dt = new Date(d.date + 'T12:00:00');
+    const label = labels[i - 1] || weekNames[dt.getDay()];
+    const { icon: dic, color: dcolor } = getWeatherStyle(d.iconDay);
+    rows.push({ type: 'spacer', length: 6 });
+    rows.push({
+      type: 'stack', direction: 'row', alignItems: 'center',
+      children: [
+        { type: 'text', text: label, font: { size: 16 }, textColor: T, width: 44 },
+        { type: 'image', src: `sf-symbol:${dic}`, width: 22, height: 22, color: dcolor },
+        { type: 'spacer' },
+        { type: 'text', text: `${d.tempMin}°`, font: { size: 17 }, textColor: S },
+        { type: 'spacer', length: 12 },
+        { type: 'text', text: `${d.tempMax}°`, font: { size: 17, weight: 'semibold' }, textColor: T }
+      ]
+    });
+  }
+
   return {
     type: 'widget',
     padding: 14,
-    children: [
-      // 顶栏：城市+天气图标 | AQI徽章
-      {
-        type: 'stack', direction: 'row', alignItems: 'center',
-        children: [
-          capsuleTag(city, { light: '#FF3B30', dark: '#FF453A' }, { light: '#FF3B3015', dark: '#FF453A25' }),
-          { type: 'spacer', length: 6 },
-          { type: 'image', src: `sf-symbol:${icon}`, width: 22, height: 22, color: iconColor },
-          { type: 'spacer' },
-          {
-            type: 'stack', backgroundColor: aqiBg, cornerRadius: 10, padding: [4, 8, 4, 8],
-            children: [
-              { type: 'text', text: aqiLabel, font: { size: 11, weight: 'semibold' }, textColor: aqiFg }
-            ]
-          }
-        ]
-      },
-      { type: 'spacer' },
-      // 大温度
-      {
-        type: 'text',
-        text: `${now.temp}°`,
-        font: { size: 44, weight: 'bold' },
-        textColor: { light: '#1C1C1E', dark: '#F2F2F7' }
-      },
-      hiLo ? {
-        type: 'text', text: `今日 ${hiLo}`,
-        font: { size: 13 }, textColor: { light: '#8E8E93', dark: '#98989F' }
-      } : { type: 'spacer', length: 0 },
-      { type: 'spacer', length: 6 },
-      {
-        type: 'text',
-        text: `${now.text} · 体感${now.feelsLike}°`,
-        font: { size: 13 },
-        textColor: { light: '#6E6E73', dark: '#AEAEB2' }
-      },
-      { type: 'spacer', length: 2 },
-      {
-        type: 'text',
-        text: `湿度${now.humidity}% · ${now.windDir}${now.windScale}级`,
-        font: { size: 12 },
-        textColor: { light: '#8E8E93', dark: '#98989F' }
-      },
-      tomorrowText ? { type: 'spacer', length: 2 } : { type: 'spacer', length: 0 },
-      tomorrowText ? {
-        type: 'text',
-        text: tomorrowText,
-        font: { size: 12 },
-        textColor: { light: '#8E8E93', dark: '#98989F' }
-      } : { type: 'spacer', length: 0 },
-      { type: 'spacer' }
-    ]
+    children: [header, { type: 'spacer', length: 4 }, todayRow, ...rows, { type: 'spacer' }]
   };
 }
 
