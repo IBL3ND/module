@@ -1,6 +1,6 @@
 // 双周日历小组件
 // 顶栏：月份 | 农历 | 年份 | 周数
-// 两周日期，农历/节日/节气显示，今天蓝色高亮
+// 两周日期，农历/节日/节气显示
 
 export default async function(ctx) {
   const lunarInfo = [
