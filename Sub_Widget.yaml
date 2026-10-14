@@ -1,0 +1,73 @@
+name: 机场订阅
+description: 机场订阅流量监控小组件 支持最多 5 个机场
+author: iBL3ND
+icon: https://iili.io/nXokTep.png
+env_schema:
+  NAME1:
+    name: 机场1名称
+    description: 显示在卡片上的机场名称
+    default_value: ''
+  URL1:
+    name: 机场1订阅地址
+    description: 从机场后台复制的完整订阅链接（含 token）
+    default_value: ''
+  RESET1:
+    name: 机场1重置日（可选）
+    description: 每月流量重置日，1-31 的数字，留空不显示
+    default_value: ''
+  NAME2:
+    name: 机场2名称
+    description: 显示在卡片上的机场名称
+    default_value: ''
+  URL2:
+    name: 机场2订阅地址
+    description: 从机场后台复制的完整订阅链接（含 token）
+    default_value: ''
+  RESET2:
+    name: 机场2重置日（可选）
+    description: 每月流量重置日，1-31 的数字，留空不显示
+    default_value: ''
+  NAME3:
+    name: 机场3名称
+    description: 显示在卡片上的机场名称
+    default_value: ''
+  URL3:
+    name: 机场3订阅地址
+    description: 从机场后台复制的完整订阅链接（含 token）
+    default_value: ''
+  RESET3:
+    name: 机场3重置日（可选）
+    description: 每月流量重置日，1-31 的数字，留空不显示
+    default_value: ''
+  NAME4:
+    name: 机场4名称
+    description: 显示在卡片上的机场名称
+    default_value: ''
+  URL4:
+    name: 机场4订阅地址
+    description: 从机场后台复制的完整订阅链接（含 token）
+    default_value: ''
+  RESET4:
+    name: 机场4重置日（可选）
+    description: 每月流量重置日，1-31 的数字，留空不显示
+    default_value: ''
+  NAME5:
+    name: 机场5名称
+    description: 显示在卡片上的机场名称
+    default_value: ''
+  URL5:
+    name: 机场5订阅地址
+    description: 从机场后台复制的完整订阅链接（含 token）
+    default_value: ''
+  RESET5:
+    name: 机场5重置日（可选）
+    description: 每月流量重置日，1-31 的数字，留空不显示
+    default_value: ''
+scriptings:
+- generic:
+    name: sub-widget
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Sub_Widget.JS
+    timeout: 60
+widgets:
+- name: sub-widget
+  script_name: sub-widget
