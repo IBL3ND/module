@@ -1,902 +1,1064 @@
 /**
- * ⛽ 全国实时油价小组件
- * 数据源：http://m.qiyoujiage.com/
- * 脚本作者：Egern 群友 tg://user?id=5122789128
- * 由 iBL3ND 二次修改
- * 
- * 🔧 功能特性：
- * - 支持全国所有省份和城市
- * - 标题自动显示当前填写的地区
- * - 实时显示 92/95/98 号汽油和柴油价格
- * - 深色模式自动适配
- * - 全 iPhone 机型适配
- * - 支持锁屏小组件（单行 / 圆形 / 矩形）
- * 
- * 📚 使用教程
- * ═══════════════════════════════════════════════════
+ * 🌤️ 和风天气 - Egern 小组件
  *
- * 1️⃣ 环境变量配置
- * ─────────────────────────────────────────────────
- * 在 Egern 小组件 编辑里面 添加环境变量 中添加
+ * ⚠️ 重要提示
+ * 环境变量：
+ * KEY: 和风天气 API Key（必填）
+ * API_HOST: 你的个人API Host（必填！从控制台获取）
+ * LOCATION: 城市名，如"北京" （支持预设城市自动经纬度，非预设城市会尝试 geo 查询）
  *
- * 名称：region
- * 值：省份/城市（拼音，用 / 分隔）
- *
- * 名称：SHOW_TREND
- * 值：true（显示调价趋势）或 false（不显示）
- *
- *
- * 2️⃣ 地区代码对照表
- * ─────────────────────────────────────────────────
- * 【直辖市】
- * • 北京：beijing  • 上海：shanghai
- * • 天津：tianjin  • 重庆：chongqing
- *
- * 【省份 - 省会城市】
- * • 广东：guangdong/guangzhou
- * • 江苏：jiangsu/nanjing
- * • 浙江：zhejiang/hangzhou
- * • 山东：shandong/jinan
- * • 河南：henan/zhengzhou
- * • 河北：hebei/shijiazhuang
- * • 四川：sichuan/chengdu
- * • 湖北：hubei/wuhan
- * • 湖南：hunan/changsha
- * • 安徽：anhui/hefei
- * • 福建：fujian/fuzhou
- * • 江西：jiangxi/nanchang
- * • 辽宁：liaoning/shenyang
- * • 陕西：shanxi-3/xian  ⚠️
- * • 海南：hainan/haikou
- * • 山西：shanxi-1/taiyuan  ⚠️
- * • 吉林：jilin/changchun
- * • 黑龙江：heilongjiang/haerbin
- * • 云南：yunnan/kunming
- * • 贵州：guizhou/guiyang
- * • 广西：guangxi/nanning
- * • 甘肃：gansu/lanzhou
- * • 青海：qinghai/xining
- * • 宁夏：ningxia/yinchuan
- * • 新疆：xinjiang/wulumuqi
- * • 西藏：xizang/lasa
- * • 内蒙古：neimenggu/huhehaote
- * • 也可以去 http://m.qiyoujiage.com/shanxi-3.shtml 查看自己省份拼音
- * ═══════════════════════════════════════════════════
+ * ⚠️ 重要提示
+ * 公共域名已停用： devapi.qweather.com 、 api.qweather.com  等将从2026年起逐步停止服务
+ * 必须使用个人API Host：每个开发者账号都有独立的API Host
+ * 从控制台复制：登录 https://console.qweather.com/ → 设置 → 复制API Host
+ * KEY获取: 开始请求API之前，你需要先创建项目和凭据 前往控制台-项目管理 点击右上角“创建项目”按钮 填写项目名称，项目名称最多20个字符。你可以稍后对名称进行修改。点击“保存”按钮。然后点你刚创建的项目名称 进去就可以看见了。 ⚠️重要提示: 应用限制 你需要选择不限制
+ * ————————————————————————————————————————————————
+ * 示例 教程
+ * 名称里面填   LOCATION
+ * 值里面填     海口                 你想要显示出来的地区
+ * 名称里填     KEY
+ * 值里面填     h**********f        你的和风天气KEY
+ * 名称里面填    API_HOST       
+ * 值里面填     **.qweatherapi.com  你的个人API Host
  */
 
 export default async function (ctx) {
-  // 中文地区名 → 拼音路径映射（模块图形化选择用）
-  const REGION_MAP = {
-    '北京': 'beijing',
-    '上海': 'shanghai',
-    '天津': 'tianjin',
-    '重庆': 'chongqing',
-    '广东-深圳': 'guangdong/shenzhen',
-    '广东-广州': 'guangdong/guangzhou',
-    '广东-韶关': 'guangdong/shaoguan',
-    '广东-珠海': 'guangdong/zhuhai',
-    '广东-汕头': 'guangdong/shantou',
-    '广东-佛山': 'guangdong/foshan',
-    '广东-江门': 'guangdong/jiangmen',
-    '广东-湛江': 'guangdong/zhanjiang',
-    '广东-茂名': 'guangdong/maoming',
-    '广东-肇庆': 'guangdong/zhaoqing',
-    '广东-惠州': 'guangdong/huizhou',
-    '广东-梅州': 'guangdong/meizhou',
-    '广东-汕尾': 'guangdong/shanwei',
-    '广东-河源': 'guangdong/heyuan',
-    '广东-阳江': 'guangdong/yangjiang',
-    '广东-清远': 'guangdong/qingyuan',
-    '广东-东莞': 'guangdong/dongguan',
-    '广东-中山': 'guangdong/zhongshan',
-    '广东-潮州': 'guangdong/chaozhou',
-    '广东-揭阳': 'guangdong/jieyang',
-    '广东-云浮': 'guangdong/yunfu',
-    '江苏-南京': 'jiangsu/nanjing',
-    '江苏-无锡': 'jiangsu/wuxi',
-    '江苏-徐州': 'jiangsu/xuzhou',
-    '江苏-常州': 'jiangsu/changzhou',
-    '江苏-苏州': 'jiangsu/suzhou',
-    '江苏-南通': 'jiangsu/nantong',
-    '江苏-连云港': 'jiangsu/lianyungang',
-    '江苏-淮安': 'jiangsu/huaian',
-    '江苏-盐城': 'jiangsu/yancheng',
-    '江苏-扬州': 'jiangsu/yangzhou',
-    '江苏-镇江': 'jiangsu/zhenjiang',
-    '江苏-泰州': 'jiangsu/taizhou',
-    '江苏-宿迁': 'jiangsu/suqian',
-    '浙江-杭州': 'zhejiang/hangzhou',
-    '浙江-宁波': 'zhejiang/ningbo',
-    '浙江-温州': 'zhejiang/wenzhou',
-    '浙江-嘉兴': 'zhejiang/jiaxing',
-    '浙江-湖州': 'zhejiang/huzhou',
-    '浙江-绍兴': 'zhejiang/shaoxing',
-    '浙江-金华': 'zhejiang/jinhua',
-    '浙江-衢州': 'zhejiang/quzhou',
-    '浙江-舟山': 'zhejiang/zhoushan',
-    '浙江-台州': 'zhejiang/taizhou',
-    '浙江-丽水': 'zhejiang/lishui',
-    '山东-济南': 'shandong/jinan',
-    '山东-青岛': 'shandong/qingdao',
-    '山东-淄博': 'shandong/zibo',
-    '山东-枣庄': 'shandong/zaozhuang',
-    '山东-东营': 'shandong/dongying',
-    '山东-烟台': 'shandong/yantai',
-    '山东-潍坊': 'shandong/weifang',
-    '山东-济宁': 'shandong/jining',
-    '山东-泰安': 'shandong/taian',
-    '山东-威海': 'shandong/weihai',
-    '山东-日照': 'shandong/rizhao',
-    '山东-莱芜': 'shandong/laiwu',
-    '山东-临沂': 'shandong/linyi',
-    '山东-德州': 'shandong/dezhou',
-    '山东-聊城': 'shandong/liaocheng',
-    '山东-滨州': 'shandong/binzhou',
-    '山东-菏泽市': 'shandong/heze',
-    '河南-郑州': 'henan/zhengzhou',
-    '河南-开封': 'henan/kaifeng',
-    '河南-洛阳': 'henan/luoyang',
-    '河南-平顶山': 'henan/pingdingshan',
-    '河南-安阳': 'henan/anyang',
-    '河南-鹤壁': 'henan/hebi',
-    '河南-新乡': 'henan/xinxiang',
-    '河南-焦作': 'henan/jiaozuo',
-    '河南-濮阳': 'henan/puyang',
-    '河南-许昌': 'henan/xuchang',
-    '河南-漯河': 'henan/luohe',
-    '河南-三门峡': 'henan/sanmenxia',
-    '河南-南阳': 'henan/nanyang',
-    '河南-商丘': 'henan/shangqiu',
-    '河南-信阳': 'henan/xinyang',
-    '河南-周口': 'henan/zhoukou',
-    '河南-驻马店': 'henan/zhumadian',
-    '河北-石家庄': 'hebei/shijiazhuang',
-    '河北-唐山': 'hebei/tangshan',
-    '河北-秦皇岛': 'hebei/qinhuangdao',
-    '河北-邯郸': 'hebei/handan',
-    '河北-邢台': 'hebei/xingtai',
-    '河北-保定': 'hebei/baoding',
-    '河北-张家口': 'hebei/zhangjiakou',
-    '河北-承德': 'hebei/chengde',
-    '河北-沧州': 'hebei/cangzhou',
-    '河北-廊坊': 'hebei/langfang',
-    '河北-衡水': 'hebei/hengshui',
-    '四川-成都': 'sichuan/chengdu',
-    '四川-自贡': 'sichuan/zigong',
-    '四川-攀枝花': 'sichuan/panzhihua',
-    '四川-泸州': 'sichuan/luzhou',
-    '四川-德阳': 'sichuan/deyang',
-    '四川-绵阳': 'sichuan/mianyang',
-    '四川-广元': 'sichuan/guangyuan',
-    '四川-遂宁': 'sichuan/suining',
-    '四川-内江': 'sichuan/neijiang',
-    '四川-乐山': 'sichuan/leshan',
-    '四川-南充': 'sichuan/nanchong',
-    '四川-眉山': 'sichuan/meishan',
-    '四川-宜宾': 'sichuan/yibin',
-    '四川-广安': 'sichuan/guangan',
-    '四川-达州': 'sichuan/dazhou',
-    '四川-雅安': 'sichuan/yaan',
-    '四川-巴中': 'sichuan/bazhong',
-    '四川-资阳': 'sichuan/ziyang',
-    '四川-阿坝': 'sichuan/aba',
-    '四川-甘孜': 'sichuan/ganzi',
-    '四川-凉山': 'sichuan/liangshan',
-    '湖北-武汉': 'hubei/wuhan',
-    '湖北-黄石': 'hubei/huangshi',
-    '湖北-十堰': 'hubei/shiyan',
-    '湖北-宜昌': 'hubei/yichang',
-    '湖北-襄樊': 'hubei/xiangfan',
-    '湖北-鄂州': 'hubei/ezhou',
-    '湖北-荆门': 'hubei/jingmen',
-    '湖北-孝感': 'hubei/xiaogan',
-    '湖北-荆州': 'hubei/jingzhou',
-    '湖北-黄冈': 'hubei/huanggang',
-    '湖北-咸宁': 'hubei/xianning',
-    '湖北-随州': 'hubei/suizhou',
-    '湖北-恩施': 'hubei/enshi',
-    '湖南-长沙': 'hunan/changsha',
-    '湖南-株洲': 'hunan/zhuzhou',
-    '湖南-湘潭': 'hunan/xiangtan',
-    '湖南-衡阳': 'hunan/hengyang',
-    '湖南-邵阳': 'hunan/shaoyang',
-    '湖南-岳阳': 'hunan/yueyang',
-    '湖南-常德': 'hunan/changde',
-    '湖南-张家界': 'hunan/zhangjiajie',
-    '湖南-益阳': 'hunan/yiyang',
-    '湖南-郴州': 'hunan/chenzhou',
-    '湖南-永州': 'hunan/yongzhou',
-    '湖南-怀化': 'hunan/huaihua',
-    '湖南-娄底': 'hunan/loudi',
-    '湖南-湘西': 'hunan/xiangxi',
-    '安徽-合肥': 'anhui/hefei',
-    '安徽-芜湖': 'anhui/wuhu',
-    '安徽-蚌埠': 'anhui/bengbu',
-    '安徽-淮南': 'anhui/huainan',
-    '安徽-马鞍山': 'anhui/maanshan',
-    '安徽-淮北': 'anhui/huaibei',
-    '安徽-铜陵': 'anhui/tongling',
-    '安徽-安庆': 'anhui/anqing',
-    '安徽-黄山': 'anhui/huangshan',
-    '安徽-滁州': 'anhui/chuzhou',
-    '安徽-阜阳': 'anhui/fuyang',
-    '安徽-宿州': 'anhui/suzhou',
-    '安徽-巢湖': 'anhui/chaohu',
-    '安徽-六安': 'anhui/luan',
-    '安徽-亳州': 'anhui/bozhou',
-    '安徽-池州': 'anhui/chizhou',
-    '安徽-宣城': 'anhui/xuancheng',
-    '福建-福州': 'fujian/fuzhou',
-    '福建-厦门': 'fujian/xiamen',
-    '福建-莆田': 'fujian/putian',
-    '福建-三明': 'fujian/sanming',
-    '福建-泉州': 'fujian/quanzhou',
-    '福建-漳州': 'fujian/zhangzhou',
-    '福建-南平': 'fujian/nanping',
-    '福建-龙岩': 'fujian/longyan',
-    '福建-宁德': 'fujian/ningde',
-    '江西-南昌': 'jiangxi/nanchang',
-    '江西-景德镇': 'jiangxi/jingdezhen',
-    '江西-萍乡': 'jiangxi/pingxiang',
-    '江西-九江': 'jiangxi/jiujiang',
-    '江西-新余': 'jiangxi/xinyu',
-    '江西-鹰潭': 'jiangxi/yingtan',
-    '江西-赣州': 'jiangxi/ganzhou',
-    '江西-吉安': 'jiangxi/jian',
-    '江西-宜春': 'jiangxi/yichun',
-    '江西-抚州': 'jiangxi/fuzhou',
-    '江西-上饶': 'jiangxi/shangrao',
-    '辽宁-沈阳': 'liaoning/shenyang',
-    '辽宁-大连': 'liaoning/dalian',
-    '辽宁-鞍山': 'liaoning/anshan',
-    '辽宁-抚顺': 'liaoning/fushun',
-    '辽宁-本溪': 'liaoning/benxi',
-    '辽宁-丹东': 'liaoning/dandong',
-    '辽宁-锦州': 'liaoning/jinzhou',
-    '辽宁-营口': 'liaoning/yingkou',
-    '辽宁-阜新': 'liaoning/fuxin',
-    '辽宁-辽阳': 'liaoning/liaoyang',
-    '辽宁-盘锦': 'liaoning/panjin',
-    '辽宁-铁岭': 'liaoning/tieling',
-    '辽宁-朝阳': 'liaoning/chaoyang',
-    '辽宁-葫芦岛': 'liaoning/huludao',
-    '陕西-西安': 'shanxi-3/xian',
-    '陕西-铜川': 'shanxi-3/tongchuan',
-    '陕西-宝鸡': 'shanxi-3/baoji',
-    '陕西-咸阳': 'shanxi-3/xianyang',
-    '陕西-渭南': 'shanxi-3/weinan',
-    '陕西-延安': 'shanxi-3/yanan',
-    '陕西-汉中': 'shanxi-3/hanzhong',
-    '陕西-榆林': 'shanxi-3/yulin',
-    '陕西-安康': 'shanxi-3/ankang',
-    '陕西-商洛': 'shanxi-3/shangluo',
-    '海南-海口': 'hainan/haikou',
-    '海南-三亚': 'hainan/sanya',
-    '山西-太原': 'shanxi/taiyuan',
-    '山西-大同': 'shanxi/datong',
-    '山西-阳泉': 'shanxi/yangquan',
-    '山西-长治': 'shanxi/changzhi',
-    '山西-晋城': 'shanxi/jincheng',
-    '山西-朔州': 'shanxi/shuozhou',
-    '山西-晋中': 'shanxi/jinzhong',
-    '山西-运城': 'shanxi/yuncheng',
-    '山西-忻州': 'shanxi/xinzhou',
-    '山西-临汾': 'shanxi/linfen',
-    '山西-吕梁': 'shanxi/lvliang',
-    '吉林-长春': 'jilin/changchun',
-    '吉林-吉林市': 'jilin/jilinshi',
-    '吉林-四平': 'jilin/siping',
-    '吉林-辽源': 'jilin/liaoyuan',
-    '吉林-通化': 'jilin/tonghua',
-    '吉林-白山': 'jilin/baishan',
-    '吉林-松原': 'jilin/songyuan',
-    '吉林-白城': 'jilin/baicheng',
-    '吉林-延边': 'jilin/yanbian',
-    '黑龙江-哈尔滨': 'heilongjiang/haerbin',
-    '黑龙江-齐齐哈尔': 'heilongjiang/qiqihar',
-    '黑龙江-鸡西': 'heilongjiang/jixi',
-    '黑龙江-鹤岗': 'heilongjiang/hegang',
-    '黑龙江-双鸭山': 'heilongjiang/shuangyashan',
-    '黑龙江-大庆': 'heilongjiang/daqing',
-    '黑龙江-伊春市': 'heilongjiang/yichunshi',
-    '黑龙江-佳木斯': 'heilongjiang/jiamusi',
-    '黑龙江-七台河': 'heilongjiang/qitaihe',
-    '黑龙江-牡丹江': 'heilongjiang/mudanjiang',
-    '黑龙江-黑河': 'heilongjiang/heihe',
-    '黑龙江-绥化': 'heilongjiang/suihua',
-    '黑龙江-大兴安岭': 'heilongjiang/daxinganling',
-    '云南-昆明': 'yunnan/kunming',
-    '云南-曲靖': 'yunnan/qujing',
-    '云南-玉溪': 'yunnan/yuxi',
-    '云南-保山': 'yunnan/baoshan',
-    '云南-昭通': 'yunnan/zhaotong',
-    '云南-丽江': 'yunnan/lijiang',
-    '云南-普洱': 'yunnan/puer',
-    '云南-临沧': 'yunnan/lincang',
-    '云南-楚雄': 'yunnan/chuxiong',
-    '云南-红河': 'yunnan/honghe',
-    '云南-文山': 'yunnan/wenshan',
-    '云南-西双版纳': 'yunnan/xishuangbanna',
-    '云南-大理': 'yunnan/dali',
-    '云南-德宏': 'yunnan/dehong',
-    '云南-怒江': 'yunnan/nujiang',
-    '云南-迪庆': 'yunnan/diqing',
-    '贵州-贵阳': 'guizhou/guiyang',
-    '贵州-六盘水': 'guizhou/liupanshui',
-    '贵州-遵义': 'guizhou/zunyi',
-    '贵州-安顺': 'guizhou/anshun',
-    '贵州-铜仁': 'guizhou/tongren',
-    '贵州-黔西南': 'guizhou/qianxinan',
-    '贵州-毕节': 'guizhou/bijie',
-    '贵州-黔东南': 'guizhou/qiandongnan',
-    '贵州-黔南': 'guizhou/qiannan',
-    '广西-南宁': 'guangxi/nanning',
-    '广西-柳州': 'guangxi/liuzhou',
-    '广西-桂林': 'guangxi/guilin',
-    '广西-梧州': 'guangxi/wuzhou',
-    '广西-北海': 'guangxi/beihai',
-    '广西-防城港': 'guangxi/fangchenggang',
-    '广西-钦州': 'guangxi/qinzhou',
-    '广西-贵港': 'guangxi/guigang',
-    '广西-玉林': 'guangxi/yulin',
-    '广西-百色': 'guangxi/baise',
-    '广西-贺州': 'guangxi/hezhou',
-    '广西-河池': 'guangxi/hechi',
-    '广西-来宾': 'guangxi/laibin',
-    '广西-崇左': 'guangxi/chongzuo',
-    '甘肃-兰州': 'gansu/lanzhou',
-    '甘肃-嘉峪关': 'gansu/jiayuguan',
-    '甘肃-金昌': 'gansu/jinchang',
-    '甘肃-白银': 'gansu/baiyin',
-    '甘肃-天水': 'gansu/tianshui',
-    '甘肃-武威': 'gansu/wuwei',
-    '甘肃-张掖': 'gansu/zhangye',
-    '甘肃-平凉': 'gansu/pingliang',
-    '甘肃-酒泉': 'gansu/jiuquan',
-    '甘肃-庆阳': 'gansu/qingyang',
-    '甘肃-定西': 'gansu/dingxi',
-    '甘肃-陇南': 'gansu/longnan',
-    '甘肃-临夏': 'gansu/linxia',
-    '甘肃-甘南': 'gansu/gannan',
-    '青海-西宁': 'qinghai/xining',
-    '青海-海东': 'qinghai/haidong',
-    '青海-海北': 'qinghai/haibei',
-    '青海-黄南': 'qinghai/huangnan',
-    '青海-海南州': 'qinghai/hailanzhou',
-    '青海-果洛': 'qinghai/golog',
-    '青海-玉树': 'qinghai/yushu',
-    '青海-海西': 'qinghai/haixi',
-    '宁夏-银川': 'ningxia/yinchuan',
-    '宁夏-石嘴山': 'ningxia/shizuishan',
-    '宁夏-吴忠': 'ningxia/wuzhong',
-    '宁夏-固原': 'ningxia/guyuan',
-    '宁夏-中卫': 'ningxia/zhongwei',
-    '新疆-乌鲁木齐': 'xinjiang/wulumuqi',
-    '新疆-克拉玛依': 'xinjiang/karamay',
-    '新疆-吐鲁番': 'xinjiang/turpan',
-    '新疆-哈密': 'xinjiang/hami',
-    '新疆-昌吉': 'xinjiang/changji',
-    '新疆-博尔塔拉': 'xinjiang/bortala',
-    '新疆-巴音郭楞': 'xinjiang/bayingolin',
-    '新疆-阿克苏': 'xinjiang/aksu',
-    '新疆-克孜勒苏': 'xinjiang/kizilsu',
-    '新疆-喀什': 'xinjiang/kaxgar',
-    '新疆-和田': 'xinjiang/hotan',
-    '新疆-伊犁': 'xinjiang/ili',
-    '新疆-塔城': 'xinjiang/tacheng',
-    '新疆-阿勒泰': 'xinjiang/altay',
-    '西藏-拉萨': 'xizang/lhasa',
-    '西藏-昌都': 'xizang/changdu',
-    '西藏-山南': 'xizang/shannan',
-    '西藏-日喀则': 'xizang/rikeze',
-    '西藏-那曲': 'xizang/naqu',
-    '西藏-阿里': 'xizang/ali',
-    '西藏-林芝': 'xizang/linzhi',
-    '内蒙古-呼和浩特': 'neimenggu/huhehaote',
-    '内蒙古-包头': 'neimenggu/baotou',
-    '内蒙古-乌海': 'neimenggu/wuhai',
-    '内蒙古-赤峰': 'neimenggu/chifeng',
-    '内蒙古-通辽': 'neimenggu/tongliao',
-    '内蒙古-鄂尔多斯': 'neimenggu/ordos',
-    '内蒙古-呼伦贝尔': 'neimenggu/hulunbeir',
-    '内蒙古-巴彦淖尔': 'neimenggu/bayannaoer',
-    '内蒙古-乌兰察布': 'neimenggu/wulanchabu',
-    '内蒙古-兴安盟': 'neimenggu/xinganmeng',
-    '内蒙古-锡林郭勒': 'neimenggu/xilinguole',
-    '内蒙古-阿拉善': 'neimenggu/alashan',
-  };
-  // OIL_REGION（模块中文填写）优先，兼容旧版 region（拼音）
-  // 支持三种填法：城市名（海口）、"省份-城市"（广东-深圳）、拼音（hainan/haikou）
-  const CITY_MAP = {};      // 纯城市名 -> 拼音路径
-  const PROVINCE_PINYIN = {}; // 省份名 -> 省份拼音
-  for (const [k, v] of Object.entries(REGION_MAP)) {
-    if (k.includes('-')) {
-      const [prov, city] = k.split('-');
-      CITY_MAP[city] = v;
-      if (!PROVINCE_PINYIN[prov]) PROVINCE_PINYIN[prov] = v.split('/')[0];
-    } else {
-      CITY_MAP[k] = v;
-      PROVINCE_PINYIN[k] = v;
-    }
-  }
-  function resolveRegion(input) {
-    input = (input || '').trim();
-    if (!input) return 'hainan/haikou';
-    if (REGION_MAP[input]) return REGION_MAP[input];
-    if (CITY_MAP[input]) return CITY_MAP[input];
-    if (PROVINCE_PINYIN[input]) return PROVINCE_PINYIN[input];
-    return input; // 旧版拼音直传
-  }
-  const regionInput = (ctx.env.OIL_REGION || ctx.env.region || '').trim();
-  const regionParam = resolveRegion(regionInput);
-  const SHOW_TREND = (ctx.env.SHOW_TREND || "true").trim() !== "false";
+  const safeCtx = ctx || {};
+  const env = safeCtx.env || {};
+  const widgetFamily = safeCtx.widgetFamily || 'systemMedium';
 
-  const now = new Date();
-  const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-  const refreshTime = new Date(Date.now() + 6*60*60*1000).toISOString();
+  const apiKey     = (env.KEY || '').trim();
+  const apiHostRaw = (env.API_HOST || '').trim();
+  const location   = (env.LOCATION || '').trim();
+  const userName   = (env.USER_NAME || '').trim();
 
-  const backgroundColor = { light: "#FFFFFF", dark: "#1C1C1E" };
+  if (!apiKey)     return renderError('缺少 KEY 环境变量');
+  if (!apiHostRaw) return renderError('缺少 API_HOST 环境变量');
 
-  const COLORS = {
-    primary: { light: "#1A1A1A", dark: "#FFFFFF" },
-    secondary: { light: "#666666", dark: "#CCCCCC" },
-    tertiary: { light: "#999999", dark: "#888888" },
-    card: { light: "#FFFFFF15", dark: "#FFFFFF10" },
-    cardBorder: { light: "#00000015", dark: "#FFFFFF20" },
-    p92: { light: "#FF9F0A", dark: "#FFB347" },
-    p95: { light: "#FF6B35", dark: "#FF8A5C" },
-    p98: { light: "#FF3B30", dark: "#FF6B6B" },
-    diesel: { light: "#30D158", dark: "#5CD67D" },
-    trend: { light: "#2C2C2E", dark: "#FFFFFF" },
-  };
-
-  const CACHE_KEY = `qiyoujiage_oil_${regionParam}`;
-  let prices = {p92:null, p95:null, p98:null, diesel:null};
-  let regionName = "";
-  let trendInfo = "";
-  let hasCache = false;
-  
-  try {
-    const cached = ctx.storage.getJSON(CACHE_KEY);
-    if (cached && cached.prices) {
-      prices = cached.prices;
-      regionName = cached.regionName || "";
-      trendInfo = cached.trendInfo || "";
-      hasCache = true;
-    }
-  } catch(_){}
-
-  let fetchError = false;
-  let errorMsg = "";
+  const apiHost = normalizeHost(apiHostRaw);
 
   try {
-    const queryAddr = `http://m.qiyoujiage.com/${regionParam}.shtml`;
-    
-    const resp = await ctx.http.get(queryAddr, {
-      headers: {
-        'referer': 'http://m.qiyoujiage.com/',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-      },
-      timeout: 15000
-    });
-    
-    if (resp.status !== 200) {
-      throw new Error(`HTTP ${resp.status}: 页面不存在`);
-    }
-    
-    const html = await resp.text();
-    const titleMatch = html.match(/<title>([^_]+)_/);
-    if (titleMatch && titleMatch[1]) {
-      let rawName = titleMatch[1].trim();
-      regionName = rawName.replace(/(油价|实时|今日|最新|查询|价格)/g, '').trim();
-    }
-    const regPrice = /<dl>[\s\S]+?<dt>(.*油)<\/dt>[\s\S]+?<dd>(.*)\(元\)<\/dd>/gm;
-    const priceList = [];
-    let m = null;
-    
-    while ((m = regPrice.exec(html)) !== null) {
-      if (m.index === regPrice.lastIndex) regPrice.lastIndex++;
-      priceList.push({ name: m[1].trim(), value: m[2].trim() });
+    const { lon, lat, city } = await getLocation(safeCtx, location, apiKey, apiHost);
+    const now = await fetchWeatherNow(safeCtx, apiKey, lon, lat, apiHost);
+
+    let air = null;
+    if (widgetFamily !== 'systemSmall' && !isAccessoryFamily(widgetFamily)) {
+      air = await fetchAirQuality(safeCtx, apiKey, lon, lat, apiHost);
     }
 
-    if (priceList.length >= 3) {
-      const nameMap = { 
-        "92 号": "p92", "92": "p92",
-        "95 号": "p95", "95": "p95",
-        "98 号": "p98", "98": "p98",
-        "0 号": "diesel", "柴油": "diesel"
-      };
-      
-      prices = {p92:null, p95:null, p98:null, diesel:null};
-      
-      priceList.forEach(item => {
-        const key = Object.keys(nameMap).find(k => item.name.includes(k));
-        if (key) {
-          const priceVal = parseFloat(item.value);
-          if (!isNaN(priceVal)) {
-            prices[nameMap[key]] = priceVal;
-          }
-        }
-      });
-      if (SHOW_TREND) {
-        const regTrend = /<div class="tishi">[\s\S]*?<span>([^<]+)<\/span>[\s\S]*?<br\/>([\s\S]+?)<br\/>/;
-        const trendMatch = html.match(regTrend);
-        
-        if (trendMatch && trendMatch.length >= 3) {
-          const datePart = trendMatch[1].split('价')[1]?.slice(0, -2) || "";
-          const valuePart = trendMatch[2];
-          const trend = (valuePart.includes('下调') || valuePart.includes('下跌')) ? '↓' : '↑';
-          let amount = "";
-          const allPrices = valuePart.match(/([\d\.]+)\s*元\/升/g);
-          if (allPrices && allPrices.length >= 2) {
-            const nums = allPrices.map(p => p.match(/([\d\.]+)/)[1]);
-            amount = `${nums[0]}-${nums[1]}`;
-          }
-          else {
-            const allTons = valuePart.match(/([\d]+)\s*元(?:\/吨)?/g);
-            if (allTons && allTons.length >= 2) {
-              const nums = allTons.map(p => p.match(/([\d]+)/)[1]);
-              amount = `${nums[0]}-${nums[1]}元/吨`;
-            }
-            else {
-              const singleMatch = valuePart.match(/([\d\.]+)\s*元\/升/);
-              if (singleMatch) {
-                amount = `${singleMatch[1]}元/L`;
-              }
-            }
-          }
-          
-          trendInfo = `${datePart}调整 ${trend} ${amount}`.trim();
-        }
-      }
-
-      // 缓存包含地区名
-      ctx.storage.setJSON(CACHE_KEY, { prices, regionName, trendInfo });
-      fetchError = false;
-    } else {
-      if (!hasCache) {
-        fetchError = true;
-        errorMsg = `解析失败`;
-      }
+    if (isAccessoryFamily(widgetFamily)) {
+      return renderAccessory(now, city, widgetFamily);
     }
+    if (widgetFamily === 'systemSmall') {
+      const [daily3d, airSmall] = await Promise.all([
+        fetchDaily3d(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
+        fetchAirQuality(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
+      ]);
+      return renderSmall(now, city, daily3d, airSmall);
+    }
+    if (widgetFamily === 'systemLarge') {
+      const [daily3d, hourly24h] = await Promise.all([
+        fetchDaily3d(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
+        fetchHourly24h(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
+      ]);
+      return renderLarge(now, city, daily3d, hourly24h, userName);
+    }
+    const daily7d = await fetchDaily7d(safeCtx, apiKey, lon, lat, apiHost).catch(() => null);
+    return renderMedium(now, city, daily7d);
 
   } catch (e) {
-    if (!hasCache) {
-      fetchError = true;
-      errorMsg = e.message;
+    try { console.error(e); } catch (_) {}
+    const msg = String((e && e.message) || e || '未知错误').slice(0, 80);
+    return renderError(`请求失败：${msg}`);
+  }
+}
+
+function getNextHoliday() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const holidays = [
+    { m: 1, d: 1, name: '元旦' },
+    { m: 2, d: 17, name: '春节', y: 2026 }, { m: 2, d: 6, name: '春节', y: 2027 },
+    { m: 3, d: 3, name: '元宵节', y: 2026 },
+    { m: 5, d: 1, name: '劳动节' },
+    { m: 6, d: 19, name: '端午节', y: 2026 }, { m: 6, d: 9, name: '端午节', y: 2027 },
+    { m: 8, d: 19, name: '七夕节', y: 2026 },
+    { m: 9, d: 25, name: '中秋节', y: 2026 }, { m: 9, d: 15, name: '中秋节', y: 2027 },
+    { m: 10, d: 18, name: '重阳节', y: 2026 },
+    { m: 10, d: 1, name: '国庆节' },
+    { m: 12, d: 25, name: '圣诞节' },
+    { m: 2, d: 4, name: '立春' }, { m: 2, d: 19, name: '雨水' },
+    { m: 3, d: 5, name: '惊蛰' }, { m: 3, d: 20, name: '春分' },
+    { m: 4, d: 4, name: '清明' }, { m: 4, d: 20, name: '谷雨' },
+    { m: 5, d: 5, name: '立夏' }, { m: 5, d: 21, name: '小满' },
+    { m: 6, d: 5, name: '芒种' }, { m: 6, d: 21, name: '夏至' },
+    { m: 7, d: 7, name: '小暑' }, { m: 7, d: 22, name: '大暑' },
+    { m: 8, d: 7, name: '立秋' }, { m: 8, d: 23, name: '处暑' },
+    { m: 9, d: 7, name: '白露' }, { m: 9, d: 23, name: '秋分' },
+    { m: 10, d: 8, name: '寒露' }, { m: 10, d: 23, name: '霜降' },
+    { m: 11, d: 7, name: '立冬' }, { m: 11, d: 22, name: '小雪' },
+    { m: 12, d: 7, name: '大雪' }, { m: 12, d: 21, name: '冬至' },
+    { m: 1, d: 5, name: '小寒' }, { m: 1, d: 20, name: '大寒' },
+  ];
+  let best = null;
+  for (const h of holidays) {
+    for (const yy of [y, y + 1]) {
+      if (h.y && h.y !== yy) continue;
+      const dt = new Date(yy, h.m - 1, h.d);
+      const days = Math.ceil((dt - now) / 86400000);
+      if (days >= 0 && (!best || days < best.days)) {
+        best = { name: h.name, days };
+      }
     }
   }
+  return best;
+}
 
-  const titleText = regionName ? `${regionName}实时油价` : "实时油价";
+function renderMedium(now, city, daily7d) {
+  const { icon, color: iconColor } = getWeatherStyle(now.icon);
+  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
+  const S = { light: '#8E8E93', dark: '#AEAEB2' };
+  const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-  const rows = [
-    {label:"92 号", price:prices.p92, color:COLORS.p92},
-    {label:"95 号", price:prices.p95, color:COLORS.p95},
-    {label:"98 号", price:prices.p98, color:COLORS.p98},
-    {label:"柴油", price:prices.diesel, color:COLORS.diesel},
-  ].filter(r => r.price !== null);
+  const nowT = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const timeStr = `${nowT.getFullYear()}-${pad(nowT.getMonth() + 1)}-${pad(nowT.getDate())} ${pad(nowT.getHours())}:${pad(nowT.getMinutes())}`;
 
-  function priceCard(row){
-    return {
-      type:"stack",
-      direction:"column",
-      alignItems:"center",
-      flex:1,
-      padding:[8,4,8,4],
-      backgroundColor: COLORS.card,
-      borderRadius:12,
-      borderWidth: 0.5,
-      borderColor: COLORS.cardBorder,
-      children:[
-        {
-          type:"stack",
-          direction:"row",
-          alignItems:"center",
-          width:44,
-          height:22,
-          backgroundColor: {
-            light: row.color.light + "28",
-            dark: row.color.dark + "28"
-          },
-          borderRadius:6,
-          borderWidth:0.5,
-          borderColor: {
-            light: row.color.light + "55",
-            dark: row.color.dark + "55"
-          },
-          children:[{
-            type:"text",
-            text:row.label,
-            font:{size:"caption2",weight:"bold"},
-            textColor: row.color,
-            textAlign:"center"
-          }]
-        },
-        {
-          type:"text",
-          text:row.price !== null ? row.price.toFixed(2) : "--",
-          font:{size:"title3",weight:"semibold"},
-          textColor: COLORS.primary,
-          textAlign:"center",
-          maxLines:1,
-          minScale:0.7
-        }
-      ]
-    }
-  }
+  const today = daily7d && daily7d[0];
+  const hlText = today ? `H:${today.tempMax}° L:${today.tempMin}°` : '';
 
-  // ═══════════ 锁屏专用布局（仅 accessory 系列生效，其他尺寸不受影响）═══════════
-  if (ctx.widgetFamily && ctx.widgetFamily.startsWith("accessory")) {
-    // 锁屏背景透明，文字颜色交给系统处理，次要文字用半透明白色
-    const SUB = { light: "#FFFFFFB3", dark: "#FFFFFFB3" };
-    const short = (label) => label.replace(/\s/g, "");   // "92 号" → "92号"
-    const place = regionName || "油价";
+  const humidity = Math.max(0, Math.min(100, Number(now.humidity) || 0));
+  const barW = 300, barH = 10;
+  const fillW = Math.round(barW * humidity / 100);
+  const dotX = Math.max(6, Math.min(barW - 6, fillW));
+  const humiditySvg =
+    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${barW} ${barH}' preserveAspectRatio='none'>` +
+    `<defs><linearGradient id='hg' x1='0' y1='0' x2='1' y2='0'>` +
+    `<stop offset='0' stop-color='%2334C759'/><stop offset='0.35' stop-color='%23FFCC00'/>` +
+    `<stop offset='0.55' stop-color='%23FF9500'/><stop offset='0.75' stop-color='%23FF3B30'/>` +
+    `<stop offset='1' stop-color='%23AF52DE'/></linearGradient></defs>` +
+    `<rect x='0' y='1' width='${barW}' height='${barH - 2}' rx='${(barH - 2) / 2}' fill='url(%23hg)' opacity='0.25'/>` +
+    `<rect x='0' y='1' width='${fillW}' height='${barH - 2}' rx='${(barH - 2) / 2}' fill='url(%23hg)'/>` +
+    `<circle cx='${dotX}' cy='${barH / 2}' r='5' fill='%23FFFFFF' opacity='0.95'/>` +
+    `</svg>`;
 
-    let lockDate = "";
-    const ldm = trendInfo.match(/(\d{1,2})月(\d{1,2})日/);
-    if (SHOW_TREND && ldm) {
-      lockDate = `${ldm[1].padStart(2,"0")}-${ldm[2].padStart(2,"0")}`;
-    }
-
-    // 没有任何价格数据
-    if (rows.length === 0) {
-      return {
-        type:"widget",
-        refreshAfter:refreshTime,
-        children:[{
-          type:"text",
-          text: fetchError ? `油价 ${errorMsg}` : "暂无油价数据",
-          font:{size:"caption1",weight:"medium"},
-          maxLines:1,
-          minScale:0.5
-        }]
-      };
-    }
-
-    // 单行：海口 92号 9.72 · 95号 10.33
-    if (ctx.widgetFamily === "accessoryInline") {
-      return {
-        type:"widget",
-        refreshAfter:refreshTime,
-        children:[{
-          type:"text",
-          text:`${place} ${rows.slice(0, 2).map(r => `${short(r.label)} ${r.price.toFixed(2)}`).join(" · ")}`,
-          font:{size:"caption1",weight:"medium"},
-          maxLines:1,
-          minScale:0.5
-        }]
-      };
-    }
-
-    // 圆形：只显示 92 号（没有则显示第一项）
-    if (ctx.widgetFamily === "accessoryCircular") {
-      const r0 = rows.find(r => r.label.includes("92")) || rows[0];
-      return {
-        type:"widget",
-        padding:2,
-        refreshAfter:refreshTime,
-        children:[
-          {type:"spacer"},
-          {type:"text",text:short(r0.label),font:{size:"caption2",weight:"medium"},textColor:SUB,textAlign:"center",maxLines:1},
-          {type:"text",text:r0.price.toFixed(2),font:{size:"headline",weight:"bold"},textAlign:"center",maxLines:1,minScale:0.5},
-          {type:"text",text:"元/升",font:{size:"caption2"},textColor:SUB,textAlign:"center",maxLines:1},
-          {type:"spacer"}
+  const forecastCells = [];
+  if (daily7d) {
+    for (let i = 1; i <= 6 && daily7d[i]; i++) {
+      const d = daily7d[i];
+      const dt = new Date(d.date + 'T12:00:00');
+      const { icon: dic, color: dcolor } = getWeatherStyle(d.iconDay);
+      forecastCells.push({
+        type: 'stack',
+        direction: 'column',
+        alignItems: 'center',
+        gap: 2,
+        flex: 1,
+        children: [
+          { type: 'text', text: weekNames[dt.getDay()], font: { size: 11 }, textColor: S, maxLines: 1 },
+          { type: 'image', src: `sf-symbol:${dic}`, width: 20, height: 20, color: dcolor },
+          { type: 'text', text: `${d.tempMax}°`, font: { size: 12, weight: 'semibold' }, textColor: T, maxLines: 1 },
         ]
-      };
+      });
     }
-
-    // 矩形：第一行地区 + 调价日期，下面两行每行两个油品（左边说明，右边加粗价格）
-    const cell = (r) => ({
-      type:"stack",
-      direction:"row",
-      alignItems:"center",
-      flex:1,
-      gap:4,
-      children:[
-        {type:"text",text:short(r.label),font:{size:"caption2",weight:"medium"},textColor:SUB,maxLines:1},
-        {type:"spacer"},
-        {type:"text",text:r.price.toFixed(2),font:{size:"caption1",weight:"bold"},maxLines:1,minScale:0.6}
-      ]
-    });
-
-    const lockPairs = [];
-    for (let i = 0; i < rows.length; i += 2) lockPairs.push(rows.slice(i, i + 2));
-
-    return {
-      type:"widget",
-      padding:2,
-      gap:3,
-      refreshAfter:refreshTime,
-      children:[
-        {
-          type:"stack",
-          direction:"row",
-          alignItems:"center",
-          gap:4,
-          children:[
-            {type:"image",src:"sf-symbol:fuelpump.fill",width:11,height:11},
-            {type:"text",text:place,font:{size:"caption2",weight:"semibold"},maxLines:1,minScale:0.7},
-            {type:"spacer"},
-            ...(lockDate ? [{type:"text",text:lockDate,font:{size:"caption2"},textColor:SUB,maxLines:1}] : [])
-          ]
-        },
-        ...lockPairs.map(pair => ({
-          type:"stack",
-          direction:"row",
-          alignItems:"center",
-          gap:10,
-          children: pair.length === 1 ? [cell(pair[0]), {type:"spacer"}] : pair.map(cell)
-        }))
-      ]
-    };
   }
-  // ═══════════ 锁屏专用布局结束 ═══════════
 
-  if (ctx.widgetFamily === "systemSmall") {
-    const smallCard = (row) => ({
-      type:"stack",
-      direction:"column",
-      alignItems:"center",
-      flex:1,
-      gap:0,
-      padding:[2,4,2,4],
-      backgroundColor: COLORS.card,
-      borderRadius:10,
-      borderWidth:0.5,
-      borderColor: COLORS.cardBorder,
-      children:[
-        {
-          type:"stack",
-          direction:"row",
-          alignItems:"center",
-          padding:[1,8,1,8],
-          backgroundColor: {
-            light: row.color.light + "28",
-            dark: row.color.dark + "28"
+  const hrLine = {
+    type: 'text', text: ' ',
+    font: { size: 1 },
+    backgroundColor: { light: '#00000018', dark: '#FFFFFF20' },
+  };
+
+  const holiday = getNextHoliday();
+  const holidayBlock = holiday ? {
+    type: 'stack',
+    direction: 'column',
+    alignItems: 'center',
+    gap: 0,
+    children: [
+      { type: 'text', text: `距离${holiday.name}`, font: { size: 11, weight: 'semibold' }, textColor: { light: '#FF3B30', dark: '#FF6B62' }, maxLines: 1 },
+      { type: 'text', text: holiday.days === 0 ? '就是今天' : `还有${holiday.days}天`, font: { size: 11 }, textColor: S, maxLines: 1 },
+    ]
+  } : { type: 'spacer' };
+
+  const infoRow = {
+    type: 'stack',
+    direction: 'row',
+    alignItems: 'center',
+    children: [
+      { type: 'spacer' },
+      { type: 'text', text: `体感 ${now.feelsLike}° · 降水 ${now.precip}mm · 能见度 ${now.vis}km`, font: { size: 10 }, textColor: S, maxLines: 1 },
+      { type: 'spacer' },
+    ]
+  };
+
+  return {
+    type: 'widget',
+    padding: 10,
+    gap: 3,
+    children: [
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        children: [
+          { type: 'image', src: `sf-symbol:${icon}`, width: 36, height: 36, color: iconColor },
+          { type: 'spacer', length: 8 },
+          {
+            type: 'stack',
+            direction: 'column',
+            gap: 1,
+            children: [
+              { type: 'text', text: city, font: { size: 18, weight: 'semibold' }, textColor: T, maxLines: 1 },
+              { type: 'text', text: now.text, font: { size: 13 }, textColor: T, maxLines: 1 },
+              { type: 'text', text: timeStr, font: { size: 10 }, textColor: S, maxLines: 1 },
+            ]
           },
-          borderRadius:6,
-          children:[{
-            type:"text",
-            text:row.label,
-            font:{size:"caption2",weight:"bold"},
-            textColor: row.color,
-            textAlign:"center"
-          }]
-        },
-        {
-          type:"text",
-          text:row.price.toFixed(2),
-          font:{size:"headline",weight:"bold"},
-          textColor: COLORS.primary,
-          textAlign:"center",
-          maxLines:1,
-          minScale:0.7
-        }
+          { type: 'spacer' },
+          holidayBlock,
+          { type: 'spacer' },
+          {
+            type: 'stack',
+            direction: 'column',
+            alignItems: 'end',
+            gap: 1,
+            children: [
+              { type: 'text', text: `${now.temp}°C`, font: { size: 30, weight: 'bold' }, textColor: T, maxLines: 1, minScale: 0.7 },
+              { type: 'text', text: hlText, font: { size: 12 }, textColor: S, maxLines: 1 },
+            ]
+          },
+        ]
+      },
+
+      infoRow,
+
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        gap: 6,
+        children: [
+          { type: 'text', text: '相对湿度', font: { size: 12 }, textColor: T, maxLines: 1 },
+          {
+            type: 'image',
+            src: `data:image/svg+xml,${humiditySvg}`,
+            flex: 1,
+            height: 10,
+          },
+          { type: 'text', text: `${humidity}%`, font: { size: 12, weight: 'semibold' }, textColor: T, maxLines: 1 },
+        ]
+      },
+
+      hrLine,
+
+      {
+        type: 'stack',
+        direction: 'row',
+        alignItems: 'center',
+        flex: 1,
+        children: forecastCells.length > 0 ? forecastCells : [{ type: 'spacer' }],
+      },
+    ]
+  };
+}
+
+function renderSmall(now, city, daily3d, air) {
+  const { icon, color: iconColor } = getWeatherStyle(now.icon);
+  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
+  const S = { light: '#8E8E93', dark: '#AEAEB2' };
+  const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+  const header = {
+    type: 'stack', direction: 'row', alignItems: 'center',
+    children: [
+      { type: 'text', text: city, font: { size: 17, weight: 'semibold' }, textColor: T, maxLines: 1 },
+      { type: 'spacer' },
+      { type: 'image', src: `sf-symbol:${icon}`, width: 28, height: 28, color: iconColor }
+    ]
+  };
+
+  const today = daily3d && daily3d[0];
+  const todayRow = {
+    type: 'stack', direction: 'row', alignItems: 'center',
+    children: [
+      { type: 'text', text: `${now.temp}°`, font: { size: 38, weight: 'bold' }, textColor: T },
+      { type: 'spacer' },
+      today ? { type: 'text', text: `${today.tempMin}°`, font: { size: 20 }, textColor: S } : { type: 'spacer', length: 0 },
+      today ? { type: 'spacer', length: 12 } : { type: 'spacer', length: 0 },
+      today ? { type: 'text', text: `${today.tempMax}°`, font: { size: 20, weight: 'semibold' }, textColor: T } : { type: 'spacer', length: 0 }
+    ]
+  };
+
+  const rows = [];
+  const labels = ['明天'];
+  for (let i = 1; i < 3 && daily3d && daily3d[i]; i++) {
+    const d = daily3d[i];
+    const dt = new Date(d.date + 'T12:00:00');
+    const label = labels[i - 1] || weekNames[dt.getDay()];
+    const { icon: dic, color: dcolor } = getWeatherStyle(d.iconDay);
+    rows.push({ type: 'spacer', length: 6 });
+    rows.push({
+      type: 'stack', direction: 'row', alignItems: 'center',
+      children: [
+        { type: 'text', text: label, font: { size: 16 }, textColor: T, width: 44 },
+        { type: 'image', src: `sf-symbol:${dic}`, width: 22, height: 22, color: dcolor },
+        { type: 'spacer' },
+        { type: 'text', text: `${d.tempMin}°`, font: { size: 17 }, textColor: S },
+        { type: 'spacer', length: 12 },
+        { type: 'text', text: `${d.tempMax}°`, font: { size: 17, weight: 'semibold' }, textColor: T }
       ]
     });
-    const pairs = [];
-    for (let i = 0; i < rows.length; i += 2) pairs.push(rows.slice(i, i + 2));
-
-    return {
-      type:"widget",
-      padding:[10,10,10,10],
-      gap:2,
-      refreshAfter:refreshTime,
-      children:[
-        {
-          type:"stack",
-          direction:"row",
-          alignItems:"center",
-          gap:4,
-          children:[
-            {type:"image",src:"sf-symbol:fuelpump.fill",width:16,height:16,color:COLORS.p92},
-            {type:"text",text:`${regionName || ""}油价`,font:{size:"headline",weight:"bold"},textColor:COLORS.primary,maxLines:1,minScale:0.7},
-            {type:"spacer"},
-            {type:"image",src:"sf-symbol:arrow.clockwise",width:12,height:12,color:COLORS.tertiary},
-            {type:"text",text:timeStr,font:{size:"callout"},textColor:COLORS.tertiary,maxLines:1}
-          ]
-        },
-        ...(SHOW_TREND && trendInfo ? [{
-          type:"text",
-          text:trendInfo.replace(/\s+/g, ""),
-          font:{size:"caption1"},
-          textColor:COLORS.secondary,
-          maxLines:1,
-          minScale:0.5
-        }] : []),
-        ...(fetchError ? [{
-          type:"text",
-          text:errorMsg,
-          font:{size:"caption2"},
-          textColor:COLORS.p98,
-          maxLines:1,
-          minScale:0.6
-        }] : []),
-        rows.length > 0 ? {
-          type:"stack",
-          direction:"column",
-          flex:1,
-          gap:4,
-          children: pairs.map(pair => ({
-            type:"stack",
-            direction:"row",
-            gap:6,
-            children: pair.map(smallCard)
-          }))
-        } : {
-          type:"stack",
-          direction:"column",
-          alignItems:"center",
-          flex:1,
-          gap:4,
-          children:[
-            {type:"image",src:"sf-symbol:exclamationmark.triangle.fill",width:20,height:20,color:COLORS.p98},
-            {type:"text",text:fetchError?"数据获取失败":"暂无数据",font:{size:"caption2"},textColor:COLORS.secondary}
-          ]
-        }
-      ]
-    };
   }
 
   return {
-    type:"widget",
-    padding:[10,8,10,8],
-    gap:5,
-    
-    refreshAfter:refreshTime,
-    children:[
+    type: 'widget',
+    padding: 14,
+    children: [header, { type: 'spacer', length: 4 }, todayRow, ...rows, { type: 'spacer' }]
+  };
+}
+
+function renderAccessory(now, city, family) {
+  if (family === 'accessoryCircular') {
+    return {
+      type: 'widget',
+      children: [{
+        type: 'text',
+        text: `${now.temp}°\n${city}`,
+        font: { size: 14, weight: 'bold' },
+        textAlign: 'center'
+      }]
+    };
+  }
+  return {
+    type: 'widget',
+    children: [{
+      type: 'text',
+      text: `${city} ${now.temp}° ${now.text}`
+    }]
+  };
+}
+
+function capsuleTag(text, textColor, bgColor) {
+  return {
+    type: 'stack',
+    backgroundColor: bgColor,
+    borderRadius: 20,
+    padding: [4, 10, 4, 10],
+    children: [{
+      type: 'text',
+      text,
+      font: { size: 13, weight: 'semibold' },
+      textColor,
+      maxLines: 1
+    }]
+  };
+}
+
+function capsuleTagLarge(text, textColor, bgColor) {
+  return {
+    type: 'stack',
+    backgroundColor: bgColor,
+    borderRadius: 20,
+    padding: [6, 14, 6, 14],
+    children: [{
+      type: 'text',
+      text,
+      font: { size: 18, weight: 'bold' },
+      textColor,
+      maxLines: 1
+    }]
+  };
+}
+
+function infoCard(_sfIcon, label, value, _iconColor, cardBg) {
+  return {
+    type: 'stack',
+    direction: 'column',
+    alignItems: 'center',
+    flex: 1,
+    backgroundColor: cardBg,
+    borderRadius: 14,
+    padding: [8, 6, 8, 6],
+    gap: 3,
+    children: [
       {
-        type:"stack",
-        direction:"row",
-        alignItems:"center",
-        gap:4,
-        padding:[0,4,0,4],
-        children:[
-          {type:"image",src:"sf-symbol:fuelpump.fill",width:13,height:13,color:COLORS.p92},
-          {type:"text",text:titleText,font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary},
-          {type:"spacer"},
-          ...(SHOW_TREND && trendInfo ? [{
-            type:"text",
-            text: trendInfo,
-            font:{size:"caption2"},
-            textColor: COLORS.trend,
-            textAlign:"right",
-            maxLines:1,
-            minScale: 0.8
-          }] : []),
-          ...(fetchError ? [{
-            type:"text",text:errorMsg,font:{size:"caption2"},textColor:COLORS.p98
-          }] : [])
-        ].filter(Boolean)
-      },
-      rows.length > 0 ? {
-        type:"stack",
-        direction:"row",
-        alignItems:"center",
-        gap:6,
-        padding:[6,0,6,0],
-        children: rows.map(priceCard)
-      } : {
-        type:"stack",
-        direction:"column",
-        alignItems:"center",
-        padding:[20,10,20,10],
-        children:[
-          {type:"image",src:"sf-symbol:exclamationmark.triangle.fill",width:24,height:24,color:COLORS.p98},
-          {type:"text",text:fetchError?"数据获取失败":"暂无数据",font:{size:"body"},textColor:COLORS.secondary}
-        ]
+        type: 'text',
+        text: label,
+        font: { size: 10 },
+        textColor: { light: '#8E8E93', dark: '#636366' }
       },
       {
-        type:"stack",
-        direction:"row",
-        alignItems:"center",
-        padding:[0,4,0,4],
-        children:[
-          {type:"text",text:`${timeStr} 更新`,font:{size:"caption2"},textColor:COLORS.tertiary},
-          {type:"spacer"},
-          {type:"text",text:"元/升",font:{size:"caption2"},textColor:COLORS.tertiary}
-        ]
+        type: 'text',
+        text: value,
+        font: { size: 13, weight: 'semibold' },
+        textColor: { light: '#1C1C1E', dark: '#F2F2F7' },
+        maxLines: 1,
+        minScale: 0.7
       }
     ]
+  };
+}
+
+function getWeatherStyle(code) {
+  const n = Number(code);
+  if (n === 100) return { icon: 'sun.max.fill',           color: { light: '#FF9500', dark: '#FFB340' } };
+  if (n === 101) return { icon: 'cloud.sun.fill',         color: { light: '#FF9500', dark: '#FFB340' } };
+  if (n === 102) return { icon: 'cloud.sun.fill',         color: { light: '#FF9500', dark: '#FFB340' } };
+  if (n === 103) return { icon: 'cloud.sun.fill',         color: { light: '#FF9500', dark: '#FFB340' } };
+  if (n === 104) return { icon: 'cloud.fill',             color: { light: '#8E8E93', dark: '#AEAEB2' } };
+  if (n >= 200 && n <= 299) return { icon: 'cloud.bolt.rain.fill', color: { light: '#5856D6', dark: '#7D7AFF' } };
+  if (n >= 300 && n <= 399) return { icon: 'cloud.rain.fill',      color: { light: '#007AFF', dark: '#0A84FF' } };
+  if (n >= 400 && n <= 499) return { icon: 'cloud.snow.fill',      color: { light: '#5AC8FA', dark: '#64D2FF' } };
+  if (n >= 105 && n <= 154) return { icon: 'cloud.fill',           color: { light: '#8E8E93', dark: '#AEAEB2' } };
+  return { icon: 'cloud.fill', color: { light: '#8E8E93', dark: '#AEAEB2' } };
+}
+
+function getBadgeBg(code) {
+  const n = Number(code);
+  if (n >= 100 && n <= 103) return { light: '#FFF3E015', dark: '#3A280025' };
+  if (n >= 200 && n <= 299) return { light: '#EDE7F615', dark: '#1E1A3625' };
+  if (n >= 300 && n <= 399) return { light: '#E3F2FD15', dark: '#001A3625' };
+  if (n >= 400 && n <= 499) return { light: '#E0F7FA15', dark: '#00333625' };
+  return { light: '#F2F2F715', dark: '#2C2C2E25' };
+}
+
+function getAQIStyle(val) {
+  const n = Number(val);
+  if (isNaN(n) || val === '--') return {
+    text: '--', color: { light: '#8E8E93', dark: '#636366' },
+    bg: { light: '#F2F2F715', dark: '#FFFFFF15' }
+  };
+  if (n <= 50)  return { text: '优', color: { light: '#34C759', dark: '#30D158' }, bg: { light: '#34C75915', dark: '#30D15825' } };
+  if (n <= 100) return { text: '良', color: { light: '#FF9500', dark: '#FF9F0A' }, bg: { light: '#FF950015', dark: '#FF9F0A25' } };
+  if (n <= 150) return { text: '轻度', color: { light: '#FF6B35', dark: '#FF6B35' }, bg: { light: '#FF6B3515', dark: '#FF6B3525' } };
+  return { text: '中度', color: { light: '#FF3B30', dark: '#FF453A' }, bg: { light: '#FF3B3015', dark: '#FF453A25' } };
+}
+
+function renderError(msg) {
+  return {
+    type: 'widget',
+    
+    padding: 16,
+    children: [{
+      type: 'stack',
+      backgroundColor: { light: '#FF3B3015', dark: '#FF453A25' },
+      borderRadius: 14,
+      padding: 12,
+      children: [{
+        type: 'text',
+        text: `⚠️ ${msg}`,
+        font: { size: 13 },
+        textColor: { light: '#FF3B30', dark: '#FF453A' }
+      }]
+    }]
+  };
+}
+
+
+function normalizeHost(host) {
+  let h = host;
+  if (!/^https?:\/\//i.test(h)) h = 'https://' + h;
+  return h.replace(/\/+$/, '');
+}
+
+function isAccessoryFamily(family) {
+  return family.startsWith('accessory');
+}
+
+async function getLocation(ctx, locName, key, host) {
+  const presets = {
+    '海口': { lon: '110.3288', lat: '20.0310' }, '三亚': { lon: '109.5119', lat: '18.2528' },
+    '儋州': { lon: '109.5768', lat: '19.5209' }, '琼海': { lon: '110.4746', lat: '19.2584' },
+    '万宁': { lon: '110.3893', lat: '18.7953' }, '文昌': { lon: '110.7530', lat: '19.6129' },
+    '东方': { lon: '108.6536', lat: '19.1017' }, '五指山': { lon: '109.5169', lat: '18.7752' },
+    '陵水': { lon: '110.0372', lat: '18.5050' }, '保亭': { lon: '109.7026', lat: '18.6390' },
+    '屯昌': { lon: '110.1029', lat: '19.3638' }, '澄迈': { lon: '110.0073', lat: '19.7364' },
+    '临高': { lon: '109.6877', lat: '19.9084' }, '定安': { lon: '110.3593', lat: '19.6849' },
+    '乐东': { lon: '109.1717', lat: '18.7478' }, '昌江': { lon: '109.0556', lat: '19.2983' },
+    '白沙': { lon: '109.4515', lat: '19.2240' }, '琼中': { lon: '109.8335', lat: '18.9982' },
+    '广州': { lon: '113.2644', lat: '23.1291' }, '深圳': { lon: '114.0579', lat: '22.5431' },
+    '珠海': { lon: '113.5767', lat: '22.2707' }, '汕头': { lon: '116.6813', lat: '23.3540' },
+    '佛山': { lon: '113.1214', lat: '23.0215' }, '韶关': { lon: '113.5975', lat: '24.8104' },
+    '湛江': { lon: '110.3593', lat: '21.2707' }, '肇庆': { lon: '112.4725', lat: '23.0515' },
+    '江门': { lon: '113.0816', lat: '22.5787' }, '茂名': { lon: '110.9254', lat: '21.6629' },
+    '惠州': { lon: '114.4161', lat: '23.1107' }, '梅州': { lon: '116.1225', lat: '24.2886' },
+    '汕尾': { lon: '115.3752', lat: '22.7862' }, '河源': { lon: '114.7001', lat: '23.7337' },
+    '阳江': { lon: '111.9826', lat: '21.8579' }, '清远': { lon: '113.0560', lat: '23.6817' },
+    '东莞': { lon: '113.7517', lat: '23.0206' }, '中山': { lon: '113.3927', lat: '22.5170' },
+    '潮州': { lon: '116.6226', lat: '23.6569' }, '揭阳': { lon: '116.3728', lat: '23.5497' },
+    '云浮': { lon: '112.0444', lat: '22.9150' },
+    '北京': { lon: '116.4074', lat: '39.9042' }, '上海': { lon: '121.4737', lat: '31.2304' },
+    '天津': { lon: '117.2008', lat: '39.0842' }, '重庆': { lon: '106.5049', lat: '29.5630' },
+    '香港': { lon: '114.1733', lat: '22.3200' }, '澳门': { lon: '113.5491', lat: '22.1987' },
+    '台北': { lon: '121.5090', lat: '25.0443' }, '杭州': { lon: '120.1551', lat: '30.2741' },
+    '南京': { lon: '118.7674', lat: '32.0415' }, '苏州': { lon: '120.5853', lat: '31.2989' },
+    '武汉': { lon: '114.2986', lat: '30.5844' }, '成都': { lon: '104.0657', lat: '30.6595' },
+    '西安': { lon: '108.9480', lat: '34.2632' }, '长沙': { lon: '112.9388', lat: '28.2282' },
+    '郑州': { lon: '113.6654', lat: '34.7579' }, '合肥': { lon: '117.2272', lat: '31.8206' },
+    '南昌': { lon: '115.8582', lat: '28.6829' }, '济南': { lon: '117.0009', lat: '36.6758' },
+    '青岛': { lon: '120.3826', lat: '36.0671' }, '福州': { lon: '119.3062', lat: '26.0753' },
+    '厦门': { lon: '118.0894', lat: '24.4798' }, '南宁': { lon: '108.3200', lat: '22.8240' },
+    '桂林': { lon: '110.2902', lat: '25.2736' }, '贵阳': { lon: '106.7135', lat: '26.5783' },
+    '昆明': { lon: '102.8329', lat: '25.0406' }, '大理': { lon: '100.2246', lat: '25.5916' },
+    '丽江': { lon: '100.2330', lat: '26.8721' }, '拉萨': { lon: '91.1322', lat: '29.6604' },
+    '沈阳': { lon: '123.4315', lat: '41.8057' }, '大连': { lon: '121.6147', lat: '38.9140' },
+    '长春': { lon: '125.3235', lat: '43.8171' }, '哈尔滨': { lon: '126.5350', lat: '45.8038' },
+    '石家庄': { lon: '114.5148', lat: '38.0423' }, '太原': { lon: '112.5488', lat: '37.8706' },
+    '呼和浩特': { lon: '111.6708', lat: '40.8183' }, '兰州': { lon: '103.8236', lat: '36.0581' },
+    '西宁': { lon: '101.7789', lat: '36.6231' }, '银川': { lon: '106.2781', lat: '38.4664' },
+    '乌鲁木齐': { lon: '87.6177', lat: '43.7928' }, '宁波': { lon: '121.5440', lat: '29.8683' },
+    '无锡': { lon: '120.3016', lat: '31.5747' }, '常州': { lon: '119.9469', lat: '31.7727' },
+    '徐州': { lon: '117.1848', lat: '34.2617' }, '扬州': { lon: '119.4129', lat: '32.3942' },
+    '金华': { lon: '119.6495', lat: '29.0895' }, '台州': { lon: '121.4286', lat: '28.6613' },
+    '温州': { lon: '120.6721', lat: '28.0005' }, '绍兴': { lon: '120.5821', lat: '29.9971' },
+    '泉州': { lon: '118.5894', lat: '24.9088' }, '洛阳': { lon: '112.4344', lat: '34.6630' },
+  };
+
+  if (presets[locName]) return { ...presets[locName], city: locName };
+
+  try {
+    const url = `${host}/geo/v2/city/lookup?location=${encodeURIComponent(locName)}&key=${key}&number=1&lang=zh`;
+    const resp = await ctx.http.get(url, { timeout: 6000 });
+    const data = await resp.json();
+    if (data.code === '200' && data.location?.[0]) {
+      const loc = data.location[0];
+      return { lon: loc.lon, lat: loc.lat, city: loc.name || locName };
+    }
+  } catch {}
+  return { lon: '116.4074', lat: '39.9042', city: locName || '北京' };
+}
+
+async function fetchWeatherNow(ctx, key, lon, lat, host) {
+  const url = `${host}/v7/weather/now?location=${lon},${lat}&key=${key}&lang=zh`;
+  const resp = await ctx.http.get(url, { timeout: 8000 });
+  const data = await resp.json();
+  if (data.code !== '200') throw new Error(describeApiError('实况', resp, data));
+  return {
+    temp: data.now.temp,
+    feelsLike: data.now.feelsLike || '--',
+    text: data.now.text,
+    icon: data.now.icon,
+    humidity: data.now.humidity,
+    windDir: data.now.windDir || '--',
+    windScale: data.now.windScale || '--',
+    windSpeed: data.now.windSpeed || '--',
+    precip: data.now.precip || '0',
+    vis: data.now.vis || '--',
+    pressure: data.now.pressure || '--'
+  };
+}
+
+async function fetchDaily7d(ctx, key, lon, lat, host) {
+  const url = `${host}/v7/weather/7d?location=${lon},${lat}&key=${key}&lang=zh`;
+  const resp = await ctx.http.get(url, { timeout: 8000 });
+  const data = await resp.json();
+  if (data.code !== '200') throw new Error(describeApiError('7d预报', resp, data));
+  return data.daily.map(d => ({
+    date: d.fxDate,
+    tempMax: d.tempMax,
+    tempMin: d.tempMin,
+    iconDay: d.iconDay,
+    textDay: d.textDay,
+  }));
+}
+
+async function fetchDaily3d(ctx, key, lon, lat, host) {
+  const url = `${host}/v7/weather/3d?location=${lon},${lat}&key=${key}&lang=zh`;
+  const resp = await ctx.http.get(url, { timeout: 8000 });
+  const data = await resp.json();
+  if (data.code !== '200') throw new Error(describeApiError('3d预报', resp, data));
+  return data.daily.map(d => ({
+    date: d.fxDate,           // 2026-10-12
+    tempMax: d.tempMax,
+    tempMin: d.tempMin,
+    iconDay: d.iconDay,
+    textDay: d.textDay,
+  }));
+}
+
+async function fetchHourly24h(ctx, key, lon, lat, host) {
+  const url = `${host}/v7/weather/24h?location=${lon},${lat}&key=${key}&lang=zh`;
+  const resp = await ctx.http.get(url, { timeout: 8000 });
+  const data = await resp.json();
+  if (data.code !== '200') throw new Error(describeApiError('24h预报', resp, data));
+  return data.hourly.map(h => ({
+    time: h.fxTime,           // 2026-10-12T14:00+08:00
+    temp: Number(h.temp),
+  }));
+}
+
+function describeApiError(tag, resp, data) {
+  const status = resp ? resp.status : 'no-response';
+  let snippet = '';
+  try {
+    snippet = JSON.stringify(data);
+    if (snippet && snippet.length > 120) snippet = snippet.slice(0, 120) + '…';
+  } catch (e) { snippet = String(data); }
+  if (!snippet || snippet === '{}' || snippet === 'undefined') {
+    return `${tag}接口无有效返回(HTTP ${status})，请检查 API_HOST 是否正确`;
   }
+  return `${tag}接口返回 ${snippet} (HTTP ${status})`;
+}
+
+async function fetchAirQuality(ctx, key, lon, lat, host) {
+  try {
+    const url = `${host}/airquality/v1/current/${lat}/${lon}?key=${key}&lang=zh`;
+    const resp = await ctx.http.get(url, { timeout: 7000 });
+    const data = await resp.json();
+    if (data.indexes && data.indexes.length > 0) {
+      const cnMee = data.indexes.find(i => i.code === 'cn-mee') || data.indexes[0];
+      return { aqi: Math.round(Number(cnMee.aqi)), category: cnMee.category };
+    }
+  } catch {}
+  return { aqi: '--', category: '--' };
+}
+
+
+/* ===================== 节假日/农历数据（自 Holiday_Countdown 移植） ===================== */
+/**
+ * 📅 节日倒计时小组件
+ */
+const HOLIDAYS = {
+  '01-01': { name: '元旦', type: 'holiday' },
+  '02-14': { name: '情人节', type: 'holiday' },
+  '03-08': { name: '妇女节', type: 'holiday' },
+  '04-01': { name: '愚人节', type: 'holiday' },
+  '05-01': { name: '劳动节', type: 'holiday' },
+  '05-04': { name: '青年节', type: 'holiday' },
+  '06-01': { name: '儿童节', type: 'holiday' },
+  '07-01': { name: '建党节', type: 'holiday' },
+  '08-01': { name: '建军节', type: 'holiday' },
+  '09-10': { name: '教师节', type: 'holiday' },
+  '10-01': { name: '国庆节', type: 'holiday' },
+  '11-11': { name: '光棍节', type: 'holiday' },
+  '12-25': { name: '圣诞节', type: 'holiday' },
+  '12-31': { name: '跨年夜', type: 'holiday' },
+};
+
+const LUNAR_HOLIDAYS = {
+  '1-1': '春节', '1-15': '元宵节', '2-2': '龙抬头',
+  '5-5': '端午节', '7-7': '七夕节', '7-15': '中元节',
+  '8-15': '中秋节', '9-9': '重阳节', '12-8': '腊八节', '12-30': '除夕'
+};
+
+const FLOATING_HOLIDAYS = {
+  'mother': { name: '母亲节', calc: (y) => getNthWeekday(y, 5, 0, 2) },
+  'father': { name: '父亲节', calc: (y) => getNthWeekday(y, 6, 0, 3) },
+};
+
+/* ===================== 农历核心算法(修正版) ===================== */
+const LUNAR_INFO = [
+  0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
+  0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255, 0x0b540, 0x0d6a0, 0x0ada2, 0x095b0, 0x14977,
+  0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40, 0x1ab54, 0x02b60, 0x09570, 0x052f2, 0x04970,
+  0x06566, 0x0d4a0, 0x0ea50, 0x06e95, 0x05ad0, 0x02b60, 0x186e3, 0x092e0, 0x1c8d7, 0x0c950,
+  0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4, 0x025d0, 0x092d0, 0x0d2b2, 0x0a950, 0x0b557,
+  0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5b0, 0x14573, 0x052b0, 0x0a9a8, 0x0e950, 0x06aa0,
+  0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570, 0x05260, 0x0f263, 0x0d950, 0x05b57, 0x056a0,
+  0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4, 0x0d250, 0x0d558, 0x0b540, 0x0b6a0, 0x195a6,
+  0x095b0, 0x049b0, 0x0a974, 0x0a4b0, 0x0b27a, 0x06a50, 0x06d40, 0x0af46, 0x0ab60, 0x09570,
+  0x04af5, 0x04970, 0x064b0, 0x074a3, 0x0ea50, 0x06b58, 0x055c0, 0x0ab60, 0x096d5, 0x092e0,
+  0x0c960, 0x0d954, 0x0d4a0, 0x0da50, 0x07552, 0x056a0, 0x0abb7, 0x025d0, 0x092d0, 0x0cab5,
+  0x0a950, 0x0b4a0, 0x0baa4, 0x0ad50, 0x055d9, 0x04ba0, 0x0a5b0, 0x15176, 0x052b0, 0x0a930,
+  0x07954, 0x06aa0, 0x0ad50, 0x05b52, 0x04b60, 0x0a6e6, 0x0a4e0, 0x0d260, 0x0ea65, 0x0d530,
+  0x05aa0, 0x076a3, 0x096d0, 0x04afb, 0x04ad0, 0x0a4d0, 0x1d0b6, 0x0d250, 0x0d520, 0x0dd45,
+  0x0b5a0, 0x056d0, 0x055b2, 0x049b0, 0x0a577, 0x0a4b0, 0x0aa50, 0x1b255, 0x06d20, 0x0ada0,
+  0x14aa6, 0x02b60, 0x09570, 0x04976, 0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40, 0x1ab54,
+  0x02b60, 0x09570, 0x052f2, 0x04970, 0x06566, 0x0d4a0, 0x0ea50, 0x16ea5, 0x05ad0, 0x02b60,
+  0x186e3, 0x092e0, 0x1c8d7, 0x0c950, 0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4, 0x025d0,
+  0x092d0, 0x0d2b2, 0x0a950, 0x0b557, 0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5d0, 0x145ad,
+  0x052b0, 0x0a9a8, 0x0e950, 0x06aa0, 0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570, 0x05260,
+  0x0f263, 0x0d950, 0x05b57, 0x056a0, 0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4, 0x0d250
+];
+
+const GAN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+const ZHI = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+const ANIMALS = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
+const LUNAR_MONTH_NAMES = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '腊'];
+const LUNAR_DAY_NAMES = [
+  '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+  '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+  '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'
+];
+
+const LUNAR_MIN_YEAR = 1900;
+const LUNAR_MAX_YEAR = 2100;
+
+function lunarYearDays(y) {
+  let sum = 348;
+  for (let i = 0x8000; i > 0x8; i >>= 1) sum += (LUNAR_INFO[y - LUNAR_MIN_YEAR] & i) ? 1 : 0;
+  return sum + lunarLeapDays(y);
+}
+function lunarLeapMonth(y) { return LUNAR_INFO[y - LUNAR_MIN_YEAR] & 0xf; }
+function lunarLeapDays(y) {
+  return lunarLeapMonth(y) ? ((LUNAR_INFO[y - LUNAR_MIN_YEAR] & 0x10000) ? 30 : 29) : 0;
+}
+function lunarMonthDays(y, m) {
+  return (LUNAR_INFO[y - LUNAR_MIN_YEAR] & (0x10000 >> m)) ? 30 : 29;
+}
+
+function solarToLunar(yy, mm, dd) {
+  const baseDate = new Date(Date.UTC(1900, 0, 31));
+  const objDate = new Date(Date.UTC(yy, mm - 1, dd));
+  let offset = Math.round((objDate - baseDate) / 86400000);
+
+  let i, temp = 0;
+  for (i = LUNAR_MIN_YEAR; i < LUNAR_MAX_YEAR && offset > 0; i++) {
+    temp = lunarYearDays(i);
+    offset -= temp;
+  }
+  if (offset < 0) { offset += temp; i--; }
+  const year = i;
+
+  const leap = lunarLeapMonth(year);
+  let isLeap = false;
+  for (i = 1; i < 13 && offset > 0; i++) {
+    if (leap > 0 && i === leap + 1 && !isLeap) {
+      --i;
+      isLeap = true;
+      temp = lunarLeapDays(year);
+    } else {
+      temp = lunarMonthDays(year, i);
+    }
+    if (isLeap && i === leap + 1) isLeap = false;
+    offset -= temp;
+  }
+  if (offset === 0 && leap > 0 && i === leap + 1) {
+    if (isLeap) { isLeap = false; }
+    else { isLeap = true; --i; }
+  }
+  if (offset < 0) { offset += temp; i--; }
+
+  const month = i;
+  const day = offset + 1;
+  const ganIndex = (year - 4) % 10;
+  const zhiIndex = (year - 4) % 12;
+
+  return {
+    year, month, day, isLeap,
+    ganZhi: GAN[(ganIndex + 10) % 10] + ZHI[(zhiIndex + 12) % 12],
+    animal: ANIMALS[(zhiIndex + 12) % 12],
+    monthStr: (isLeap ? '闰' : '') + LUNAR_MONTH_NAMES[month - 1],
+    dayStr: LUNAR_DAY_NAMES[day - 1] || ''
+  };
+}
+
+const Lunar = {
+  getLunarDate: (d) => solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate()),
+  solarToLunar
+};
+
+/* ===================== 24节气(修正版) ===================== */
+const SOLAR_TERM_NAMES = [
+  '小寒', '大寒', '立春', '雨水', '惊蛰', '春分',
+  '清明', '谷雨', '立夏', '小满', '芒种', '夏至',
+  '小暑', '大暑', '立秋', '处暑', '白露', '秋分',
+  '寒露', '霜降', '立冬', '小雪', '大雪', '冬至'
+];
+
+const SOLAR_TERM_OFFSETS_MIN = [
+  0, 21208, 42467, 63836, 85337, 107014, 128867, 150921, 173149, 195551, 218072, 240693,
+  263343, 285989, 308563, 331033, 353350, 375494, 397447, 419210, 440795, 462224, 483532, 504758
+];
+
+const TROPICAL_YEAR_MS = 365.24219878 * 86400000;
+const SOLAR_TERM_BASE = Date.UTC(1900, 0, 6, 2, 5, 0);
+
+function getSolarTermDate(year, termIndex) {
+  const ms = SOLAR_TERM_BASE + TROPICAL_YEAR_MS * (year - 1900) + SOLAR_TERM_OFFSETS_MIN[termIndex] * 60000;
+  const d = new Date(ms);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+}
+
+/* ===================== 通用日期工具 ===================== */
+function getNthWeekday(year, month, weekday, n) {
+  const first = new Date(year, month - 1, 1);
+  const diff = (weekday - first.getDay() + 7) % 7;
+  return new Date(year, month - 1, 1 + diff + (n - 1) * 7);
+}
+
+function daysDiff(from, to) {
+  const f = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const t = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.floor((t - f) / 86400000);
+}
+
+function findSolarDateByLunar(targetLunarMonth, targetLunarDay, year) {
+  const start = new Date(year, 0, 1);
+  const end = new Date(year + 1, 2, 10);
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const lunar = solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
+    if (lunar.month === targetLunarMonth && lunar.day === targetLunarDay && !lunar.isLeap) {
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }
+  }
+  return null;
+}
+
+/* ===================== 汇总所有倒计时 ===================== */
+function getCountdowns(customToday) {
+  const now = customToday || new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const year = today.getFullYear();
+  const results = [];
+
+  for (const [k, v] of Object.entries(HOLIDAYS)) {
+    const [m, d] = k.split('-').map(Number);
+    let t = new Date(year, m - 1, d);
+    if (t < today) t = new Date(year + 1, m - 1, d);
+    results.push({ name: v.name, days: daysDiff(today, t), type: v.type });
+  }
+
+  for (const v of Object.values(FLOATING_HOLIDAYS)) {
+    let t = v.calc(year);
+    if (t < today) t = v.calc(year + 1);
+    results.push({ name: v.name, days: daysDiff(today, t), type: 'floating' });
+  }
+
+  for (let i = 0; i < 24; i++) {
+    const term = getSolarTermDate(year, i);
+    let t = new Date(term.year, term.month - 1, term.day);
+    if (t < today) {
+      const term2 = getSolarTermDate(year + 1, i);
+      t = new Date(term2.year, term2.month - 1, term2.day);
+    }
+    results.push({ name: SOLAR_TERM_NAMES[i], days: daysDiff(today, t), type: 'term' });
+  }
+
+  try {
+    for (const [k, name] of Object.entries(LUNAR_HOLIDAYS)) {
+      const [lm, ld] = k.split('-').map(Number);
+      const isChuxi = k === '12-30';
+
+      let t = findSolarDateByLunar(lm, ld, year);
+      if (isChuxi && !t) t = findSolarDateByLunar(12, 29, year);
+
+      if (!t || t < today) {
+        t = findSolarDateByLunar(lm, ld, year + 1);
+        if (isChuxi && !t) t = findSolarDateByLunar(12, 29, year + 1);
+      }
+
+      if (t) results.push({ name, days: daysDiff(today, t), type: 'lunar' });
+    }
+  } catch (e) {
+    console.warn('[Lunar Calc Fallback]', e);
+  }
+
+  results.sort((a, b) => a.days - b.days);
+  const seen = new Set();
+  return results.filter(r => !seen.has(r.name) && seen.add(r.name));
+}
+
+/* ===================== SVG 构建器 ===================== */
+
+function buildClockSVG(hour, minute, second) {
+  const cx = 100, cy = 100, r = 92;
+  let ticks = '';
+  for (let i = 0; i < 60; i++) {
+    const a = (i * 6 - 90) * Math.PI / 180;
+    const isHour = i % 5 === 0;
+    const r1 = isHour ? r - 14 : r - 8;
+    const x1 = cx + r1 * Math.cos(a), y1 = cy + r1 * Math.sin(a);
+    const x2 = cx + r * Math.cos(a), y2 = cy + r * Math.sin(a);
+    ticks += `<line x1='${x1.toFixed(1)}' y1='${y1.toFixed(1)}' x2='${x2.toFixed(1)}' y2='${y2.toFixed(1)}' stroke='%23333' stroke-width='${isHour ? 3 : 1.5}'/>`;
+  }
+  let nums = '';
+  for (let n = 1; n <= 12; n++) {
+    const a = (n * 30 - 90) * Math.PI / 180;
+    const x = cx + (r - 28) * Math.cos(a), y = cy + (r - 28) * Math.sin(a);
+    nums += `<text x='${x.toFixed(1)}' y='${(y + 7).toFixed(1)}' text-anchor='middle' font-size='20' font-weight='600' fill='%23333'>${n}</text>`;
+  }
+  const ha = ((hour % 12) * 30 + minute * 0.5 - 90) * Math.PI / 180;
+  const ma = (minute * 6 - 90) * Math.PI / 180;
+  const sa = (second * 6 - 90) * Math.PI / 180;
+  const hx = cx + 45 * Math.cos(ha), hy = cy + 45 * Math.sin(ha);
+  const mx = cx + 68 * Math.cos(ma), my = cy + 68 * Math.sin(ma);
+  const sx = cx + 75 * Math.cos(sa), sy = cy + 75 * Math.sin(sa);
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'>` +
+    `<circle cx='100' cy='100' r='96' fill='none' stroke='%23999' stroke-width='2'/>` +
+    ticks + nums +
+    `<line x1='100' y1='100' x2='${hx.toFixed(1)}' y2='${hy.toFixed(1)}' stroke='%23333' stroke-width='7' stroke-linecap='round'/>` +
+    `<line x1='100' y1='100' x2='${mx.toFixed(1)}' y2='${my.toFixed(1)}' stroke='%23333' stroke-width='5' stroke-linecap='round'/>` +
+    `<line x1='100' y1='100' x2='${sx.toFixed(1)}' y2='${sy.toFixed(1)}' stroke='%23FF9500' stroke-width='2.5' stroke-linecap='round'/>` +
+    `<circle cx='100' cy='100' r='7' fill='%23FF9500'/>` +
+    `</svg>`;
+  return 'data:image/svg+xml,' + svg;
+}
+
+function buildTempCurveSVG(hourly) {
+  const W = 360, H = 120, padL = 8, padR = 8, padT = 22, padB = 16;
+  const pts = hourly.slice(0, 9);
+  if (!pts.length) return '';
+  const temps = pts.map(p => p.temp);
+  const min = Math.min(...temps), max = Math.max(...temps);
+  const span = Math.max(max - min, 1);
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const xy = pts.map((p, i) => {
+    const x = padL + (iw * i) / (pts.length - 1);
+    const y = padT + ih * (1 - (p.temp - min) / span);
+    return { x, y, temp: p.temp };
+  });
+  let grid = '';
+  for (let g = 0; g <= 3; g++) {
+    const y = padT + (ih * g) / 3;
+    grid += `<line x1='${padL}' y1='${y.toFixed(1)}' x2='${W - padR}' y2='${y.toFixed(1)}' stroke='%23999' stroke-width='1' stroke-dasharray='5,4' opacity='0.5'/>`;
+  }
+  const line = xy.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  let dots = '';
+  xy.forEach(p => {
+    dots += `<circle cx='${p.x.toFixed(1)}' cy='${p.y.toFixed(1)}' r='3' fill='%23007AFF'/>` +
+      `<text x='${p.x.toFixed(1)}' y='${(p.y - 8).toFixed(1)}' text-anchor='middle' font-size='11' fill='%23333'>${p.temp}</text>`;
+  });
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W} ${H}'>` +
+    grid +
+    `<polyline points='${line}' fill='none' stroke='%23007AFF' stroke-width='2.5'/>` +
+    dots +
+    `</svg>`;
+  return 'data:image/svg+xml,' + svg;
+}
+
+/* ===================== 大尺寸多合一 ===================== */
+
+function getGreeting(hour) {
+  if (hour >= 5 && hour < 9) return '早晨好';
+  if (hour >= 9 && hour < 12) return '上午好';
+  if (hour >= 12 && hour < 14) return '中午好';
+  if (hour >= 14 && hour < 18) return '下午好';
+  if (hour >= 18 && hour < 23) return '晚上好';
+  return '夜深了';
+}
+
+/* ===================== 大尺寸（简化测试版） ===================== */
+
+function renderLarge(now, city, daily3d, hourly24h, userName) {
+  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
+  const S = { light: '#8E8E93', dark: '#AEAEB2' };
+  const { icon, color } = getWeatherStyle(now.icon);
+  const d = new Date();
+  const clockSrc = buildClockSVG(d.getHours(), d.getMinutes(), d.getSeconds());
+  const curveSrc = hourly24h && hourly24h.length ? buildTempCurveSVG(hourly24h) : '';
+  const greeting = getGreeting(d.getHours());
+
+  let schedules = [];
+  try {
+    schedules = getCountdowns().slice(0, 2).map(c => {
+      const t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + c.days);
+      return { name: c.name, md: `${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}` };
+    });
+  } catch (e) {}
+
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const weekNames = ['一', '二', '三', '四', '五', '六', '日'];
+  const weekCells = [];
+  for (let i = 0; i < 7; i++) {
+    const wd = new Date(monday);
+    wd.setDate(monday.getDate() + i);
+    const isToday = wd.getDate() === d.getDate() && wd.getMonth() === d.getMonth();
+    weekCells.push({
+      type: 'stack', direction: 'column', alignItems: 'center', flex: 1, gap: 1,
+      children: [
+        { type: 'text', text: weekNames[i], font: { size: 10 }, textColor: S },
+        {
+          type: 'stack', alignItems: 'center',
+          ...(isToday ? { backgroundColor: { light: '#FF3B3025', dark: '#FF453A30' } } : {}),
+          borderRadius: 10, padding: [3, 10, 3, 10],
+          children: [
+            { type: 'text', text: String(wd.getDate()), font: { size: 15, weight: 'semibold' },
+              textColor: isToday ? { light: '#FF3B30', dark: '#FF453A' } : T },
+          ]
+        },
+      ]
+    });
+  }
+
+  const today = daily3d && daily3d[0];
+  const tomorrow = daily3d && daily3d[1];
+  const dayAfter = daily3d && daily3d[2];
+
+  const dayCard = (label, dayInfo) => {
+    if (!dayInfo) return { type: 'stack', flex: 1, children: [] };
+    const s = getWeatherStyle(dayInfo.iconDay);
+    return {
+      type: 'stack', direction: 'row', alignItems: 'center', flex: 1, gap: 6,
+      children: [
+        { type: 'text', text: label, font: { size: 13 }, textColor: S },
+        { type: 'image', src: `sf-symbol:${s.icon}`, width: 22, height: 22, color: s.color },
+        { type: 'text', text: `${dayInfo.tempMin}°-${dayInfo.tempMax}°`, font: { size: 13, weight: 'semibold' }, textColor: T },
+      ]
+    };
+  };
+
+  return {
+    type: 'widget',
+    padding: [12, 12, 4, 12],
+    gap: 8,
+    children: [
+      {
+        type: 'stack', direction: 'row', alignItems: 'center',
+        children: [
+          {
+            type: 'stack', direction: 'column', gap: 4, alignItems: 'start',
+            children: [
+              { type: 'text', text: `${d.getFullYear()} ${d.getMonth() + 1}月`, font: { size: 22, weight: 'bold' }, textColor: T },
+              {
+                type: 'stack',
+                backgroundColor: { light: '#AF52DE25', dark: '#BF5AF230' },
+                borderRadius: 6, padding: [2, 8, 2, 8],
+                children: [{ type: 'text', text: '日程', font: { size: 12, weight: 'bold' },
+                  textColor: { light: '#AF52DE', dark: '#BF5AF2' } }]
+              },
+              ...schedules.map((s, i) => ({
+                type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
+                children: [
+                  { type: 'stack', width: 3, height: 28,
+                    backgroundColor: i === 0 ? { light: '#34C75960', dark: '#30D15860' } : { light: '#FF950060', dark: '#FF9F0A60' },
+                    borderRadius: 2 },
+                  { type: 'text', text: `${s.name} ${s.md}`, font: { size: 13 }, textColor: T, maxLines: 1 },
+                ]
+              })),
+            ]
+          },
+          { type: 'spacer' },
+          { type: 'image', src: clockSrc, width: 88, height: 88 },
+          { type: 'spacer' },
+          {
+            type: 'stack', direction: 'column', alignItems: 'center',
+            children: [
+              { type: 'text', text: String(d.getDate()), font: { size: 68, weight: 'bold' }, textColor: T },
+              { type: 'text', text: userName ? `${userName}，${greeting}！` : greeting + '!', font: { size: 14, weight: 'semibold' }, textColor: S },
+            ]
+          },
+        ]
+      },
+      { type: 'stack', direction: 'row', gap: 4, children: weekCells },
+      {
+        type: 'stack', direction: 'row', alignItems: 'center', gap: 10,
+        children: [
+          { type: 'image', src: `sf-symbol:${icon}`, width: 36, height: 36, color },
+          { type: 'text', text: `${now.temp}°`, font: { size: 36, weight: 'bold' }, textColor: T },
+          {
+            type: 'stack', direction: 'column', gap: 1,
+            children: [
+              { type: 'text', text: today ? `${today.tempMax}°-${today.tempMin}°` : '', font: { size: 14 }, textColor: S },
+              { type: 'text', text: `${city} ${now.text}`, font: { size: 13 }, textColor: S },
+            ]
+          },
+          { type: 'spacer' },
+          {
+            type: 'stack', direction: 'column', alignItems: 'end', gap: 1,
+            children: [
+              { type: 'text', text: `体感${now.feelsLike}°`, font: { size: 12 }, textColor: S },
+              { type: 'text', text: `湿度${now.humidity}%`, font: { size: 12 }, textColor: S },
+            ]
+          },
+        ]
+      },
+      { type: 'stack', direction: 'row', gap: 16, children: [ dayCard('明天', tomorrow), dayCard('后天', dayAfter) ] },
+      { type: 'spacer' },
+      ...(curveSrc ? [{
+        type: 'image', src: curveSrc, height: 112
+      }] : []),
+    ]
+  };
 }
