@@ -1,1064 +1,2678 @@
-/**
- * 🌤️ 和风天气 - Egern 小组件
+/*
+ * 中国电信小组件
+ * 用这个链接去登录 https://e.dlife.cn
+ * 同一个文件，两种用法：
+ *   1. generic 类型 → iOS 小组件
+ *   2. request 类型 → 登录捕获
  *
- * ⚠️ 重要提示
  * 环境变量：
- * KEY: 和风天气 API Key（必填）
- * API_HOST: 你的个人API Host（必填！从控制台获取）
- * LOCATION: 城市名，如"北京" （支持预设城市自动经纬度，非预设城市会尝试 geo 查询）
+ *   【App 自动登录（推荐）】
+ *   CT_APP_ACCOUNT   手机号#服务密码#AndroidID（单个变量，三合一）
+ *     或分别配置：
+ *   CT_PHONE         手机号
+ *   CT_PASSWORD      服务密码
+ *   CT_ANDROID_ID    AndroidID（16 位十六进制）
+ *   有 App 账号时走电信营业厅 App 网关直连，无需 cookie，token 失效自动重登
  *
- * ⚠️ 重要提示
- * 公共域名已停用： devapi.qweather.com 、 api.qweather.com  等将从2026年起逐步停止服务
- * 必须使用个人API Host：每个开发者账号都有独立的API Host
- * 从控制台复制：登录 https://console.qweather.com/ → 设置 → 复制API Host
- * KEY获取: 开始请求API之前，你需要先创建项目和凭据 前往控制台-项目管理 点击右上角“创建项目”按钮 填写项目名称，项目名称最多20个字符。你可以稍后对名称进行修改。点击“保存”按钮。然后点你刚创建的项目名称 进去就可以看见了。 ⚠️重要提示: 应用限制 你需要选择不限制
- * ————————————————————————————————————————————————
- * 示例 教程
- * 名称里面填   LOCATION
- * 值里面填     海口                 你想要显示出来的地区
- * 名称里填     KEY
- * 值里面填     h**********f        你的和风天气KEY
- * 名称里面填    API_HOST       
- * 值里面填     **.qweatherapi.com  你的个人API Host
+ *   【网页 Cookie（备用）】
+ *   CT_LOGIN_URL     无 App 账号时使用，Safari 登录后捕获
+ *   CT_COOKIE        无 App 账号时使用
+ *
+ *   【显示开关】
+ *   CT_SHOW_USED_FLOW
+ *   CT_FILTER_ORIENTATE_FLOW
+ *   CT_SHOW_GENERAL_FLOW / CT_SHOW_DIRECTIONAL_FLOW
+ *   CT_TITLE
+ *
+ * 数据来源：
+ *   App 通道：https://appfuwu.189.cn:9021/query/qryImportantData
+ *   Cookie 通道：https://e.dlife.cn/user/package_detail.do
+ *              https://e.dlife.cn/user/balance.do
+ *
+ * 登录过期处理：
+ *   App 通道：token 失效时自动跑登录链重登；登录链失败（如密码错误）通知一次
+ *   Cookie 通道：服务器拒绝 cookie（非 200 / 返回登录页 HTML / 异常载荷）时视为登录过期，
+ *   小组件显示"登录已过期"错误页（点小组件可直接跳登录页）并通知一次，
+ *   不再静默展示旧数据；仅当"连不上服务器"（断网/超时）时才用缓存顶一下，
+ *   此时标题栏会显示"缓存 HH:mm"以示区别。
+ *
+ * 保活模式（三种用法，同一个文件）：
+ *   1. generic 类型 → iOS 小组件
+ *   2. http_request 类型 → 登录捕获
+ *   3. schedule 类型 → 定时保活：在 Egern 里建 schedule 脚本条目指向本文件，
+ *      cron 设为每 20 分钟执行一次，
+ *      App 通道：验证 token 有效性，失效则静默重登；
+ *      Cookie 通道：查一次接口，利用服务端 session 滑动过期机制续命；
+ *      注意：若 e.dlife.cn 是固定时长过期，保活无效，只能手动重登（过期会有通知提示）。
  */
 
-export default async function (ctx) {
-  const safeCtx = ctx || {};
-  const env = safeCtx.env || {};
-  const widgetFamily = safeCtx.widgetFamily || 'systemMedium';
+const URLS = {
+  login: 'https://e.dlife.cn/index.do',
+  detail: 'https://e.dlife.cn/user/package_detail.do',
+  balance: 'https://e.dlife.cn/user/balance.do',
+};
 
-  const apiKey     = (env.KEY || '').trim();
-  const apiHostRaw = (env.API_HOST || '').trim();
-  const location   = (env.LOCATION || '').trim();
-  const userName   = (env.USER_NAME || '').trim();
 
-  if (!apiKey)     return renderError('缺少 KEY 环境变量');
-  if (!apiHostRaw) return renderError('缺少 API_HOST 环境变量');
+const FLOW_COLOR = '#FF6620';
+const VOICE_COLOR = '#78C100';
 
-  const apiHost = normalizeHost(apiHostRaw);
 
-  try {
-    const { lon, lat, city } = await getLocation(safeCtx, location, apiKey, apiHost);
-    const now = await fetchWeatherNow(safeCtx, apiKey, lon, lat, apiHost);
+const COLORS = {
+  bg: {
+    light: '#FFFFFF',
+    dark: '#2C2C2E',
+  },
 
-    let air = null;
-    if (widgetFamily !== 'systemSmall' && !isAccessoryFamily(widgetFamily)) {
-      air = await fetchAirQuality(safeCtx, apiKey, lon, lat, apiHost);
-    }
+  border: {
+    light: '#E5E5EA',
+    dark: '#3A3A3C',
+  },
 
-    if (isAccessoryFamily(widgetFamily)) {
-      return renderAccessory(now, city, widgetFamily);
-    }
-    if (widgetFamily === 'systemSmall') {
-      const [daily3d, airSmall] = await Promise.all([
-        fetchDaily3d(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
-        fetchAirQuality(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
-      ]);
-      return renderSmall(now, city, daily3d, airSmall);
-    }
-    if (widgetFamily === 'systemLarge') {
-      const [daily3d, hourly24h] = await Promise.all([
-        fetchDaily3d(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
-        fetchHourly24h(safeCtx, apiKey, lon, lat, apiHost).catch(() => null),
-      ]);
-      return renderLarge(now, city, daily3d, hourly24h, userName);
-    }
-    const daily7d = await fetchDaily7d(safeCtx, apiKey, lon, lat, apiHost).catch(() => null);
-    return renderMedium(now, city, daily7d);
+  title: {
+    light: '#666666',
+    dark: '#8E8E93',
+  },
 
-  } catch (e) {
-    try { console.error(e); } catch (_) {}
-    const msg = String((e && e.message) || e || '未知错误').slice(0, 80);
-    return renderError(`请求失败：${msg}`);
-  }
-}
+  value: {
+    light: '#1C1C1E',
+    dark: '#FFFFFF',
+  },
 
-function getNextHoliday() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const holidays = [
-    { m: 1, d: 1, name: '元旦' },
-    { m: 2, d: 17, name: '春节', y: 2026 }, { m: 2, d: 6, name: '春节', y: 2027 },
-    { m: 3, d: 3, name: '元宵节', y: 2026 },
-    { m: 5, d: 1, name: '劳动节' },
-    { m: 6, d: 19, name: '端午节', y: 2026 }, { m: 6, d: 9, name: '端午节', y: 2027 },
-    { m: 8, d: 19, name: '七夕节', y: 2026 },
-    { m: 9, d: 25, name: '中秋节', y: 2026 }, { m: 9, d: 15, name: '中秋节', y: 2027 },
-    { m: 10, d: 18, name: '重阳节', y: 2026 },
-    { m: 10, d: 1, name: '国庆节' },
-    { m: 12, d: 25, name: '圣诞节' },
-    { m: 2, d: 4, name: '立春' }, { m: 2, d: 19, name: '雨水' },
-    { m: 3, d: 5, name: '惊蛰' }, { m: 3, d: 20, name: '春分' },
-    { m: 4, d: 4, name: '清明' }, { m: 4, d: 20, name: '谷雨' },
-    { m: 5, d: 5, name: '立夏' }, { m: 5, d: 21, name: '小满' },
-    { m: 6, d: 5, name: '芒种' }, { m: 6, d: 21, name: '夏至' },
-    { m: 7, d: 7, name: '小暑' }, { m: 7, d: 22, name: '大暑' },
-    { m: 8, d: 7, name: '立秋' }, { m: 8, d: 23, name: '处暑' },
-    { m: 9, d: 7, name: '白露' }, { m: 9, d: 23, name: '秋分' },
-    { m: 10, d: 8, name: '寒露' }, { m: 10, d: 23, name: '霜降' },
-    { m: 11, d: 7, name: '立冬' }, { m: 11, d: 22, name: '小雪' },
-    { m: 12, d: 7, name: '大雪' }, { m: 12, d: 21, name: '冬至' },
-    { m: 1, d: 5, name: '小寒' }, { m: 1, d: 20, name: '大寒' },
-  ];
-  let best = null;
-  for (const h of holidays) {
-    for (const yy of [y, y + 1]) {
-      if (h.y && h.y !== yy) continue;
-      const dt = new Date(yy, h.m - 1, h.d);
-      const days = Math.ceil((dt - now) / 86400000);
-      if (days >= 0 && (!best || days < best.days)) {
-        best = { name: h.name, days };
-      }
-    }
-  }
-  return best;
-}
+  time: {
+    light: '#999999',
+    dark: '#666666',
+  },
 
-function renderMedium(now, city, daily7d) {
-  const { icon, color: iconColor } = getWeatherStyle(now.icon);
-  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
-  const S = { light: '#8E8E93', dark: '#AEAEB2' };
-  const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  error: {
+    light: '#FF3B30',
+    dark: '#FF453A',
+  },
 
-  const nowT = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const timeStr = `${nowT.getFullYear()}-${pad(nowT.getMonth() + 1)}-${pad(nowT.getDate())} ${pad(nowT.getHours())}:${pad(nowT.getMinutes())}`;
+  capsuleBg: {
+    light: '#FFFFFF15',
+    dark: '#FFFFFF10',
+  },
 
-  const today = daily7d && daily7d[0];
-  const hlText = today ? `H:${today.tempMax}° L:${today.tempMin}°` : '';
+  accent: {
+    light: '#FF6620',
+    dark: '#FF854D',
+  },
+};
 
-  const humidity = Math.max(0, Math.min(100, Number(now.humidity) || 0));
-  const barW = 300, barH = 10;
-  const fillW = Math.round(barW * humidity / 100);
-  const dotX = Math.max(6, Math.min(barW - 6, fillW));
-  const humiditySvg =
-    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${barW} ${barH}' preserveAspectRatio='none'>` +
-    `<defs><linearGradient id='hg' x1='0' y1='0' x2='1' y2='0'>` +
-    `<stop offset='0' stop-color='%2334C759'/><stop offset='0.35' stop-color='%23FFCC00'/>` +
-    `<stop offset='0.55' stop-color='%23FF9500'/><stop offset='0.75' stop-color='%23FF3B30'/>` +
-    `<stop offset='1' stop-color='%23AF52DE'/></linearGradient></defs>` +
-    `<rect x='0' y='1' width='${barW}' height='${barH - 2}' rx='${(barH - 2) / 2}' fill='url(%23hg)' opacity='0.25'/>` +
-    `<rect x='0' y='1' width='${fillW}' height='${barH - 2}' rx='${(barH - 2) / 2}' fill='url(%23hg)'/>` +
-    `<circle cx='${dotX}' cy='${barH / 2}' r='5' fill='%23FFFFFF' opacity='0.95'/>` +
-    `</svg>`;
 
-  const forecastCells = [];
-  if (daily7d) {
-    for (let i = 1; i <= 6 && daily7d[i]; i++) {
-      const d = daily7d[i];
-      const dt = new Date(d.date + 'T12:00:00');
-      const { icon: dic, color: dcolor } = getWeatherStyle(d.iconDay);
-      forecastCells.push({
-        type: 'stack',
-        direction: 'column',
-        alignItems: 'center',
-        gap: 2,
-        flex: 1,
-        children: [
-          { type: 'text', text: weekNames[dt.getDay()], font: { size: 11 }, textColor: S, maxLines: 1 },
-          { type: 'image', src: `sf-symbol:${dic}`, width: 20, height: 20, color: dcolor },
-          { type: 'text', text: `${d.tempMax}°`, font: { size: 12, weight: 'semibold' }, textColor: T, maxLines: 1 },
-        ]
-      });
-    }
-  }
+function formatFlow(flow) {
+  const remain = flow / 1024;
 
-  const hrLine = {
-    type: 'text', text: ' ',
-    font: { size: 1 },
-    backgroundColor: { light: '#00000018', dark: '#FFFFFF20' },
-  };
-
-  const holiday = getNextHoliday();
-  const holidayBlock = holiday ? {
-    type: 'stack',
-    direction: 'column',
-    alignItems: 'center',
-    gap: 0,
-    children: [
-      { type: 'text', text: `距离${holiday.name}`, font: { size: 11, weight: 'semibold' }, textColor: { light: '#FF3B30', dark: '#FF6B62' }, maxLines: 1 },
-      { type: 'text', text: holiday.days === 0 ? '就是今天' : `还有${holiday.days}天`, font: { size: 11 }, textColor: S, maxLines: 1 },
-    ]
-  } : { type: 'spacer' };
-
-  const infoRow = {
-    type: 'stack',
-    direction: 'row',
-    alignItems: 'center',
-    children: [
-      { type: 'spacer' },
-      { type: 'text', text: `体感 ${now.feelsLike}° · 降水 ${now.precip}mm · 能见度 ${now.vis}km`, font: { size: 10 }, textColor: S, maxLines: 1 },
-      { type: 'spacer' },
-    ]
-  };
-
-  return {
-    type: 'widget',
-    padding: 10,
-    gap: 3,
-    children: [
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        children: [
-          { type: 'image', src: `sf-symbol:${icon}`, width: 36, height: 36, color: iconColor },
-          { type: 'spacer', length: 8 },
-          {
-            type: 'stack',
-            direction: 'column',
-            gap: 1,
-            children: [
-              { type: 'text', text: city, font: { size: 18, weight: 'semibold' }, textColor: T, maxLines: 1 },
-              { type: 'text', text: now.text, font: { size: 13 }, textColor: T, maxLines: 1 },
-              { type: 'text', text: timeStr, font: { size: 10 }, textColor: S, maxLines: 1 },
-            ]
-          },
-          { type: 'spacer' },
-          holidayBlock,
-          { type: 'spacer' },
-          {
-            type: 'stack',
-            direction: 'column',
-            alignItems: 'end',
-            gap: 1,
-            children: [
-              { type: 'text', text: `${now.temp}°C`, font: { size: 30, weight: 'bold' }, textColor: T, maxLines: 1, minScale: 0.7 },
-              { type: 'text', text: hlText, font: { size: 12 }, textColor: S, maxLines: 1 },
-            ]
-          },
-        ]
-      },
-
-      infoRow,
-
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        gap: 6,
-        children: [
-          { type: 'text', text: '相对湿度', font: { size: 12 }, textColor: T, maxLines: 1 },
-          {
-            type: 'image',
-            src: `data:image/svg+xml,${humiditySvg}`,
-            flex: 1,
-            height: 10,
-          },
-          { type: 'text', text: `${humidity}%`, font: { size: 12, weight: 'semibold' }, textColor: T, maxLines: 1 },
-        ]
-      },
-
-      hrLine,
-
-      {
-        type: 'stack',
-        direction: 'row',
-        alignItems: 'center',
-        flex: 1,
-        children: forecastCells.length > 0 ? forecastCells : [{ type: 'spacer' }],
-      },
-    ]
-  };
-}
-
-function renderSmall(now, city, daily3d, air) {
-  const { icon, color: iconColor } = getWeatherStyle(now.icon);
-  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
-  const S = { light: '#8E8E93', dark: '#AEAEB2' };
-  const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-
-  const header = {
-    type: 'stack', direction: 'row', alignItems: 'center',
-    children: [
-      { type: 'text', text: city, font: { size: 17, weight: 'semibold' }, textColor: T, maxLines: 1 },
-      { type: 'spacer' },
-      { type: 'image', src: `sf-symbol:${icon}`, width: 28, height: 28, color: iconColor }
-    ]
-  };
-
-  const today = daily3d && daily3d[0];
-  const todayRow = {
-    type: 'stack', direction: 'row', alignItems: 'center',
-    children: [
-      { type: 'text', text: `${now.temp}°`, font: { size: 38, weight: 'bold' }, textColor: T },
-      { type: 'spacer' },
-      today ? { type: 'text', text: `${today.tempMin}°`, font: { size: 20 }, textColor: S } : { type: 'spacer', length: 0 },
-      today ? { type: 'spacer', length: 12 } : { type: 'spacer', length: 0 },
-      today ? { type: 'text', text: `${today.tempMax}°`, font: { size: 20, weight: 'semibold' }, textColor: T } : { type: 'spacer', length: 0 }
-    ]
-  };
-
-  const rows = [];
-  const labels = ['明天'];
-  for (let i = 1; i < 3 && daily3d && daily3d[i]; i++) {
-    const d = daily3d[i];
-    const dt = new Date(d.date + 'T12:00:00');
-    const label = labels[i - 1] || weekNames[dt.getDay()];
-    const { icon: dic, color: dcolor } = getWeatherStyle(d.iconDay);
-    rows.push({ type: 'spacer', length: 6 });
-    rows.push({
-      type: 'stack', direction: 'row', alignItems: 'center',
-      children: [
-        { type: 'text', text: label, font: { size: 16 }, textColor: T, width: 44 },
-        { type: 'image', src: `sf-symbol:${dic}`, width: 22, height: 22, color: dcolor },
-        { type: 'spacer' },
-        { type: 'text', text: `${d.tempMin}°`, font: { size: 17 }, textColor: S },
-        { type: 'spacer', length: 12 },
-        { type: 'text', text: `${d.tempMax}°`, font: { size: 17, weight: 'semibold' }, textColor: T }
-      ]
-    });
-  }
-
-  return {
-    type: 'widget',
-    padding: 14,
-    children: [header, { type: 'spacer', length: 4 }, todayRow, ...rows, { type: 'spacer' }]
-  };
-}
-
-function renderAccessory(now, city, family) {
-  if (family === 'accessoryCircular') {
+  if (remain < 1024) {
     return {
-      type: 'widget',
-      children: [{
-        type: 'text',
-        text: `${now.temp}°\n${city}`,
-        font: { size: 14, weight: 'bold' },
-        textAlign: 'center'
-      }]
+      amount: remain.toFixed(2),
+      unit: 'MB',
     };
   }
+
   return {
-    type: 'widget',
-    children: [{
-      type: 'text',
-      text: `${city} ${now.temp}° ${now.text}`
-    }]
+    amount: (remain / 1024).toFixed(2),
+    unit: 'GB',
   };
 }
 
-function capsuleTag(text, textColor, bgColor) {
-  return {
-    type: 'stack',
-    backgroundColor: bgColor,
-    borderRadius: 20,
-    padding: [4, 10, 4, 10],
-    children: [{
-      type: 'text',
-      text,
-      font: { size: 13, weight: 'semibold' },
-      textColor,
-      maxLines: 1
-    }]
-  };
+
+function pad2(n) {
+  return n < 10 ? `0${n}` : `${n}`;
 }
 
-function capsuleTagLarge(text, textColor, bgColor) {
-  return {
-    type: 'stack',
-    backgroundColor: bgColor,
-    borderRadius: 20,
-    padding: [6, 14, 6, 14],
-    children: [{
-      type: 'text',
-      text,
-      font: { size: 18, weight: 'bold' },
-      textColor,
-      maxLines: 1
-    }]
-  };
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-function infoCard(_sfIcon, label, value, _iconColor, cardBg) {
-  return {
-    type: 'stack',
-    direction: 'column',
-    alignItems: 'center',
-    flex: 1,
-    backgroundColor: cardBg,
-    borderRadius: 14,
-    padding: [8, 6, 8, 6],
-    gap: 3,
-    children: [
-      {
-        type: 'text',
-        text: label,
-        font: { size: 10 },
-        textColor: { light: '#8E8E93', dark: '#636366' }
+
+function mergeCookies(oldCookie, newPairs) {
+  const map = new Map();
+  for (const p of String(oldCookie || '').split(';')) {
+    const i = p.indexOf('=');
+    if (i > 0) map.set(p.slice(0, i).trim(), p.slice(i + 1).trim());
+  }
+  for (const p of String(newPairs || '').split(';')) {
+    const i = p.indexOf('=');
+    if (i > 0) map.set(p.slice(0, i).trim(), p.slice(i + 1).trim());
+  }
+  return [...map].map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+function harvestSetCookie(ctx, resp, cookie) {
+  // 滑动续期：API 成功返回时若带了 Set-Cookie，合并进存储（同名覆盖）
+  try {
+    const setCookies = (resp.headers && resp.headers.getAll('set-cookie')) || [];
+    const pairs = setCookies
+      .map((c) => String(c).split(';')[0].trim())
+      .filter(Boolean);
+    if (pairs.length > 0) {
+      const merged = mergeCookies(cookie, pairs.join('; '));
+      if (merged && merged !== cookie) ctx.storage.set('ct_cookie', merged);
+      return merged || cookie;
+    }
+  } catch (e) {}
+  return cookie;
+}
+
+
+async function refreshCookie(ctx) {
+  const loginUrl =
+    (ctx.env.CT_LOGIN_URL || '').trim() ||
+    ctx.storage.get('ct_login_url') ||
+    '';
+
+  if (!loginUrl) {
+    return ctx.storage.get('ct_cookie') || '';
+  }
+
+  const url =
+    (loginUrl.match(/(http.+)&sign/) || [])[1] ||
+    loginUrl;
+
+  const resp = await ctx.http.get(url, {
+    redirect: 'manual',
+    timeout: 15000,
+    credentials: 'omit',
+  });
+
+  const setCookies =
+    (resp.headers &&
+      resp.headers.getAll &&
+      resp.headers.getAll('set-cookie')) ||
+    [];
+
+  const pairs = setCookies
+    .map((c) => String(c).split(';')[0].trim())
+    .filter(Boolean);
+
+  if (pairs.length > 0) {
+    // 合并而非覆盖：回放可能只返回部分 cookie，直接覆盖会丢掉原有的
+    const merged = mergeCookies(ctx.storage.get('ct_cookie'), pairs.join('; '));
+    if (merged) ctx.storage.set('ct_cookie', merged);
+  }
+
+  return ctx.storage.get('ct_cookie') || '';
+}
+
+
+async function fetchJson(ctx, url, cookie) {
+  let resp;
+  try {
+    resp = await ctx.http.get(url, {
+      headers: {
+        Cookie: cookie,
       },
-      {
-        type: 'text',
-        text: value,
-        font: { size: 13, weight: 'semibold' },
-        textColor: { light: '#1C1C1E', dark: '#F2F2F7' },
-        maxLines: 1,
-        minScale: 0.7
+
+      timeout: 15000,
+
+      credentials: 'omit',
+    });
+  } catch (e) {
+    // 连服务器都没连上（断网/DNS/超时）：瞬时故障，可以用缓存顶
+    const err = new Error(`network: ${url}`);
+    err.transient = true;
+    throw err;
+  }
+
+  if (!resp || resp.status !== 200) {
+    // 服务器有响应但拒绝了（302 跳登录/401/403 等）：cookie 已失效
+    throw new Error(
+      `HTTP ${resp ? resp.status : 'no-response'}: ${url}`
+    );
+  }
+
+  // 滑动续期：成功响应带的 Set-Cookie 合并进存储
+  cookie = harvestSetCookie(ctx, resp, cookie);
+
+  try {
+    return await resp.json();
+  } catch (e) {
+    // 200 但不是 JSON（通常是被踢到登录页，拿回 HTML）：cookie 已失效
+    throw new Error(`not-json: ${url}`);
+  }
+}
+
+
+
+/* ============================================================
+ * App 登录链（电信营业厅 App 网关直连）
+ * 移植自 Scripting 版，纯 JS 实现无依赖
+ * 配置：CT_APP_ACCOUNT=手机号#服务密码#AndroidID
+ *       或分别配置 CT_PHONE / CT_PASSWORD / CT_ANDROID_ID
+ * 有 App 账号时优先走 App 接口，无需 cookie；token 失效自动重登
+ * ============================================================ */
+
+// 纯 TS 实现的 AES-128-ECB（Pkcs7），用于 189.cn 积分接口的请求体加密。
+// 无外部依赖，可在 Scripting（JavaScriptCore）中运行。
+
+const AES_SBOX = [
+  0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
+  0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
+  0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
+  0x04, 0xc7, 0x23, 0xc3, 0x18, 0x96, 0x05, 0x9a, 0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75,
+  0x09, 0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0, 0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3, 0x2f, 0x84,
+  0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b, 0x6a, 0xcb, 0xbe, 0x39, 0x4a, 0x4c, 0x58, 0xcf,
+  0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85, 0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8,
+  0x51, 0xa3, 0x40, 0x8f, 0x92, 0x9d, 0x38, 0xf5, 0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2,
+  0xcd, 0x0c, 0x13, 0xec, 0x5f, 0x97, 0x44, 0x17, 0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19, 0x73,
+  0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88, 0x46, 0xee, 0xb8, 0x14, 0xde, 0x5e, 0x0b, 0xdb,
+  0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c, 0xc2, 0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79,
+  0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5, 0x4e, 0xa9, 0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08,
+  0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+  0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
+  0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
+  0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16,
+]
+
+const RCON = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36]
+
+function xtime(a) {
+  return ((a << 1) ^ (a & 0x80 ? 0x1b : 0)) & 0xff
+}
+
+function expandKey(key) {
+  const ek = new Uint8Array(176)
+  ek.set(key)
+  for (let i = 16; i < 176; i += 4) {
+    let t0 = ek[i - 4], t1 = ek[i - 3], t2 = ek[i - 2], t3 = ek[i - 1]
+    if (i % 16 === 0) {
+      const u = AES_SBOX[t1]
+      t1 = AES_SBOX[t2]
+      t2 = AES_SBOX[t3]
+      t3 = AES_SBOX[t0]
+      t0 = u ^ RCON[i / 16 - 1]
+    }
+    ek[i] = ek[i - 16] ^ t0
+    ek[i + 1] = ek[i - 15] ^ t1
+    ek[i + 2] = ek[i - 14] ^ t2
+    ek[i + 3] = ek[i - 13] ^ t3
+  }
+  return ek
+}
+
+function encryptBlock(block, ek) {
+  // state 为 4x4 列优先
+  const s = new Uint8Array(16)
+  for (let i = 0; i < 16; i++) s[i] = block[i] ^ ek[i]
+  for (let round = 1; round <= 10; round++) {
+    // SubBytes
+    for (let i = 0; i < 16; i++) s[i] = AES_SBOX[s[i]]
+    // ShiftRows
+    let t
+    t = s[1]; s[1] = s[5]; s[5] = s[9]; s[9] = s[13]; s[13] = t
+    t = s[2]; s[2] = s[10]; s[10] = t
+    t = s[6]; s[6] = s[14]; s[14] = t
+    t = s[15]; s[15] = s[11]; s[11] = s[7]; s[7] = s[3]; s[3] = t
+    // MixColumns（最后一轮跳过）
+    if (round < 10) {
+      for (let c = 0; c < 4; c++) {
+        const i = c * 4
+        const a0 = s[i], a1 = s[i + 1], a2 = s[i + 2], a3 = s[i + 3]
+        const b0 = xtime(a0), b1 = xtime(a1), b2 = xtime(a2), b3 = xtime(a3)
+        s[i] = b0 ^ a1 ^ b1 ^ a2 ^ a3
+        s[i + 1] = a0 ^ b1 ^ a2 ^ b2 ^ a3
+        s[i + 2] = a0 ^ a1 ^ b2 ^ a3 ^ b3
+        s[i + 3] = a0 ^ b0 ^ a1 ^ a2 ^ b3
       }
-    ]
-  };
-}
-
-function getWeatherStyle(code) {
-  const n = Number(code);
-  if (n === 100) return { icon: 'sun.max.fill',           color: { light: '#FF9500', dark: '#FFB340' } };
-  if (n === 101) return { icon: 'cloud.sun.fill',         color: { light: '#FF9500', dark: '#FFB340' } };
-  if (n === 102) return { icon: 'cloud.sun.fill',         color: { light: '#FF9500', dark: '#FFB340' } };
-  if (n === 103) return { icon: 'cloud.sun.fill',         color: { light: '#FF9500', dark: '#FFB340' } };
-  if (n === 104) return { icon: 'cloud.fill',             color: { light: '#8E8E93', dark: '#AEAEB2' } };
-  if (n >= 200 && n <= 299) return { icon: 'cloud.bolt.rain.fill', color: { light: '#5856D6', dark: '#7D7AFF' } };
-  if (n >= 300 && n <= 399) return { icon: 'cloud.rain.fill',      color: { light: '#007AFF', dark: '#0A84FF' } };
-  if (n >= 400 && n <= 499) return { icon: 'cloud.snow.fill',      color: { light: '#5AC8FA', dark: '#64D2FF' } };
-  if (n >= 105 && n <= 154) return { icon: 'cloud.fill',           color: { light: '#8E8E93', dark: '#AEAEB2' } };
-  return { icon: 'cloud.fill', color: { light: '#8E8E93', dark: '#AEAEB2' } };
-}
-
-function getBadgeBg(code) {
-  const n = Number(code);
-  if (n >= 100 && n <= 103) return { light: '#FFF3E015', dark: '#3A280025' };
-  if (n >= 200 && n <= 299) return { light: '#EDE7F615', dark: '#1E1A3625' };
-  if (n >= 300 && n <= 399) return { light: '#E3F2FD15', dark: '#001A3625' };
-  if (n >= 400 && n <= 499) return { light: '#E0F7FA15', dark: '#00333625' };
-  return { light: '#F2F2F715', dark: '#2C2C2E25' };
-}
-
-function getAQIStyle(val) {
-  const n = Number(val);
-  if (isNaN(n) || val === '--') return {
-    text: '--', color: { light: '#8E8E93', dark: '#636366' },
-    bg: { light: '#F2F2F715', dark: '#FFFFFF15' }
-  };
-  if (n <= 50)  return { text: '优', color: { light: '#34C759', dark: '#30D158' }, bg: { light: '#34C75915', dark: '#30D15825' } };
-  if (n <= 100) return { text: '良', color: { light: '#FF9500', dark: '#FF9F0A' }, bg: { light: '#FF950015', dark: '#FF9F0A25' } };
-  if (n <= 150) return { text: '轻度', color: { light: '#FF6B35', dark: '#FF6B35' }, bg: { light: '#FF6B3515', dark: '#FF6B3525' } };
-  return { text: '中度', color: { light: '#FF3B30', dark: '#FF453A' }, bg: { light: '#FF3B3015', dark: '#FF453A25' } };
-}
-
-function renderError(msg) {
-  return {
-    type: 'widget',
-    
-    padding: 16,
-    children: [{
-      type: 'stack',
-      backgroundColor: { light: '#FF3B3015', dark: '#FF453A25' },
-      borderRadius: 14,
-      padding: 12,
-      children: [{
-        type: 'text',
-        text: `⚠️ ${msg}`,
-        font: { size: 13 },
-        textColor: { light: '#FF3B30', dark: '#FF453A' }
-      }]
-    }]
-  };
-}
-
-
-function normalizeHost(host) {
-  let h = host;
-  if (!/^https?:\/\//i.test(h)) h = 'https://' + h;
-  return h.replace(/\/+$/, '');
-}
-
-function isAccessoryFamily(family) {
-  return family.startsWith('accessory');
-}
-
-async function getLocation(ctx, locName, key, host) {
-  const presets = {
-    '海口': { lon: '110.3288', lat: '20.0310' }, '三亚': { lon: '109.5119', lat: '18.2528' },
-    '儋州': { lon: '109.5768', lat: '19.5209' }, '琼海': { lon: '110.4746', lat: '19.2584' },
-    '万宁': { lon: '110.3893', lat: '18.7953' }, '文昌': { lon: '110.7530', lat: '19.6129' },
-    '东方': { lon: '108.6536', lat: '19.1017' }, '五指山': { lon: '109.5169', lat: '18.7752' },
-    '陵水': { lon: '110.0372', lat: '18.5050' }, '保亭': { lon: '109.7026', lat: '18.6390' },
-    '屯昌': { lon: '110.1029', lat: '19.3638' }, '澄迈': { lon: '110.0073', lat: '19.7364' },
-    '临高': { lon: '109.6877', lat: '19.9084' }, '定安': { lon: '110.3593', lat: '19.6849' },
-    '乐东': { lon: '109.1717', lat: '18.7478' }, '昌江': { lon: '109.0556', lat: '19.2983' },
-    '白沙': { lon: '109.4515', lat: '19.2240' }, '琼中': { lon: '109.8335', lat: '18.9982' },
-    '广州': { lon: '113.2644', lat: '23.1291' }, '深圳': { lon: '114.0579', lat: '22.5431' },
-    '珠海': { lon: '113.5767', lat: '22.2707' }, '汕头': { lon: '116.6813', lat: '23.3540' },
-    '佛山': { lon: '113.1214', lat: '23.0215' }, '韶关': { lon: '113.5975', lat: '24.8104' },
-    '湛江': { lon: '110.3593', lat: '21.2707' }, '肇庆': { lon: '112.4725', lat: '23.0515' },
-    '江门': { lon: '113.0816', lat: '22.5787' }, '茂名': { lon: '110.9254', lat: '21.6629' },
-    '惠州': { lon: '114.4161', lat: '23.1107' }, '梅州': { lon: '116.1225', lat: '24.2886' },
-    '汕尾': { lon: '115.3752', lat: '22.7862' }, '河源': { lon: '114.7001', lat: '23.7337' },
-    '阳江': { lon: '111.9826', lat: '21.8579' }, '清远': { lon: '113.0560', lat: '23.6817' },
-    '东莞': { lon: '113.7517', lat: '23.0206' }, '中山': { lon: '113.3927', lat: '22.5170' },
-    '潮州': { lon: '116.6226', lat: '23.6569' }, '揭阳': { lon: '116.3728', lat: '23.5497' },
-    '云浮': { lon: '112.0444', lat: '22.9150' },
-    '北京': { lon: '116.4074', lat: '39.9042' }, '上海': { lon: '121.4737', lat: '31.2304' },
-    '天津': { lon: '117.2008', lat: '39.0842' }, '重庆': { lon: '106.5049', lat: '29.5630' },
-    '香港': { lon: '114.1733', lat: '22.3200' }, '澳门': { lon: '113.5491', lat: '22.1987' },
-    '台北': { lon: '121.5090', lat: '25.0443' }, '杭州': { lon: '120.1551', lat: '30.2741' },
-    '南京': { lon: '118.7674', lat: '32.0415' }, '苏州': { lon: '120.5853', lat: '31.2989' },
-    '武汉': { lon: '114.2986', lat: '30.5844' }, '成都': { lon: '104.0657', lat: '30.6595' },
-    '西安': { lon: '108.9480', lat: '34.2632' }, '长沙': { lon: '112.9388', lat: '28.2282' },
-    '郑州': { lon: '113.6654', lat: '34.7579' }, '合肥': { lon: '117.2272', lat: '31.8206' },
-    '南昌': { lon: '115.8582', lat: '28.6829' }, '济南': { lon: '117.0009', lat: '36.6758' },
-    '青岛': { lon: '120.3826', lat: '36.0671' }, '福州': { lon: '119.3062', lat: '26.0753' },
-    '厦门': { lon: '118.0894', lat: '24.4798' }, '南宁': { lon: '108.3200', lat: '22.8240' },
-    '桂林': { lon: '110.2902', lat: '25.2736' }, '贵阳': { lon: '106.7135', lat: '26.5783' },
-    '昆明': { lon: '102.8329', lat: '25.0406' }, '大理': { lon: '100.2246', lat: '25.5916' },
-    '丽江': { lon: '100.2330', lat: '26.8721' }, '拉萨': { lon: '91.1322', lat: '29.6604' },
-    '沈阳': { lon: '123.4315', lat: '41.8057' }, '大连': { lon: '121.6147', lat: '38.9140' },
-    '长春': { lon: '125.3235', lat: '43.8171' }, '哈尔滨': { lon: '126.5350', lat: '45.8038' },
-    '石家庄': { lon: '114.5148', lat: '38.0423' }, '太原': { lon: '112.5488', lat: '37.8706' },
-    '呼和浩特': { lon: '111.6708', lat: '40.8183' }, '兰州': { lon: '103.8236', lat: '36.0581' },
-    '西宁': { lon: '101.7789', lat: '36.6231' }, '银川': { lon: '106.2781', lat: '38.4664' },
-    '乌鲁木齐': { lon: '87.6177', lat: '43.7928' }, '宁波': { lon: '121.5440', lat: '29.8683' },
-    '无锡': { lon: '120.3016', lat: '31.5747' }, '常州': { lon: '119.9469', lat: '31.7727' },
-    '徐州': { lon: '117.1848', lat: '34.2617' }, '扬州': { lon: '119.4129', lat: '32.3942' },
-    '金华': { lon: '119.6495', lat: '29.0895' }, '台州': { lon: '121.4286', lat: '28.6613' },
-    '温州': { lon: '120.6721', lat: '28.0005' }, '绍兴': { lon: '120.5821', lat: '29.9971' },
-    '泉州': { lon: '118.5894', lat: '24.9088' }, '洛阳': { lon: '112.4344', lat: '34.6630' },
-  };
-
-  if (presets[locName]) return { ...presets[locName], city: locName };
-
-  try {
-    const url = `${host}/geo/v2/city/lookup?location=${encodeURIComponent(locName)}&key=${key}&number=1&lang=zh`;
-    const resp = await ctx.http.get(url, { timeout: 6000 });
-    const data = await resp.json();
-    if (data.code === '200' && data.location?.[0]) {
-      const loc = data.location[0];
-      return { lon: loc.lon, lat: loc.lat, city: loc.name || locName };
     }
-  } catch {}
-  return { lon: '116.4074', lat: '39.9042', city: locName || '北京' };
-}
-
-async function fetchWeatherNow(ctx, key, lon, lat, host) {
-  const url = `${host}/v7/weather/now?location=${lon},${lat}&key=${key}&lang=zh`;
-  const resp = await ctx.http.get(url, { timeout: 8000 });
-  const data = await resp.json();
-  if (data.code !== '200') throw new Error(describeApiError('实况', resp, data));
-  return {
-    temp: data.now.temp,
-    feelsLike: data.now.feelsLike || '--',
-    text: data.now.text,
-    icon: data.now.icon,
-    humidity: data.now.humidity,
-    windDir: data.now.windDir || '--',
-    windScale: data.now.windScale || '--',
-    windSpeed: data.now.windSpeed || '--',
-    precip: data.now.precip || '0',
-    vis: data.now.vis || '--',
-    pressure: data.now.pressure || '--'
-  };
-}
-
-async function fetchDaily7d(ctx, key, lon, lat, host) {
-  const url = `${host}/v7/weather/7d?location=${lon},${lat}&key=${key}&lang=zh`;
-  const resp = await ctx.http.get(url, { timeout: 8000 });
-  const data = await resp.json();
-  if (data.code !== '200') throw new Error(describeApiError('7d预报', resp, data));
-  return data.daily.map(d => ({
-    date: d.fxDate,
-    tempMax: d.tempMax,
-    tempMin: d.tempMin,
-    iconDay: d.iconDay,
-    textDay: d.textDay,
-  }));
-}
-
-async function fetchDaily3d(ctx, key, lon, lat, host) {
-  const url = `${host}/v7/weather/3d?location=${lon},${lat}&key=${key}&lang=zh`;
-  const resp = await ctx.http.get(url, { timeout: 8000 });
-  const data = await resp.json();
-  if (data.code !== '200') throw new Error(describeApiError('3d预报', resp, data));
-  return data.daily.map(d => ({
-    date: d.fxDate,           // 2026-10-12
-    tempMax: d.tempMax,
-    tempMin: d.tempMin,
-    iconDay: d.iconDay,
-    textDay: d.textDay,
-  }));
-}
-
-async function fetchHourly24h(ctx, key, lon, lat, host) {
-  const url = `${host}/v7/weather/24h?location=${lon},${lat}&key=${key}&lang=zh`;
-  const resp = await ctx.http.get(url, { timeout: 8000 });
-  const data = await resp.json();
-  if (data.code !== '200') throw new Error(describeApiError('24h预报', resp, data));
-  return data.hourly.map(h => ({
-    time: h.fxTime,           // 2026-10-12T14:00+08:00
-    temp: Number(h.temp),
-  }));
-}
-
-function describeApiError(tag, resp, data) {
-  const status = resp ? resp.status : 'no-response';
-  let snippet = '';
-  try {
-    snippet = JSON.stringify(data);
-    if (snippet && snippet.length > 120) snippet = snippet.slice(0, 120) + '…';
-  } catch (e) { snippet = String(data); }
-  if (!snippet || snippet === '{}' || snippet === 'undefined') {
-    return `${tag}接口无有效返回(HTTP ${status})，请检查 API_HOST 是否正确`;
+    // AddRoundKey
+    const off = round * 16
+    for (let i = 0; i < 16; i++) s[i] ^= ek[off + i]
   }
-  return `${tag}接口返回 ${snippet} (HTTP ${status})`;
+  return s
 }
 
-async function fetchAirQuality(ctx, key, lon, lat, host) {
-  try {
-    const url = `${host}/airquality/v1/current/${lat}/${lon}?key=${key}&lang=zh`;
-    const resp = await ctx.http.get(url, { timeout: 7000 });
-    const data = await resp.json();
-    if (data.indexes && data.indexes.length > 0) {
-      const cnMee = data.indexes.find(i => i.code === 'cn-mee') || data.indexes[0];
-      return { aqi: Math.round(Number(cnMee.aqi)), category: cnMee.category };
+function utf8Bytes(str) {
+  const out = []
+  for (let i = 0; i < str.length; i++) {
+    let c = str.charCodeAt(i)
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < str.length) {
+      const lo = str.charCodeAt(i + 1)
+      if (lo >= 0xdc00 && lo <= 0xdfff) {
+        c = 0x10000 + ((c - 0xd800) << 10) + (lo - 0xdc00)
+        i++
+      }
     }
-  } catch {}
-  return { aqi: '--', category: '--' };
-}
-
-
-/* ===================== 节假日/农历数据（自 Holiday_Countdown 移植） ===================== */
-/**
- * 📅 节日倒计时小组件
- */
-const HOLIDAYS = {
-  '01-01': { name: '元旦', type: 'holiday' },
-  '02-14': { name: '情人节', type: 'holiday' },
-  '03-08': { name: '妇女节', type: 'holiday' },
-  '04-01': { name: '愚人节', type: 'holiday' },
-  '05-01': { name: '劳动节', type: 'holiday' },
-  '05-04': { name: '青年节', type: 'holiday' },
-  '06-01': { name: '儿童节', type: 'holiday' },
-  '07-01': { name: '建党节', type: 'holiday' },
-  '08-01': { name: '建军节', type: 'holiday' },
-  '09-10': { name: '教师节', type: 'holiday' },
-  '10-01': { name: '国庆节', type: 'holiday' },
-  '11-11': { name: '光棍节', type: 'holiday' },
-  '12-25': { name: '圣诞节', type: 'holiday' },
-  '12-31': { name: '跨年夜', type: 'holiday' },
-};
-
-const LUNAR_HOLIDAYS = {
-  '1-1': '春节', '1-15': '元宵节', '2-2': '龙抬头',
-  '5-5': '端午节', '7-7': '七夕节', '7-15': '中元节',
-  '8-15': '中秋节', '9-9': '重阳节', '12-8': '腊八节', '12-30': '除夕'
-};
-
-const FLOATING_HOLIDAYS = {
-  'mother': { name: '母亲节', calc: (y) => getNthWeekday(y, 5, 0, 2) },
-  'father': { name: '父亲节', calc: (y) => getNthWeekday(y, 6, 0, 3) },
-};
-
-/* ===================== 农历核心算法(修正版) ===================== */
-const LUNAR_INFO = [
-  0x04bd8, 0x04ae0, 0x0a570, 0x054d5, 0x0d260, 0x0d950, 0x16554, 0x056a0, 0x09ad0, 0x055d2,
-  0x04ae0, 0x0a5b6, 0x0a4d0, 0x0d250, 0x1d255, 0x0b540, 0x0d6a0, 0x0ada2, 0x095b0, 0x14977,
-  0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40, 0x1ab54, 0x02b60, 0x09570, 0x052f2, 0x04970,
-  0x06566, 0x0d4a0, 0x0ea50, 0x06e95, 0x05ad0, 0x02b60, 0x186e3, 0x092e0, 0x1c8d7, 0x0c950,
-  0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4, 0x025d0, 0x092d0, 0x0d2b2, 0x0a950, 0x0b557,
-  0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5b0, 0x14573, 0x052b0, 0x0a9a8, 0x0e950, 0x06aa0,
-  0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570, 0x05260, 0x0f263, 0x0d950, 0x05b57, 0x056a0,
-  0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4, 0x0d250, 0x0d558, 0x0b540, 0x0b6a0, 0x195a6,
-  0x095b0, 0x049b0, 0x0a974, 0x0a4b0, 0x0b27a, 0x06a50, 0x06d40, 0x0af46, 0x0ab60, 0x09570,
-  0x04af5, 0x04970, 0x064b0, 0x074a3, 0x0ea50, 0x06b58, 0x055c0, 0x0ab60, 0x096d5, 0x092e0,
-  0x0c960, 0x0d954, 0x0d4a0, 0x0da50, 0x07552, 0x056a0, 0x0abb7, 0x025d0, 0x092d0, 0x0cab5,
-  0x0a950, 0x0b4a0, 0x0baa4, 0x0ad50, 0x055d9, 0x04ba0, 0x0a5b0, 0x15176, 0x052b0, 0x0a930,
-  0x07954, 0x06aa0, 0x0ad50, 0x05b52, 0x04b60, 0x0a6e6, 0x0a4e0, 0x0d260, 0x0ea65, 0x0d530,
-  0x05aa0, 0x076a3, 0x096d0, 0x04afb, 0x04ad0, 0x0a4d0, 0x1d0b6, 0x0d250, 0x0d520, 0x0dd45,
-  0x0b5a0, 0x056d0, 0x055b2, 0x049b0, 0x0a577, 0x0a4b0, 0x0aa50, 0x1b255, 0x06d20, 0x0ada0,
-  0x14aa6, 0x02b60, 0x09570, 0x04976, 0x04970, 0x0a4b0, 0x0b4b5, 0x06a50, 0x06d40, 0x1ab54,
-  0x02b60, 0x09570, 0x052f2, 0x04970, 0x06566, 0x0d4a0, 0x0ea50, 0x16ea5, 0x05ad0, 0x02b60,
-  0x186e3, 0x092e0, 0x1c8d7, 0x0c950, 0x0d4a0, 0x1d8a6, 0x0b550, 0x056a0, 0x1a5b4, 0x025d0,
-  0x092d0, 0x0d2b2, 0x0a950, 0x0b557, 0x06ca0, 0x0b550, 0x15355, 0x04da0, 0x0a5d0, 0x145ad,
-  0x052b0, 0x0a9a8, 0x0e950, 0x06aa0, 0x0aea6, 0x0ab50, 0x04b60, 0x0aae4, 0x0a570, 0x05260,
-  0x0f263, 0x0d950, 0x05b57, 0x056a0, 0x096d0, 0x04dd5, 0x04ad0, 0x0a4d0, 0x0d4d4, 0x0d250
-];
-
-const GAN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
-const ZHI = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-const ANIMALS = ['鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪'];
-const LUNAR_MONTH_NAMES = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '腊'];
-const LUNAR_DAY_NAMES = [
-  '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
-  '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
-  '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'
-];
-
-const LUNAR_MIN_YEAR = 1900;
-const LUNAR_MAX_YEAR = 2100;
-
-function lunarYearDays(y) {
-  let sum = 348;
-  for (let i = 0x8000; i > 0x8; i >>= 1) sum += (LUNAR_INFO[y - LUNAR_MIN_YEAR] & i) ? 1 : 0;
-  return sum + lunarLeapDays(y);
-}
-function lunarLeapMonth(y) { return LUNAR_INFO[y - LUNAR_MIN_YEAR] & 0xf; }
-function lunarLeapDays(y) {
-  return lunarLeapMonth(y) ? ((LUNAR_INFO[y - LUNAR_MIN_YEAR] & 0x10000) ? 30 : 29) : 0;
-}
-function lunarMonthDays(y, m) {
-  return (LUNAR_INFO[y - LUNAR_MIN_YEAR] & (0x10000 >> m)) ? 30 : 29;
-}
-
-function solarToLunar(yy, mm, dd) {
-  const baseDate = new Date(Date.UTC(1900, 0, 31));
-  const objDate = new Date(Date.UTC(yy, mm - 1, dd));
-  let offset = Math.round((objDate - baseDate) / 86400000);
-
-  let i, temp = 0;
-  for (i = LUNAR_MIN_YEAR; i < LUNAR_MAX_YEAR && offset > 0; i++) {
-    temp = lunarYearDays(i);
-    offset -= temp;
+    if (c < 0x80) out.push(c)
+    else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f))
+    else if (c < 0x10000) out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f))
+    else out.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 0x3f), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f))
   }
-  if (offset < 0) { offset += temp; i--; }
-  const year = i;
+  return Uint8Array.from(out)
+}
 
-  const leap = lunarLeapMonth(year);
-  let isLeap = false;
-  for (i = 1; i < 13 && offset > 0; i++) {
-    if (leap > 0 && i === leap + 1 && !isLeap) {
-      --i;
-      isLeap = true;
-      temp = lunarLeapDays(year);
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+function base64Encode(bytes) {
+  let out = ""
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i], b1 = i + 1 < bytes.length ? bytes[i + 1] : 0, b2 = i + 2 < bytes.length ? bytes[i + 2] : 0
+    out += B64[b0 >> 2] + B64[((b0 & 3) << 4) | (b1 >> 4)]
+    out += i + 1 < bytes.length ? B64[((b1 & 15) << 2) | (b2 >> 6)] : "="
+    out += i + 2 < bytes.length ? B64[b2 & 63] : "="
+  }
+  return out
+}
+
+/** AES-128-ECB + Pkcs7，返回 base64（对标 CryptoJS.AES.encrypt(...).toString()） */
+function aes128EcbPkcs7Base64(plaintext, keyStr) {
+  const key = utf8Bytes(keyStr)
+  if (key.length !== 16) throw new Error("AES-128 需要 16 字节 key")
+  const ek = expandKey(key)
+  const pt = utf8Bytes(plaintext)
+  const padLen = 16 - (pt.length % 16)
+  const data = new Uint8Array(pt.length + padLen)
+  data.set(pt)
+  data.fill(padLen, pt.length)
+  const out = new Uint8Array(data.length)
+  for (let off = 0; off < data.length; off += 16) {
+    out.set(encryptBlock(data.subarray(off, off + 16), ek), off)
+  }
+  return base64Encode(out)
+}
+
+
+// 纯 TS 实现 DES / TripleDES-CBC，无依赖，Scripting 可用
+
+const IP = [
+  58, 50, 42, 34, 26, 18, 10, 2, 60, 52, 44, 36, 28, 20, 12, 4,
+  62, 54, 46, 38, 30, 22, 14, 6, 64, 56, 48, 40, 32, 24, 16, 8,
+  57, 49, 41, 33, 25, 17, 9, 1, 59, 51, 43, 35, 27, 19, 11, 3,
+  61, 53, 45, 37, 29, 21, 13, 5, 63, 55, 47, 39, 31, 23, 15, 7,
+]
+const FP = [
+  40, 8, 48, 16, 56, 24, 64, 32, 39, 7, 47, 15, 55, 23, 63, 31,
+  38, 6, 46, 14, 54, 22, 62, 30, 37, 5, 45, 13, 53, 21, 61, 29,
+  36, 4, 44, 12, 52, 20, 60, 28, 35, 3, 43, 11, 51, 19, 59, 27,
+  34, 2, 42, 10, 50, 18, 58, 26, 33, 1, 41, 9, 49, 17, 57, 25,
+]
+const E = [
+  32, 1, 2, 3, 4, 5, 4, 5, 6, 7, 8, 9,
+  8, 9, 10, 11, 12, 13, 12, 13, 14, 15, 16, 17,
+  16, 17, 18, 19, 20, 21, 20, 21, 22, 23, 24, 25,
+  24, 25, 26, 27, 28, 29, 28, 29, 30, 31, 32, 1,
+]
+const P = [
+  16, 7, 20, 21, 29, 12, 28, 17, 1, 15, 23, 26, 5, 18, 31, 10,
+  2, 8, 24, 14, 32, 27, 3, 9, 19, 13, 30, 6, 22, 11, 4, 25,
+]
+const PC1 = [
+  57, 49, 41, 33, 25, 17, 9, 1, 58, 50, 42, 34, 26, 18,
+  10, 2, 59, 51, 43, 35, 27, 19, 11, 3, 60, 52, 44, 36,
+  63, 55, 47, 39, 31, 23, 15, 7, 62, 54, 46, 38, 30, 22,
+  14, 6, 61, 53, 45, 37, 29, 21, 13, 5, 28, 20, 12, 4,
+]
+const PC2 = [
+  14, 17, 11, 24, 1, 5, 3, 28, 15, 6, 21, 10,
+  23, 19, 12, 4, 26, 8, 16, 7, 27, 20, 13, 2,
+  41, 52, 31, 37, 47, 55, 30, 40, 51, 45, 33, 48,
+  44, 49, 39, 56, 34, 53, 46, 42, 50, 36, 29, 32,
+]
+const ROT = [1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
+const DES_SBOX = [
+  [
+    14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7,
+    0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11, 9, 5, 3, 8,
+    4, 1, 14, 8, 13, 6, 2, 11, 15, 12, 9, 7, 3, 10, 5, 0,
+    15, 12, 8, 2, 4, 9, 1, 7, 5, 11, 3, 14, 10, 0, 6, 13,
+  ],
+  [
+    15, 1, 8, 14, 6, 11, 3, 4, 9, 7, 2, 13, 12, 0, 5, 10,
+    3, 13, 4, 7, 15, 2, 8, 14, 12, 0, 1, 10, 6, 9, 11, 5,
+    0, 14, 7, 11, 10, 4, 13, 1, 5, 8, 12, 6, 9, 3, 2, 15,
+    13, 8, 10, 1, 3, 15, 4, 2, 11, 6, 7, 12, 0, 5, 14, 9,
+  ],
+  [
+    10, 0, 9, 14, 6, 3, 15, 5, 1, 13, 12, 7, 11, 4, 2, 8,
+    13, 7, 0, 9, 3, 4, 6, 10, 2, 8, 5, 14, 12, 11, 15, 1,
+    13, 6, 4, 9, 8, 15, 3, 0, 11, 1, 2, 12, 5, 10, 14, 7,
+    1, 10, 13, 0, 6, 9, 8, 7, 4, 15, 14, 3, 11, 5, 2, 12,
+  ],
+  [
+    7, 13, 14, 3, 0, 6, 9, 10, 1, 2, 8, 5, 11, 12, 4, 15,
+    13, 8, 11, 5, 6, 15, 0, 3, 4, 7, 2, 12, 1, 10, 14, 9,
+    10, 6, 9, 0, 12, 11, 7, 13, 15, 1, 3, 14, 5, 2, 8, 4,
+    3, 15, 0, 6, 10, 1, 13, 8, 9, 4, 5, 11, 12, 7, 2, 14,
+  ],
+  [
+    2, 12, 4, 1, 7, 10, 11, 6, 8, 5, 3, 15, 13, 0, 14, 9,
+    14, 11, 2, 12, 4, 7, 13, 1, 5, 0, 15, 10, 3, 9, 8, 6,
+    4, 2, 1, 11, 10, 13, 7, 8, 15, 9, 12, 5, 6, 3, 0, 14,
+    11, 8, 12, 7, 1, 14, 2, 13, 6, 15, 0, 9, 10, 4, 5, 3,
+  ],
+  [
+    12, 1, 10, 15, 9, 2, 6, 8, 0, 13, 3, 4, 14, 7, 5, 11,
+    10, 15, 4, 2, 7, 12, 9, 5, 6, 1, 13, 14, 0, 11, 3, 8,
+    9, 14, 15, 5, 2, 8, 12, 3, 7, 0, 4, 10, 1, 13, 11, 6,
+    4, 3, 2, 12, 9, 5, 15, 10, 11, 14, 1, 7, 6, 0, 8, 13,
+  ],
+  [
+    4, 11, 2, 14, 15, 0, 8, 13, 3, 12, 9, 7, 5, 10, 6, 1,
+    13, 0, 11, 7, 4, 9, 1, 10, 14, 3, 5, 12, 2, 15, 8, 6,
+    1, 4, 11, 13, 12, 3, 7, 14, 10, 15, 6, 8, 0, 5, 9, 2,
+    6, 11, 13, 8, 1, 4, 10, 7, 9, 5, 0, 15, 14, 2, 3, 12,
+  ],
+  [
+    13, 2, 8, 4, 6, 15, 11, 1, 10, 9, 3, 14, 5, 0, 12, 7,
+    1, 15, 13, 8, 10, 3, 7, 4, 12, 5, 6, 11, 0, 14, 9, 2,
+    7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13, 15, 3, 5, 8,
+    2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11,
+  ],
+]
+
+
+
+function bytesToBits(b) {
+  const out = []
+  for (const byte of b) for (let i = 7; i >= 0; i--) out.push((byte >> i) & 1)
+  return out
+}
+function bitsToBytes(bits) {
+  const out = new Uint8Array(bits.length / 8)
+  for (let i = 0; i < out.length; i++) {
+    let v = 0
+    for (let j = 0; j < 8; j++) v = (v << 1) | bits[i * 8 + j]
+    out[i] = v
+  }
+  return out
+}
+function perm(bits, table) {
+  return table.map((p) => bits[p - 1])
+}
+function xor(a, b) {
+  return a.map((v, i) => v ^ b[i])
+}
+function rotL(bits, n) {
+  return bits.slice(n).concat(bits.slice(0, n))
+}
+
+function keySchedule(key8) {
+  const k56 = perm(bytesToBits(key8), PC1)
+  let c = k56.slice(0, 28)
+  let d = k56.slice(28)
+  const subs = []
+  for (let i = 0; i < 16; i++) {
+    c = rotL(c, ROT[i])
+    d = rotL(d, ROT[i])
+    subs.push(perm(c.concat(d), PC2))
+  }
+  return subs
+}
+
+function feistel(r32, sub) {
+  const e48 = perm(r32, E)
+  const x = xor(e48, sub)
+  const s32 = []
+  for (let s = 0; s < 8; s++) {
+    const chunk = x.slice(s * 6, s * 6 + 6)
+    const row = (chunk[0] << 1) | chunk[5]
+    const col = (chunk[1] << 3) | (chunk[2] << 2) | (chunk[3] << 1) | chunk[4]
+    const v = DES_SBOX[s][row * 16 + col]
+    for (let i = 3; i >= 0; i--) s32.push((v >> i) & 1)
+  }
+  return perm(s32, P)
+}
+
+function desBlock(block8, subs, decrypt) {
+  const ip = perm(bytesToBits(block8), IP)
+  let l = ip.slice(0, 32)
+  let r = ip.slice(32)
+  for (let i = 0; i < 16; i++) {
+    const sub = decrypt ? subs[15 - i] : subs[i]
+    const nl = r
+    const nr = xor(l, feistel(r, sub))
+    l = nl
+    r = nr
+  }
+  return bitsToBytes(perm(r.concat(l), FP))
+}
+
+/** TripleDES-CBC。key24: 24 字节；iv8: 8 字节；encrypt: true=加密/false=解密。PKCS7 填充。 */
+function tripleDesCbc(data, key24, iv8, encrypt) {
+  const k1 = keySchedule(key24.slice(0, 8))
+  const k2 = keySchedule(key24.slice(8, 16))
+  const k3 = keySchedule(key24.slice(16, 24))
+  const single = (blk, ks, dec) => desBlock(blk, ks, dec)
+  const ede = (blk, dec) =>
+    dec
+      ? single(single(single(blk, k3, true), k2, false), k1, true)
+      : single(single(single(blk, k1, false), k2, true), k3, false)
+
+  let input
+  if (encrypt) {
+    const pad = 8 - (data.length % 8)
+    input = new Uint8Array(data.length + pad)
+    input.set(data)
+    input.fill(pad, data.length)
+  } else {
+    input = data
+  }
+  const out = new Uint8Array(input.length)
+  let prev = iv8
+  for (let off = 0; off < input.length; off += 8) {
+    const blk = input.slice(off, off + 8)
+    if (encrypt) {
+      const x = new Uint8Array(8)
+      for (let i = 0; i < 8; i++) x[i] = blk[i] ^ prev[i]
+      const c = ede(x, false)
+      out.set(c, off)
+      prev = c
     } else {
-      temp = lunarMonthDays(year, i);
+      const p = ede(blk, true)
+      for (let i = 0; i < 8; i++) out[off + i] = p[i] ^ prev[i]
+      prev = blk
     }
-    if (isLeap && i === leap + 1) isLeap = false;
-    offset -= temp;
   }
-  if (offset === 0 && leap > 0 && i === leap + 1) {
-    if (isLeap) { isLeap = false; }
-    else { isLeap = true; --i; }
+  if (!encrypt) {
+    const pad = out[out.length - 1]
+    if (pad < 1 || pad > 8) throw new Error("3DES 解密填充错误")
+    return out.slice(0, out.length - pad)
   }
-  if (offset < 0) { offset += temp; i--; }
+  return out
+}
 
-  const month = i;
-  const day = offset + 1;
-  const ganIndex = (year - 4) % 10;
-  const zhiIndex = (year - 4) % 12;
+function hexToBytes(hex) {
+  const out = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  return out
+}
+function bytesToHex(b) {
+  return Array.from(b).map((x) => x.toString(16).padStart(2, "0")).join("")
+}
+
+
+// 纯 TS RSA 公钥加密（PKCS#1 v1.5），无依赖，Scripting 可用
+// 用 BigInt 做模幂运算
+
+const RSA_N_HEX =
+  "c190b4f5e53855833ebf34e97ab3c18d3e87dd5b359b0a45a791a026eced8b8e43351fb74cbf3922a9dc54d368da9864472d7fd934c0971e73dc5bfb0386214204dd7ca85bf2f20e9561bf50b6ba08d3d7b5efab3e642b62bfb85b8a7d9c0938fdf625299c4968666d7d9701f2a3af6ee543223cca6ad3f5ca04ef2562137f83"
+const RSA_E = 65537n
+const RSA_N = BigInt("0x" + RSA_N_HEX)
+const KEY_BYTES = 128
+
+function modPow(base, exp, mod) {
+  let result = 1n
+  let b = base % mod
+  let e = exp
+  while (e > 0n) {
+    if (e & 1n) result = (result * b) % mod
+    b = (b * b) % mod
+    e >>= 1n
+  }
+  return result
+}
+
+function bigintToBytes(v, len) {
+  const out = new Uint8Array(len)
+  let x = v
+  for (let i = len - 1; i >= 0; i--) {
+    out[i] = Number(x & 0xffn)
+    x >>= 8n
+  }
+  return out
+}
+
+/** PKCS#1 v1.5 加密，返回 base64。msg 为 UTF-8 字符串。 */
+function rsaEncryptPkcs1(msg) {
+  const enc = new TextEncoder()
+  const m = enc.encode(msg)
+  if (m.length > KEY_BYTES - 11) throw new Error("RSA 明文过长")
+  // 0x00 || 0x02 || PS(非零随机) || 0x00 || M
+  const psLen = KEY_BYTES - 3 - m.length
+  const block = new Uint8Array(KEY_BYTES)
+  block[0] = 0x00
+  block[1] = 0x02
+  const rnd = new Uint8Array(psLen)
+  // 简单 PRNG（Math.random），加密用途可接受
+  for (let i = 0; i < psLen; i++) {
+    let b = 0
+    while (b === 0) b = Math.floor(Math.random() * 256)
+    rnd[i] = b
+  }
+  block.set(rnd, 2)
+  block[2 + psLen] = 0x00
+  block.set(m, 3 + psLen)
+  let v = 0n
+  for (const b of block) v = (v << 8n) | BigInt(b)
+  const c = modPow(v, RSA_E, RSA_N)
+  const cBytes = bigintToBytes(c, KEY_BYTES)
+  return base64Encode(cBytes)
+}
+
+
+/* 电信营业厅 App 登录链（Egern 版）
+ * 移植自 Scripting 版 api/loginchain.ts
+ * ① 服务密码登录 → ② 换 ticket → ③ wapact 统一登录拿 Bearer
+ * 依赖：rsaEncryptPkcs1, tripleDesCbc, hexToBytes, bytesToHex, aes128EcbPkcs7Base64
+ *（由 rsa.js / des3.js / aes.js 提供）
+ */
+
+const APP_UA =
+  'Mozilla/5.0 (Linux; U; Android 12; zh-cn) AppleWebKit/533.1 (KHTML, like Gecko) Version/5.0 Mobile Safari/533.1';
+const DES3_KEY_STR = '1234567`90koiuyhgtfrdews';
+const AES_LOGIN_KEY = 'telecom_wap_2018';
+const REQ_TIMEOUT = 15000;
+const MAX_RETRY = 2;
+
+function appCaesar2(s) {
+  return Array.from(s).map((c) => String.fromCharCode(c.charCodeAt(0) + 2)).join('');
+}
+
+function appTs14(d) {
+  d = d || new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+/* 把 Set-Cookie 收集进 jar（Egern 的 headers.getAll 风格） */
+function appCollectCookies(resp, jar) {
+  let rawCookies = [];
+  try {
+    if (resp.headers && resp.headers.getAll) {
+      rawCookies = resp.headers.getAll('set-cookie') || [];
+    }
+  } catch (e) {}
+  // 兼容单个 set-cookie 头
+  if (rawCookies.length === 0) {
+    try {
+      const single = resp.headers && resp.headers.get && resp.headers.get('set-cookie');
+      if (single) rawCookies = [single];
+    } catch (e) {}
+  }
+  for (const c of rawCookies) {
+    for (const part of String(c).split(/,(?=[^;,=\s]+=)/)) {
+      const m = part.match(/^\s*([^=;]+)=([^;]*)/);
+      if (m) jar[m[1].trim()] = m[2];
+    }
+  }
+}
+
+async function appReqOnce(ctx, url, opts, jar) {
+  opts = opts || {};
+  jar = jar || {};
+  const headers = Object.assign({ 'User-Agent': APP_UA }, opts.headers || {});
+  const ck = Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
+  if (ck) headers['Cookie'] = ck;
+
+  const method = (opts.method || 'GET').toUpperCase();
+  const reqOpts = {
+    headers: headers,
+    timeout: REQ_TIMEOUT,
+    credentials: 'omit',
+  };
+  if (opts.body !== undefined) reqOpts.body = opts.body;
+  // Egern 支持 redirect 选项时透传
+  if (opts.redirect) reqOpts.redirect = opts.redirect;
+
+  let resp;
+  if (method === 'POST') {
+    resp = await ctx.http.post(url, reqOpts);
+  } else {
+    resp = await ctx.http.get(url, reqOpts);
+  }
+
+  appCollectCookies(resp, jar);
+
+  let text = '';
+  try { text = await resp.text(); } catch (e) {}
+  let json = null;
+  try { json = JSON.parse(text); } catch (e) {}
+  return { status: resp.status, text: text, json: json };
+}
+
+async function appReq(ctx, url, opts, jar) {
+  let lastErr = null;
+  for (let i = 0; i <= MAX_RETRY; i++) {
+    try {
+      return await appReqOnce(ctx, url, opts, jar);
+    } catch (e) {
+      lastErr = e;
+      if (i < MAX_RETRY) await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
+function explainCode(rc) {
+  if (rc === '3001') return '（手机号或密码有误；若确认无误，可能是账号被临时锁定，请等 1-2 小时再试）';
+  if (rc === '3006') return '（服务端风控拒绝；可能是设备指纹异常或账号被锁定，请等 1-2 小时再试）';
+  return '';
+}
+
+/* 跑完整登录链（AndroidID 版）。返回每步结果与会话。 */
+async function runLoginChain(ctx, phoneInput, passwdInput, androidIdInput) {
+  const steps = [];
+  const jar = {};
+  const fail = (msg) => {
+    steps.push({ ok: false, msg: msg });
+    return { steps: steps };
+  };
+
+  const phone = String(phoneInput || '').trim();
+  const passwd = String(passwdInput || '').trim();
+  const androidId = String(androidIdInput || '').trim().toLowerCase();
+  if (!/^1\d{10}$/.test(phone)) return fail('① 手机号格式不对，应为 11 位数字');
+  if (!passwd) return fail('① 服务密码不能为空');
+  if (!/^[0-9a-f]{16}$/.test(androidId))
+    return fail('① AndroidID 格式不对，应为 16 位十六进制字符');
+
+  // ---------- ① 服务密码登录 ----------
+  const t = appTs14();
+  const plain = `Xiaomi 20 8.0.0.${androidId.slice(0, 12)}${phone}${t}${passwd}0$$$0.`;
+  let cipherB64;
+  try {
+    cipherB64 = rsaEncryptPkcs1(plain);
+  } catch (e) {
+    return fail(`① RSA 加密失败: ${e && e.message}`);
+  }
+  const body1 = {
+    headerInfos: {
+      code: 'userLoginNormal',
+      timestamp: t,
+      broadAccount: '',
+      broadToken: '',
+      clientType: '#11.0.0#channel8#Xiaomi 20#',
+      shopId: '20002',
+      source: '110003',
+      sourcePassword: 'Sid98s',
+      token: '',
+      userLoginName: appCaesar2(phone),
+    },
+    content: {
+      attach: 'test',
+      fieldData: {
+        loginType: '4',
+        accountType: '',
+        loginAuthCipherAsymmertric: cipherB64,
+        deviceUid: '',
+        phoneNum: appCaesar2(phone),
+        isChinatelecom: '',
+        systemVersion: '8.0.0',
+        androidId: appCaesar2(androidId),
+        loginAuthCipher: '',
+        authentication: appCaesar2(passwd),
+      },
+    },
+  };
+  let r1;
+  try {
+    r1 = await appReq(
+      ctx,
+      'https://appgologin.189.cn:9031/login/client/userLoginNormal',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body1) },
+      jar
+    );
+  } catch (e) {
+    return fail(`① 登录请求网络异常（已重试）: ${e && e.message}`);
+  }
+  const respData = (r1.json && r1.json.responseData) || {};
+  const rc1 = String(respData.resultCode || '');
+  if (rc1 !== '0000') {
+    const failDetail = respData.data && respData.data.loginFailResult;
+    const failJson = failDetail ? JSON.stringify(failDetail) : '';
+    const msg = (r1.json && r1.json.msg) || respData.resultDetail || respData.resultDesc || '';
+    return fail(`① 登录失败 resultCode=${rc1} ${msg}${explainCode(rc1)} | 详情: ${failJson.slice(0, 500)}`);
+  }
+  const loginData = respData.data.loginSuccessResult;
+  const userId = loginData.userId;
+  const token = loginData.token;
+  steps.push({ ok: true, msg: `① 登录成功 userId=${userId}` });
+
+  // ---------- ② 换 ticket ----------
+  const enc = new TextEncoder();
+  const des3key = enc.encode(DES3_KEY_STR);
+  const iv8 = new Uint8Array(8);
+  let targetIdHex;
+  try {
+    targetIdHex = bytesToHex(tripleDesCbc(enc.encode(String(userId)), des3key, iv8, true));
+  } catch (e) {
+    return fail(`② 3DES 加密失败: ${e && e.message}`);
+  }
+  const xml =
+`<Request>
+    <HeaderInfos>
+        <Code>getSingle</Code>
+        <Timestamp>${t}</Timestamp>
+        <BroadAccount></BroadAccount>
+        <BroadToken></BroadToken>
+        <ClientType>#9.6.1#channel50#iPhone 14 Pro Max#</ClientType>
+        <ShopId>20002</ShopId>
+        <Source>110003</Source>
+        <SourcePassword>Sid98s</SourcePassword>
+        <Token>${token}</Token>
+        <UserLoginName>${phone}</UserLoginName>
+    </HeaderInfos>
+    <Content>
+        <Attach>test</Attach>
+        <FieldData>
+            <TargetId>${targetIdHex}</TargetId>
+            <Url>4a6862274835b451</Url>
+        </FieldData>
+    </Content>
+</Request>`;
+  let r2;
+  try {
+    r2 = await appReq(
+      ctx,
+      'https://appgologin.189.cn:9031/map/clientXML',
+      { method: 'POST', headers: { 'Content-Type': 'application/xml' }, body: xml },
+      jar
+    );
+  } catch (e) {
+    return fail(`② 换 ticket 请求网络异常（已重试）: ${e && e.message}`);
+  }
+  if (typeof r2.text !== 'string' || !r2.text.includes('<Ticket>')) {
+    const hint = /过期|校验错误/.test(r2.text || '') ? '（票据校验异常，可能是 token 已失效）' : '';
+    return fail(`② 未取到 Ticket${hint} | 原始前200字: ${(r2.text || '').slice(0, 200)}`);
+  }
+  let ticketHex;
+  let uid;
+  try {
+    ticketHex = r2.text.split('<Ticket>')[1].split('</Ticket>')[0];
+    const dec = tripleDesCbc(hexToBytes(ticketHex), des3key, iv8, false);
+    uid = new TextDecoder().decode(dec);
+  } catch (e) {
+    return fail(`② Ticket 解密失败: ${e && e.message}`);
+  }
+  if (!uid) return fail('② Ticket 解密结果为空');
+  steps.push({ ok: true, msg: '② 拿到 ticket' });
+
+  // ---------- ③ wapact 统一登录拿 Bearer ----------
+  const authPlain = JSON.stringify({
+    ticket: uid,
+    backUrl: 'https%3A%2F%2Fwapact.189.cn%3A9001',
+    platformCode: 'P201010301',
+    loginType: 2,
+  });
+  let authBody;
+  try {
+    authBody = aes128EcbPkcs7Base64(authPlain, AES_LOGIN_KEY);
+  } catch (e) {
+    return fail(`③ AES 加密失败: ${e && e.message}`);
+  }
+  let r3;
+  try {
+    r3 = await appReq(
+      ctx,
+      'https://wapact.189.cn:9001/unified/user/login',
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: authBody },
+      jar
+    );
+  } catch (e) {
+    return fail(`③ 统一登录请求网络异常（已重试）: ${e && e.message}`);
+  }
+  const cookie = Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
+  if (r3.json && r3.json.code === 0 && r3.json.biz && r3.json.biz.token) {
+    const bearer = `Bearer ${r3.json.biz.token}`;
+    steps.push({ ok: true, msg: '③ 统一登录成功，拿到 Bearer' });
+    return { steps: steps, userId: String(userId), token: String(token), ticket: ticketHex, uid: uid, bearer: bearer, cookie: cookie };
+  }
+  steps.push({ ok: false, msg: `③ 统一登录未拿到 Bearer (code=${r3.json && r3.json.code})，但前两步已通` });
+  return { steps: steps, userId: String(userId), token: String(token), ticket: ticketHex, uid: uid, cookie: cookie };
+}
+
+
+/* App 接口查话费/流量/语音（Egern 版）
+ * 移植自 Scripting 版 api/appdata.ts
+ * POST https://appfuwu.189.cn:9021/query/qryImportantData
+ * 用 App 登录拿到的 token 直接查，无需 e.dlife.cn cookie
+ */
+
+const APPFUWU_UA = 'P216010901';
+const APP_CLIENT_TYPE = '#11.0.0#channel8#Xiaomi 20#';
+
+function appDataCaesar2(s) {
+  return Array.from(s).map((c) => String.fromCharCode(c.charCodeAt(0) + 2)).join('');
+}
+
+function appDataTsMin(d) {
+  d = d || new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}00`;
+}
+
+/* 用 App token 查主要数据。成功返回解析后的数据，失败抛错。 */
+async function fetchImportantData(ctx, token, phone) {
+  const t = appDataTsMin();
+  const encPhone = appDataCaesar2(phone);
+  const body = {
+    content: {
+      fieldData: {
+        provinceCode: '600101',
+        cityCode: '8441900',
+        shopId: '20002',
+        isChinatelecom: '0',
+        account: encPhone,
+      },
+      attach: 'test',
+    },
+    headerInfos: {
+      code: 'userFluxPackage',
+      clientType: APP_CLIENT_TYPE,
+      timestamp: t,
+      shopId: '20002',
+      source: '110003',
+      sourcePassword: 'Sid98s',
+      userLoginName: encPhone,
+      token: token,
+    },
+  };
+
+  let resp;
+  try {
+    resp = await ctx.http.post('https://appfuwu.189.cn:9021/query/qryImportantData', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json; charset=UTF-8',
+        'user-agent': APPFUWU_UA,
+      },
+      body: JSON.stringify(body),
+      timeout: 15000,
+      credentials: 'omit',
+    });
+  } catch (e) {
+    const err = new Error(`network: qryImportantData`);
+    err.transient = true;
+    throw err;
+  }
+
+  let text = '';
+  try { text = await resp.text(); } catch (e) {}
+  let json = null;
+  try { json = JSON.parse(text); } catch (e) {}
+
+  const rd = json && json.responseData;
+  if (!rd || rd.resultCode !== '0000') {
+    const err = new Error(`resultCode=${rd && rd.resultCode} | 原始: ${text.slice(0, 300)}`);
+    // token 失效类错误标记为 authFailed，便于上层触发重登
+    err.authFailed = true;
+    throw err;
+  }
+
+  const d = rd.data;
+  const num = (v) => {
+    const n = parseInt(String(v == null ? '0' : v), 10);
+    return isNaN(n) ? 0 : n;
+  };
+  const total = (d && d.flowInfo && d.flowInfo.totalAmount) || {};
+  const common = (d && d.flowInfo && d.flowInfo.commonFlow) || {};
+  const special = (d && d.flowInfo && d.flowInfo.specialAmount) || {};
+  const voice = (d && d.voiceInfo && d.voiceInfo.voiceDataInfo) || {};
+  const balStr = (d && d.balanceInfo && d.balanceInfo.indexBalanceDataInfo && d.balanceInfo.indexBalanceDataInfo.balance) || '0';
 
   return {
-    year, month, day, isLeap,
-    ganZhi: GAN[(ganIndex + 10) % 10] + ZHI[(zhiIndex + 12) % 12],
-    animal: ANIMALS[(zhiIndex + 12) % 12],
-    monthStr: (isLeap ? '闰' : '') + LUNAR_MONTH_NAMES[month - 1],
-    dayStr: LUNAR_DAY_NAMES[day - 1] || ''
+    balanceFen: Math.round(parseFloat(String(balStr)) * 100) || 0,
+    voiceUsed: num(voice.used),
+    voiceBalance: num(voice.balance),
+    voiceTotal: num(voice.total),
+    flowUsedKB: num(total.used),
+    flowBalanceKB: num(total.balance),
+    flowOverKB: num(total.over),
+    commonUsedKB: num(common.used),
+    commonBalanceKB: num(common.balance),
+    commonOverKB: num(common.over),
+    specialUsedKB: num(special.used),
+    specialBalanceKB: num(special.balance),
   };
 }
 
-const Lunar = {
-  getLunarDate: (d) => solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate()),
-  solarToLunar
-};
 
-/* ===================== 24节气(修正版) ===================== */
-const SOLAR_TERM_NAMES = [
-  '小寒', '大寒', '立春', '雨水', '惊蛰', '春分',
-  '清明', '谷雨', '立夏', '小满', '芒种', '夏至',
-  '小暑', '大暑', '立秋', '处暑', '白露', '秋分',
-  '寒露', '霜降', '立冬', '小雪', '大雪', '冬至'
-];
+/* ---------- App 账号配置解析 ---------- */
 
-const SOLAR_TERM_OFFSETS_MIN = [
-  0, 21208, 42467, 63836, 85337, 107014, 128867, 150921, 173149, 195551, 218072, 240693,
-  263343, 285989, 308563, 331033, 353350, 375494, 397447, 419210, 440795, 462224, 483532, 504758
-];
-
-const TROPICAL_YEAR_MS = 365.24219878 * 86400000;
-const SOLAR_TERM_BASE = Date.UTC(1900, 0, 6, 2, 5, 0);
-
-function getSolarTermDate(year, termIndex) {
-  const ms = SOLAR_TERM_BASE + TROPICAL_YEAR_MS * (year - 1900) + SOLAR_TERM_OFFSETS_MIN[termIndex] * 60000;
-  const d = new Date(ms);
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
-}
-
-/* ===================== 通用日期工具 ===================== */
-function getNthWeekday(year, month, weekday, n) {
-  const first = new Date(year, month - 1, 1);
-  const diff = (weekday - first.getDay() + 7) % 7;
-  return new Date(year, month - 1, 1 + diff + (n - 1) * 7);
-}
-
-function daysDiff(from, to) {
-  const f = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  const t = new Date(to.getFullYear(), to.getMonth(), to.getDate());
-  return Math.floor((t - f) / 86400000);
-}
-
-function findSolarDateByLunar(targetLunarMonth, targetLunarDay, year) {
-  const start = new Date(year, 0, 1);
-  const end = new Date(year + 1, 2, 10);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const lunar = solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
-    if (lunar.month === targetLunarMonth && lunar.day === targetLunarDay && !lunar.isLeap) {
-      return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+function getAppAccount(ctx) {
+  // 优先单个变量 CT_APP_ACCOUNT=手机号#服务密码#AndroidID
+  const combined = (ctx.env.CT_APP_ACCOUNT || '').trim();
+  if (combined) {
+    const parts = combined.split('#');
+    if (parts.length >= 2) {
+      return {
+        phone: (parts[0] || '').trim(),
+        passwd: parts[1] || '',
+        androidId: (parts[2] || '').trim(),
+      };
     }
+  }
+  // 备选：三个独立变量
+  const phone = (ctx.env.CT_PHONE || '').trim();
+  const passwd = (ctx.env.CT_PASSWORD || '').trim();
+  const androidId = (ctx.env.CT_ANDROID_ID || '').trim();
+  if (phone && passwd) {
+    return { phone: phone, passwd: passwd, androidId: androidId };
+  }
+  // 兼容 Storage 里存的（之前配置过）
+  const sPhone = ctx.storage.get('ct_app_phone') || '';
+  const sPass = ctx.storage.get('ct_app_pass') || '';
+  const sAndroid = ctx.storage.get('ct_app_android_id') || '';
+  if (sPhone && sPass) {
+    return { phone: sPhone, passwd: sPass, androidId: sAndroid };
   }
   return null;
 }
 
-/* ===================== 汇总所有倒计时 ===================== */
-function getCountdowns(customToday) {
-  const now = customToday || new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const year = today.getFullYear();
-  const results = [];
-
-  for (const [k, v] of Object.entries(HOLIDAYS)) {
-    const [m, d] = k.split('-').map(Number);
-    let t = new Date(year, m - 1, d);
-    if (t < today) t = new Date(year + 1, m - 1, d);
-    results.push({ name: v.name, days: daysDiff(today, t), type: v.type });
-  }
-
-  for (const v of Object.values(FLOATING_HOLIDAYS)) {
-    let t = v.calc(year);
-    if (t < today) t = v.calc(year + 1);
-    results.push({ name: v.name, days: daysDiff(today, t), type: 'floating' });
-  }
-
-  for (let i = 0; i < 24; i++) {
-    const term = getSolarTermDate(year, i);
-    let t = new Date(term.year, term.month - 1, term.day);
-    if (t < today) {
-      const term2 = getSolarTermDate(year + 1, i);
-      t = new Date(term2.year, term2.month - 1, term2.day);
-    }
-    results.push({ name: SOLAR_TERM_NAMES[i], days: daysDiff(today, t), type: 'term' });
-  }
-
-  try {
-    for (const [k, name] of Object.entries(LUNAR_HOLIDAYS)) {
-      const [lm, ld] = k.split('-').map(Number);
-      const isChuxi = k === '12-30';
-
-      let t = findSolarDateByLunar(lm, ld, year);
-      if (isChuxi && !t) t = findSolarDateByLunar(12, 29, year);
-
-      if (!t || t < today) {
-        t = findSolarDateByLunar(lm, ld, year + 1);
-        if (isChuxi && !t) t = findSolarDateByLunar(12, 29, year + 1);
-      }
-
-      if (t) results.push({ name, days: daysDiff(today, t), type: 'lunar' });
-    }
-  } catch (e) {
-    console.warn('[Lunar Calc Fallback]', e);
-  }
-
-  results.sort((a, b) => a.days - b.days);
-  const seen = new Set();
-  return results.filter(r => !seen.has(r.name) && seen.add(r.name));
+function saveAppAccountStorage(ctx, phone, passwd, androidId) {
+  ctx.storage.set('ct_app_phone', String(phone || '').trim());
+  ctx.storage.set('ct_app_pass', String(passwd || ''));
+  ctx.storage.set('ct_app_android_id', String(androidId || '').trim());
 }
 
-/* ===================== SVG 构建器 ===================== */
+/* ---------- App Token 管理 ---------- */
 
-function buildClockSVG(hour, minute, second) {
-  const cx = 100, cy = 100, r = 92;
-  let ticks = '';
-  for (let i = 0; i < 60; i++) {
-    const a = (i * 6 - 90) * Math.PI / 180;
-    const isHour = i % 5 === 0;
-    const r1 = isHour ? r - 14 : r - 8;
-    const x1 = cx + r1 * Math.cos(a), y1 = cy + r1 * Math.sin(a);
-    const x2 = cx + r * Math.cos(a), y2 = cy + r * Math.sin(a);
-    ticks += `<line x1='${x1.toFixed(1)}' y1='${y1.toFixed(1)}' x2='${x2.toFixed(1)}' y2='${y2.toFixed(1)}' stroke='%23333' stroke-width='${isHour ? 3 : 1.5}'/>`;
-  }
-  let nums = '';
-  for (let n = 1; n <= 12; n++) {
-    const a = (n * 30 - 90) * Math.PI / 180;
-    const x = cx + (r - 28) * Math.cos(a), y = cy + (r - 28) * Math.sin(a);
-    nums += `<text x='${x.toFixed(1)}' y='${(y + 7).toFixed(1)}' text-anchor='middle' font-size='20' font-weight='600' fill='%23333'>${n}</text>`;
-  }
-  const ha = ((hour % 12) * 30 + minute * 0.5 - 90) * Math.PI / 180;
-  const ma = (minute * 6 - 90) * Math.PI / 180;
-  const sa = (second * 6 - 90) * Math.PI / 180;
-  const hx = cx + 45 * Math.cos(ha), hy = cy + 45 * Math.sin(ha);
-  const mx = cx + 68 * Math.cos(ma), my = cy + 68 * Math.sin(ma);
-  const sx = cx + 75 * Math.cos(sa), sy = cy + 75 * Math.sin(sa);
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'>` +
-    `<circle cx='100' cy='100' r='96' fill='none' stroke='%23999' stroke-width='2'/>` +
-    ticks + nums +
-    `<line x1='100' y1='100' x2='${hx.toFixed(1)}' y2='${hy.toFixed(1)}' stroke='%23333' stroke-width='7' stroke-linecap='round'/>` +
-    `<line x1='100' y1='100' x2='${mx.toFixed(1)}' y2='${my.toFixed(1)}' stroke='%23333' stroke-width='5' stroke-linecap='round'/>` +
-    `<line x1='100' y1='100' x2='${sx.toFixed(1)}' y2='${sy.toFixed(1)}' stroke='%23FF9500' stroke-width='2.5' stroke-linecap='round'/>` +
-    `<circle cx='100' cy='100' r='7' fill='%23FF9500'/>` +
-    `</svg>`;
-  return 'data:image/svg+xml,' + svg;
+function getAppToken(ctx) {
+  return ctx.storage.get('ct_app_token') || '';
 }
 
-function buildTempCurveSVG(hourly) {
-  const W = 360, H = 120, padL = 8, padR = 8, padT = 22, padB = 16;
-  const pts = hourly.slice(0, 9);
-  if (!pts.length) return '';
-  const temps = pts.map(p => p.temp);
-  const min = Math.min(...temps), max = Math.max(...temps);
-  const span = Math.max(max - min, 1);
-  const iw = W - padL - padR, ih = H - padT - padB;
-  const xy = pts.map((p, i) => {
-    const x = padL + (iw * i) / (pts.length - 1);
-    const y = padT + ih * (1 - (p.temp - min) / span);
-    return { x, y, temp: p.temp };
-  });
-  let grid = '';
-  for (let g = 0; g <= 3; g++) {
-    const y = padT + (ih * g) / 3;
-    grid += `<line x1='${padL}' y1='${y.toFixed(1)}' x2='${W - padR}' y2='${y.toFixed(1)}' stroke='%23999' stroke-width='1' stroke-dasharray='5,4' opacity='0.5'/>`;
-  }
-  const line = xy.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  let dots = '';
-  xy.forEach(p => {
-    dots += `<circle cx='${p.x.toFixed(1)}' cy='${p.y.toFixed(1)}' r='3' fill='%23007AFF'/>` +
-      `<text x='${p.x.toFixed(1)}' y='${(p.y - 8).toFixed(1)}' text-anchor='middle' font-size='11' fill='%23333'>${p.temp}</text>`;
-  });
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W} ${H}'>` +
-    grid +
-    `<polyline points='${line}' fill='none' stroke='%23007AFF' stroke-width='2.5'/>` +
-    dots +
-    `</svg>`;
-  return 'data:image/svg+xml,' + svg;
+function saveAppToken(ctx, token) {
+  ctx.storage.set('ct_app_token', token || '');
+  ctx.storage.set('ct_app_token_at', Date.now());
 }
 
-/* ===================== 大尺寸多合一 ===================== */
-
-function getGreeting(hour) {
-  if (hour >= 5 && hour < 9) return '早晨好';
-  if (hour >= 9 && hour < 12) return '上午好';
-  if (hour >= 12 && hour < 14) return '中午好';
-  if (hour >= 14 && hour < 18) return '下午好';
-  if (hour >= 18 && hour < 23) return '晚上好';
-  return '夜深了';
+function clearAppToken(ctx) {
+  ctx.storage.delete('ct_app_token');
+  ctx.storage.delete('ct_app_token_at');
 }
 
-/* ===================== 大尺寸（简化测试版） ===================== */
+/* ---------- App 数据格式转换 ---------- */
+/* 把 qryImportantData 的返回转成现有 render 函数能用的 ds 格式 */
 
-function renderLarge(now, city, daily3d, hourly24h, userName) {
-  const T = { light: '#1C1C1E', dark: '#F2F2F7' };
-  const S = { light: '#8E8E93', dark: '#AEAEB2' };
-  const { icon, color } = getWeatherStyle(now.icon);
-  const d = new Date();
-  const clockSrc = buildClockSVG(d.getHours(), d.getMinutes(), d.getSeconds());
-  const curveSrc = hourly24h && hourly24h.length ? buildTempCurveSVG(hourly24h) : '';
-  const greeting = getGreeting(d.getHours());
+function parseAppData(imp, opts) {
+  const showUsedFlow = opts.showUsedFlow;
+  const showGeneralFlow = opts.showGeneralFlow;
+  const showDirectionalFlow = opts.showDirectionalFlow;
 
-  let schedules = [];
-  try {
-    schedules = getCountdowns().slice(0, 2).map(c => {
-      const t = new Date(d.getFullYear(), d.getMonth(), d.getDate() + c.days);
-      return { name: c.name, md: `${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}` };
-    });
-  } catch (e) {}
+  // 流量：按通用/定向开关累加（KB）
+  let balanceKB = 0;
+  let usedKB = 0;
+  if (showGeneralFlow) {
+    balanceKB += imp.commonBalanceKB || 0;
+    usedKB += imp.commonUsedKB || 0;
+  }
+  if (showDirectionalFlow) {
+    balanceKB += imp.specialBalanceKB || 0;
+    usedKB += imp.specialUsedKB || 0;
+  }
+  // 两个开关都关时用总量，避免显示 0
+  if (!showGeneralFlow && !showDirectionalFlow) {
+    balanceKB = imp.flowBalanceKB || 0;
+    usedKB = imp.flowUsedKB || 0;
+  }
+  const totalKB = balanceKB + usedKB;
 
-  const monday = new Date(d);
-  monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  const weekNames = ['一', '二', '三', '四', '五', '六', '日'];
-  const weekCells = [];
-  for (let i = 0; i < 7; i++) {
-    const wd = new Date(monday);
-    wd.setDate(monday.getDate() + i);
-    const isToday = wd.getDate() === d.getDate() && wd.getMonth() === d.getMonth();
-    weekCells.push({
-      type: 'stack', direction: 'column', alignItems: 'center', flex: 1, gap: 1,
-      children: [
-        { type: 'text', text: weekNames[i], font: { size: 10 }, textColor: S },
-        {
-          type: 'stack', alignItems: 'center',
-          ...(isToday ? { backgroundColor: { light: '#FF3B3025', dark: '#FF453A30' } } : {}),
-          borderRadius: 10, padding: [3, 10, 3, 10],
-          children: [
-            { type: 'text', text: String(wd.getDate()), font: { size: 15, weight: 'semibold' },
-              textColor: isToday ? { light: '#FF3B30', dark: '#FF453A' } : T },
-          ]
-        },
-      ]
-    });
+  const balanceFlow = formatFlow(balanceKB / 1024);  // KB → MB
+  const usedFlow = formatFlow(usedKB / 1024);
+
+  const flow = {
+    title: '剩余流量',
+    number: balanceFlow.amount,
+    unit: balanceFlow.unit,
+    percent: +(((balanceKB / (totalKB || 1)) * 100).toFixed(2)),
+    color: FLOW_COLOR,
+  };
+  if (showUsedFlow) {
+    flow.title = '已用流量';
+    flow.number = usedFlow.amount;
+    flow.unit = usedFlow.unit;
   }
 
-  const today = daily3d && daily3d[0];
-  const tomorrow = daily3d && daily3d[1];
-  const dayAfter = daily3d && daily3d[2];
+  const voiceBalance = imp.voiceBalance || 0;
+  const voiceTotal = imp.voiceTotal || 1;
+  const voice = {
+    title: '剩余语音',
+    number: `${voiceBalance}`,
+    unit: '分钟',
+    percent: +(((voiceBalance / voiceTotal) * 100).toFixed(2)),
+    color: VOICE_COLOR,
+  };
 
-  const dayCard = (label, dayInfo) => {
-    if (!dayInfo) return { type: 'stack', flex: 1, children: [] };
-    const s = getWeatherStyle(dayInfo.iconDay);
-    return {
-      type: 'stack', direction: 'row', alignItems: 'center', flex: 1, gap: 6,
-      children: [
-        { type: 'text', text: label, font: { size: 13 }, textColor: S },
-        { type: 'image', src: `sf-symbol:${s.icon}`, width: 22, height: 22, color: s.color },
-        { type: 'text', text: `${dayInfo.tempMin}°-${dayInfo.tempMax}°`, font: { size: 13, weight: 'semibold' }, textColor: T },
-      ]
-    };
+  const fee = {
+    title: '剩余话费',
+    number: ((imp.balanceFen || 0) / 100).toFixed(2),
+    unit: '元',
   };
 
   return {
-    type: 'widget',
-    padding: [12, 12, 4, 12],
-    gap: 8,
-    children: [
-      {
-        type: 'stack', direction: 'row', alignItems: 'center',
-        children: [
-          {
-            type: 'stack', direction: 'column', gap: 4, alignItems: 'start',
-            children: [
-              { type: 'text', text: `${d.getFullYear()} ${d.getMonth() + 1}月`, font: { size: 22, weight: 'bold' }, textColor: T },
-              {
-                type: 'stack',
-                backgroundColor: { light: '#AF52DE25', dark: '#BF5AF230' },
-                borderRadius: 6, padding: [2, 8, 2, 8],
-                children: [{ type: 'text', text: '日程', font: { size: 12, weight: 'bold' },
-                  textColor: { light: '#AF52DE', dark: '#BF5AF2' } }]
-              },
-              ...schedules.map((s, i) => ({
-                type: 'stack', direction: 'row', alignItems: 'center', gap: 6,
-                children: [
-                  { type: 'stack', width: 3, height: 28,
-                    backgroundColor: i === 0 ? { light: '#34C75960', dark: '#30D15860' } : { light: '#FF950060', dark: '#FF9F0A60' },
-                    borderRadius: 2 },
-                  { type: 'text', text: `${s.name} ${s.md}`, font: { size: 13 }, textColor: T, maxLines: 1 },
-                ]
-              })),
-            ]
-          },
-          { type: 'spacer' },
-          { type: 'image', src: clockSrc, width: 88, height: 88 },
-          { type: 'spacer' },
-          {
-            type: 'stack', direction: 'column', alignItems: 'center',
-            children: [
-              { type: 'text', text: String(d.getDate()), font: { size: 68, weight: 'bold' }, textColor: T },
-              { type: 'text', text: userName ? `${userName}，${greeting}！` : greeting + '!', font: { size: 14, weight: 'semibold' }, textColor: S },
-            ]
-          },
-        ]
-      },
-      { type: 'stack', direction: 'row', gap: 4, children: weekCells },
-      {
-        type: 'stack', direction: 'row', alignItems: 'center', gap: 10,
-        children: [
-          { type: 'image', src: `sf-symbol:${icon}`, width: 36, height: 36, color },
-          { type: 'text', text: `${now.temp}°`, font: { size: 36, weight: 'bold' }, textColor: T },
-          {
-            type: 'stack', direction: 'column', gap: 1,
-            children: [
-              { type: 'text', text: today ? `${today.tempMax}°-${today.tempMin}°` : '', font: { size: 14 }, textColor: S },
-              { type: 'text', text: `${city} ${now.text}`, font: { size: 13 }, textColor: S },
-            ]
-          },
-          { type: 'spacer' },
-          {
-            type: 'stack', direction: 'column', alignItems: 'end', gap: 1,
-            children: [
-              { type: 'text', text: `体感${now.feelsLike}°`, font: { size: 12 }, textColor: S },
-              { type: 'text', text: `湿度${now.humidity}%`, font: { size: 12 }, textColor: S },
-            ]
-          },
-        ]
-      },
-      { type: 'stack', direction: 'row', gap: 16, children: [ dayCard('明天', tomorrow), dayCard('后天', dayAfter) ] },
-      { type: 'spacer' },
-      ...(curveSrc ? [{
-        type: 'image', src: curveSrc, height: 112
-      }] : []),
-    ]
+    fee: fee,
+    flow: flow,
+    voice: voice,
+    updatedAt: Date.now(),
   };
+}
+
+/* ---------- App 数据获取（含自动重登） ---------- */
+
+async function tryAppToken(ctx, token, phone, settings) {
+  const imp = await fetchImportantData(ctx, token, phone);
+  const ds = parseAppData(imp, settings);
+  ctx.storage.setJSON('ct_datasource', ds);
+  // 标记数据源为 App，供保活用
+  ctx.storage.set('ct_datasource_type', 'app');
+  return ds;
+}
+
+async function runAppLogin(ctx, account) {
+  const r = await runLoginChain(ctx, account.phone, account.passwd, account.androidId);
+  const allOk = r.steps.length === 3 && r.steps.every((s) => s.ok);
+  if (!allOk || !r.token) {
+    const detail = r.steps.map((s) => `${s.ok ? 'OK' : 'FAIL'} ${s.msg}`).join(' | ');
+    const err = new Error(`app-login-failed: ${detail}`);
+    err.appLoginFailed = true;
+    throw err;
+  }
+  // 保存账号（供下次重登）和 token
+  saveAppAccountStorage(ctx, account.phone, account.passwd, account.androidId);
+  saveAppToken(ctx, r.token);
+  return r.token;
+}
+
+/* App 登录失败通知：同一账号只通知一次，成功后清除 */
+function notifyAppExpiredOnce(ctx, account) {
+  const key = 'ct_app_expired_notified';
+  const marker = account ? account.phone : 'none';
+  if (ctx.storage.get(key) === marker) return;
+  ctx.storage.set(key, marker);
+  try {
+    ctx.notify({
+      title: '中国电信',
+      body: 'App 登录失败，请检查 CT_APP_ACCOUNT（手机号#服务密码#AndroidID）是否正确',
+    });
+  } catch (e) {}
+}
+
+function clearAppExpiredFlag(ctx) {
+  ctx.storage.delete('ct_app_expired_notified');
+}
+
+function parseTelecom(detail, balance, opts) {
+  const {
+    showUsedFlow,
+    showGeneralFlow,
+    showDirectionalFlow,
+  } = opts;
+
+  let totalFlowAmount = 0;
+  let totalBalanceFlowAmount = 0;
+  let totalUsedFlowAmount = 0;
+
+  let totalVoiceAmount = 0;
+  let totalBalanceVoiceAmount = 0;
+
+  let isUnlimitedFlow = false;
+
+  for (const data of detail?.items || []) {
+
+    if (data.offerType === 19) {
+      continue;
+    }
+
+    for (const item of data.items || []) {
+
+
+      if (item.unitTypeId == 3) {
+
+        // 定向判断：资源名含"定向"即为定向流量，其余为通用流量
+        const isDirectional =
+          /定向/.test(
+            item.ratableResourcename || ''
+          );
+
+        const directionAllowed =
+          isDirectional ?
+            showDirectionalFlow :
+            showGeneralFlow;
+
+        if (
+          !(
+            item.usageAmount == 0 &&
+            item.balanceAmount == 0
+          )
+        ) {
+
+          const skip =
+            item.balanceAmount == '999999999999' ||
+            !directionAllowed;
+
+          if (!skip) {
+
+            totalFlowAmount +=
+              parseFloat(
+                item.ratableAmount
+              ) || 0;
+
+            totalBalanceFlowAmount +=
+              parseFloat(
+                item.balanceAmount
+              ) || 0;
+          }
+        }
+
+        // 已用流量同样按开关过滤，保证"只显示通用"时已用也是通用的
+        if (directionAllowed) {
+
+          totalUsedFlowAmount +=
+            parseFloat(
+              item.usageAmount
+            ) || 0;
+        }
+
+        if (
+          data.offerType == 21 &&
+          item.ratableAmount == '0'
+        ) {
+          isUnlimitedFlow = true;
+        }
+
+      }
+
+
+      else if (
+        !detail.voiceBalance &&
+        item.unitTypeId == 1
+      ) {
+
+        totalVoiceAmount +=
+          parseInt(
+            item.ratableAmount,
+            10
+          ) || 0;
+
+        totalBalanceVoiceAmount +=
+          parseInt(
+            item.balanceAmount,
+            10
+          ) || 0;
+      }
+    }
+  }
+
+
+  if (
+    detail.voiceAmount &&
+    detail.voiceBalance
+  ) {
+
+    totalVoiceAmount =
+      detail.voiceAmount;
+
+    totalBalanceVoiceAmount =
+      detail.voiceBalance;
+  }
+
+
+  const balanceFlow =
+    formatFlow(
+      totalBalanceFlowAmount
+    );
+
+  const usedFlow =
+    formatFlow(
+      totalUsedFlowAmount
+    );
+
+
+  const flow = {
+
+    title:
+      '剩余流量',
+
+    number:
+      balanceFlow.amount,
+
+    unit:
+      balanceFlow.unit,
+
+    percent:
+      +(
+        (
+          totalBalanceFlowAmount /
+          (totalFlowAmount || 1)
+        ) *
+        100
+      ).toFixed(2),
+
+    color:
+      FLOW_COLOR,
+  };
+
+
+  if (showUsedFlow) {
+
+    flow.title =
+      '已用流量';
+
+    flow.number =
+      usedFlow.amount;
+
+    flow.unit =
+      usedFlow.unit;
+  }
+
+
+  if (isUnlimitedFlow) {
+
+    flow.title =
+      '已用流量';
+
+    flow.number =
+      usedFlow.amount;
+
+    flow.unit =
+      usedFlow.unit;
+  }
+
+
+  const voice = {
+
+    title:
+      '剩余语音',
+
+    number:
+      `${totalBalanceVoiceAmount}`,
+
+    unit:
+      '分钟',
+
+    percent:
+      +(
+        (
+          totalBalanceVoiceAmount /
+          (totalVoiceAmount || 1)
+        ) *
+        100
+      ).toFixed(2),
+
+    color:
+      VOICE_COLOR,
+  };
+
+
+  const feeNum =
+    Number(
+      balance?.totalBalanceAvailable
+    );
+
+  const fee = {
+
+    title:
+      '剩余话费',
+
+    number:
+      Number.isFinite(feeNum)
+        ? (feeNum / 100).toFixed(2)
+        : '0.00',
+
+    unit:
+      '元',
+  };
+
+
+  return {
+
+    fee,
+
+    flow,
+
+    voice,
+
+    updatedAt:
+      Date.now(),
+  };
+}
+
+
+async function tryCookie(
+  ctx,
+  cookie,
+  settings
+) {
+
+  const detail =
+    await fetchJson(
+      ctx,
+      URLS.detail,
+      cookie
+    );
+
+  const balance =
+    await fetchJson(
+      ctx,
+      URLS.balance,
+      cookie
+    );
+
+  // 200 + JSON 但不是套餐数据（比如返回了错误码对象）：视为登录失效
+  for (const [name, data] of [['detail', detail], ['balance', balance]]) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error(`bad-payload: ${name}`);
+    }
+  }
+
+  const ds =
+    parseTelecom(
+      detail,
+      balance,
+      settings
+    );
+
+  ctx.storage.setJSON(
+    'ct_datasource',
+    ds
+  );
+
+  return ds;
+}
+
+
+async function loadData(ctx) {
+
+  const settings = {
+
+    showUsedFlow:
+      ctx.env.CT_SHOW_USED_FLOW ===
+      'true',
+
+    // 模块开关：通用流量 / 定向流量显示控制（默认都显示，即原来的"全部流量"）
+    showGeneralFlow:
+      ctx.env.CT_SHOW_GENERAL_FLOW !==
+      'false',
+
+    // 兼容旧版 CT_FILTER_ORIENTATE_FLOW=true（等价于定向流量开关关闭）
+    showDirectionalFlow:
+      ctx.env.CT_SHOW_DIRECTIONAL_FLOW !==
+      'false' &&
+      ctx.env.CT_FILTER_ORIENTATE_FLOW !==
+      'true',
+  };
+
+  /* ---------- App 通道（优先）：有 App 账号配置时走 App 网关 ---------- */
+  const appAccount = getAppAccount(ctx);
+  if (appAccount) {
+    const cachedToken = getAppToken(ctx);
+
+    // 1) 先试缓存的 token
+    if (cachedToken) {
+      try {
+        const ds = await tryAppToken(ctx, cachedToken, appAccount.phone, settings);
+        clearAppExpiredFlag(ctx);
+        return {
+          configured: true,
+          ds: ds,
+          fromCache: false,
+          authFailed: false,
+        };
+      } catch (e) {
+        if (e && e.transient) {
+          // 断网：用缓存顶一下
+          const cached = ctx.storage.getJSON('ct_datasource');
+          return {
+            configured: true,
+            ds: cached || null,
+            fromCache: !!cached,
+            authFailed: false,
+          };
+        }
+        // token 失效：继续走自动重登
+      }
+    }
+
+    // 2) 跑登录链拿新 token
+    try {
+      const newToken = await runAppLogin(ctx, appAccount);
+      const ds = await tryAppToken(ctx, newToken, appAccount.phone, settings);
+      clearAppExpiredFlag(ctx);
+      return {
+        configured: true,
+        ds: ds,
+        fromCache: false,
+        authFailed: false,
+      };
+    } catch (e) {
+      if (e && e.transient) {
+        const cached = ctx.storage.getJSON('ct_datasource');
+        return {
+          configured: true,
+          ds: cached || null,
+          fromCache: !!cached,
+          authFailed: false,
+        };
+      }
+      // 登录链失败（如密码错误）：通知一次，用缓存顶
+      notifyAppExpiredOnce(ctx, appAccount);
+      const cached = ctx.storage.getJSON('ct_datasource');
+      return {
+        configured: true,
+        ds: cached || null,
+        fromCache: !!cached,
+        authFailed: !cached,  // 无缓存时视为登录过期，显示错误页
+      };
+    }
+  }
+
+  /* ---------- Cookie 通道（备用）：无 App 账号时走老路 ---------- */
+  const envCookie =
+    (ctx.env.CT_COOKIE || '').trim();
+
+  const loginUrl =
+    (ctx.env.CT_LOGIN_URL || '').trim() ||
+    ctx.storage.get('ct_login_url') ||
+    '';
+
+  const storedCookie =
+    ctx.storage.get('ct_cookie') ||
+    '';
+
+  const configured =
+    !!(
+      envCookie ||
+      loginUrl ||
+      storedCookie
+    );
+
+
+  const firstCookie =
+    envCookie ||
+    storedCookie;
+
+  // authFailed：服务器明确拒绝了 cookie（非 200 / 非 JSON / 异常载荷），
+  // 与"连不上服务器"（transient，走缓存）区分开
+  let authFailed = false;
+
+  if (firstCookie) {
+
+    try {
+
+      const ds =
+        await tryCookie(
+          ctx,
+          firstCookie,
+          settings
+        );
+
+      clearExpiredFlag(ctx);
+
+      return {
+
+        configured,
+
+        ds,
+
+        fromCache: false,
+
+        authFailed: false,
+      };
+
+    } catch (e) {
+
+      if (!(e && e.transient)) {
+        authFailed = true;
+      }
+    }
+  }
+
+
+  if (
+    !envCookie &&
+    loginUrl
+  ) {
+
+    try {
+
+      const fresh =
+        await refreshCookie(ctx);
+
+      if (
+        fresh &&
+        fresh !== firstCookie
+      ) {
+
+        try {
+
+          const ds =
+            await tryCookie(
+              ctx,
+              fresh,
+              settings
+            );
+
+          clearExpiredFlag(ctx);
+
+          return {
+
+            configured,
+
+            ds,
+
+            fromCache: false,
+
+            authFailed: false,
+          };
+
+        } catch (e2) {
+
+          if (!(e2 && e2.transient)) {
+            authFailed = true;
+          }
+        }
+      }
+
+    } catch (e) {
+    }
+  }
+
+
+  const cached =
+    ctx.storage.getJSON(
+      'ct_datasource'
+    );
+
+  if (authFailed) {
+    // cookie 被服务器拒绝且刷新无果：登录已过期，通知一次（同个 cookie 只通知一次）
+    notifyExpiredOnce(ctx, firstCookie);
+  }
+
+  return {
+
+    configured,
+
+    ds:
+      cached || null,
+
+    fromCache:
+      !!cached,
+
+    authFailed,
+  };
+}
+
+
+// 登录过期通知：同一个失效 cookie 只通知一次，成功刷新后清除标记
+function notifyExpiredOnce(ctx, cookie) {
+  const key = 'ct_expired_notified';
+  const marker = cookie || 'none';
+
+  if (ctx.storage.get(key) === marker) {
+    return;
+  }
+
+  ctx.storage.set(key, marker);
+
+  try {
+    ctx.notify({
+      title: '中国电信',
+      body: '登录已过期，请在 Safari 重新登录 e.dlife.cn',
+    });
+  } catch (e) {
+  }
+}
+
+
+function clearExpiredFlag(ctx) {
+  ctx.storage.delete('ct_expired_notified');
+}
+
+
+function makeCapsule(
+  title,
+  value,
+  unit
+) {
+
+  return {
+
+    type: 'stack',
+
+    direction: 'column',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    flex: 1,
+
+    padding: [
+      8,
+      8,
+      8,
+      8,
+    ],
+
+    backgroundColor:
+      COLORS.capsuleBg,
+
+    borderRadius: 14,
+
+    borderWidth: 1,
+
+    borderColor:
+      COLORS.border,
+
+    children: [
+
+      {
+        type: 'text',
+
+        text:
+          title,
+
+        font: {
+          size: 'caption2',
+          weight: 'medium',
+        },
+
+        textColor:
+          COLORS.title,
+
+        textAlign:
+          'center',
+
+        maxLines: 1,
+
+        minScale:
+          0.7,
+      },
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        justifyContent:
+          'center',
+
+        gap: 3,
+
+        children: [
+
+          {
+            type: 'text',
+
+            text:
+              String(value),
+
+            font: {
+              size: 'title2',
+              weight: 'semibold',
+            },
+
+            textColor:
+              COLORS.value,
+
+            textAlign:
+              'center',
+
+            maxLines: 1,
+
+            minScale:
+              0.65,
+          },
+
+          {
+            type: 'text',
+
+            text:
+              unit,
+
+            font: {
+              size: 'caption2',
+              weight: 'regular',
+            },
+
+            textColor:
+              COLORS.title,
+
+            maxLines: 1,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+
+function headerRow(
+  title,
+  ds,
+  fromCache
+) {
+
+  const time =
+    ds &&
+    ds.updatedAt
+      ? fmtTime(ds.updatedAt)
+      : '--:--';
+
+  return {
+
+    type: 'stack',
+
+    direction: 'row',
+
+    alignItems: 'center',
+
+    children: [
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        gap: 7,
+
+        children: [
+
+          {
+            type: 'image',
+
+            src:
+              'sf-symbol:antenna.radiowaves.left.and.right',
+
+            color:
+              COLORS.accent,
+
+            width: 18,
+
+            height: 18,
+          },
+
+          {
+            type: 'text',
+
+            text:
+              title,
+
+            font: {
+              size: 'headline',
+              weight: 'semibold',
+            },
+
+            textColor:
+              COLORS.value,
+
+            maxLines: 1,
+
+            minScale:
+              0.75,
+          },
+        ],
+      },
+
+      {
+        type: 'spacer',
+      },
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        gap: 5,
+
+        children: [
+
+          {
+            type: 'image',
+
+            src:
+              'sf-symbol:arrow.clockwise',
+
+            color:
+              COLORS.time,
+
+            width: 12,
+
+            height: 12,
+          },
+
+          {
+            type: 'text',
+
+            text:
+              fromCache ? `缓存 ${time}` : time,
+
+            font: {
+              size: 'caption2',
+            },
+
+            textColor:
+              COLORS.time,
+
+            maxLines: 1,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+
+function buildMainWidget(
+  title,
+  ds,
+  fromCache
+) {
+
+  return {
+
+    type: 'widget',
+
+
+
+    padding: [
+      10,
+      14,
+      10,
+      14,
+    ],
+
+    gap: 12,
+
+    refreshAfter:
+      new Date(
+        Date.now() +
+        60 * 60 * 1000
+      ).toISOString(),
+
+    children: [
+
+      /* 顶部 */
+
+      headerRow(
+        title,
+        ds,
+        fromCache
+      ),
+
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        gap: 9,
+
+        children: [
+
+          makeCapsule(
+            ds.fee.title,
+            ds.fee.number,
+            ds.fee.unit
+          ),
+
+          makeCapsule(
+            ds.voice.title,
+            ds.voice.number,
+            ds.voice.unit
+          ),
+
+          makeCapsule(
+            ds.flow.title,
+            ds.flow.number,
+            ds.flow.unit
+          ),
+        ],
+      },
+
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        children: [
+
+          {
+            type: 'spacer',
+          },
+
+          {
+            type: 'stack',
+
+            width: 48,
+
+            height: 4,
+
+            borderRadius: 2,
+
+            backgroundColor:
+              COLORS.border,
+          },
+
+          {
+            type: 'spacer',
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/* 小尺寸专用：圆形图标 + 数值 + 说明 的横条 */
+function smallRow(
+  color,
+  symbol,
+  glyph,
+  value,
+  unit,
+  label
+) {
+
+  const iconChild =
+    symbol
+      ? {
+          type: 'image',
+
+          src: symbol,
+
+          color: '#FFFFFF',
+
+          width: 16,
+
+          height: 16,
+        }
+      : {
+          type: 'text',
+
+          text: glyph,
+
+          font: {
+            size: 'headline',
+            weight: 'bold',
+          },
+
+          textColor: '#FFFFFF',
+        };
+
+  return {
+
+    type: 'stack',
+
+    direction: 'row',
+
+    alignItems: 'center',
+
+    gap: 8,
+
+    flex: 1,
+
+    padding: [
+      4,
+      8,
+      4,
+      8,
+    ],
+
+    backgroundColor: {
+      light: color + '40',
+      dark: color + '33',
+    },
+
+    borderRadius: 14,
+
+    children: [
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        justifyContent: 'center',
+
+        width: 30,
+
+        height: 30,
+
+        borderRadius: 15,
+
+        backgroundColor: { light: color, dark: color + '60' },
+
+        children: [
+          iconChild,
+        ],
+      },
+
+      {
+        type: 'stack',
+
+        direction: 'column',
+
+        flex: 1,
+
+        children: [
+
+          {
+            type: 'stack',
+
+            direction: 'row',
+
+            alignItems: 'center',
+
+            gap: 3,
+
+            children: [
+
+              {
+                type: 'text',
+
+                text: String(value),
+
+                font: {
+                  size: 'title3',
+                  weight: 'bold',
+                },
+
+                textColor: color,
+
+                maxLines: 1,
+
+                minScale: 0.5,
+              },
+
+              {
+                type: 'text',
+
+                text: String(unit),
+
+                font: {
+                  size: 'caption1',
+                  weight: 'semibold',
+                },
+
+                textColor: color,
+
+                maxLines: 1,
+              },
+
+              {
+                type: 'spacer',
+              },
+            ],
+          },
+
+          {
+            type: 'stack',
+
+            direction: 'row',
+
+            alignItems: 'center',
+
+            children: [
+
+              {
+                type: 'text',
+
+                text: String(label),
+
+                font: {
+                  size: 'caption2',
+                  weight: 'medium',
+                },
+
+                textColor: color + 'B3',
+
+                maxLines: 1,
+
+                minScale: 0.7,
+              },
+
+              {
+                type: 'spacer',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function buildSmall(
+  title,
+  ds,
+  fromCache
+) {
+
+  return {
+
+    type: 'widget',
+
+
+
+    padding: [
+      10,
+      10,
+      10,
+      10,
+    ],
+
+    gap: 6,
+
+    refreshAfter:
+      new Date(
+        Date.now() +
+        60 * 60 * 1000
+      ).toISOString(),
+
+    children: [
+
+      smallRow(
+        '#E8651F',
+        null,
+        '¥',
+        ds.fee.number,
+        ds.fee.unit,
+        ds.fee.title
+      ),
+
+      smallRow(
+        '#4DA6F0',
+        'sf-symbol:antenna.radiowaves.left.and.right',
+        '',
+        ds.flow.number,
+        ds.flow.unit,
+        ds.flow.title
+      ),
+
+      smallRow(
+        '#55C759',
+        'sf-symbol:phone.and.waveform.fill',
+        '',
+        ds.voice.number,
+        ds.voice.unit,
+        ds.voice.title
+      ),
+    ],
+  };
+}
+
+function buildLockScreen(
+  title,
+  ds,
+  family
+) {
+
+  /*
+   * 锁屏组件背景是透明的，文字颜色交给系统处理，
+   * 只有次要文字用半透明白色
+   */
+  const SUB = {
+    light: '#FFFFFFB3',
+    dark: '#FFFFFFB3',
+  };
+
+
+  /*
+   * 单行：话费 · 流量
+   */
+  if (
+    family ===
+      'accessoryInline'
+  ) {
+
+    return {
+
+      type: 'widget',
+
+      children: [
+
+        {
+          type: 'text',
+
+          text:
+            `${title} ${ds.fee.number}${ds.fee.unit} · ` +
+            `${ds.flow.number}${ds.flow.unit}`,
+
+          font: {
+            size: 'caption1',
+            weight: 'medium',
+          },
+
+          maxLines: 1,
+
+          minScale:
+            0.5,
+        },
+      ],
+    };
+  }
+
+
+  /*
+   * 圆形：只显示剩余流量
+   */
+  if (
+    family ===
+      'accessoryCircular'
+  ) {
+
+    return {
+
+      type: 'widget',
+
+      padding: 2,
+
+      children: [
+
+        {
+          type: 'spacer',
+        },
+
+        {
+          type: 'text',
+
+          text:
+            `${ds.flow.number}`,
+
+          font: {
+            size: 'headline',
+            weight: 'bold',
+          },
+
+          textAlign:
+            'center',
+
+          maxLines: 1,
+
+          minScale:
+            0.5,
+        },
+
+        {
+          type: 'text',
+
+          text:
+            ds.flow.unit,
+
+          font: {
+            size: 'caption2',
+          },
+
+          textColor: SUB,
+
+          textAlign:
+            'center',
+
+          maxLines: 1,
+        },
+
+        {
+          type: 'spacer',
+        },
+      ],
+    };
+  }
+
+
+  /*
+   * 矩形：三行，左边说明，右边数值
+   */
+  const line = (
+    label,
+    value,
+    unit
+  ) => ({
+
+    type: 'stack',
+
+    direction: 'row',
+
+    alignItems: 'center',
+
+    gap: 4,
+
+    children: [
+
+      {
+        type: 'text',
+
+        text: label,
+
+        font: {
+          size: 'caption2',
+          weight: 'medium',
+        },
+
+        textColor: SUB,
+
+        maxLines: 1,
+      },
+
+      {
+        type: 'spacer',
+      },
+
+      {
+        type: 'text',
+
+        text: String(value),
+
+        font: {
+          size: 'caption1',
+          weight: 'bold',
+        },
+
+        maxLines: 1,
+
+        minScale: 0.6,
+      },
+
+      {
+        type: 'text',
+
+        text: String(unit),
+
+        font: {
+          size: 'caption2',
+        },
+
+        textColor: SUB,
+
+        maxLines: 1,
+      },
+    ],
+  });
+
+
+  return {
+
+    type: 'widget',
+
+    padding: 2,
+
+    gap: 2,
+
+    children: [
+
+      line(
+        '话费',
+        ds.fee.number,
+        ds.fee.unit
+      ),
+
+      line(
+        '流量',
+        ds.flow.number,
+        ds.flow.unit
+      ),
+
+      line(
+        '语音',
+        ds.voice.number,
+        ds.voice.unit
+      ),
+    ],
+  };
+}
+
+
+function buildError(
+  title,
+  message,
+  url
+) {
+
+  const w = {
+
+    type: 'widget',
+
+
+
+    padding: 14,
+
+    gap: 9,
+
+    children: [
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        gap: 6,
+
+        children: [
+
+          {
+            type: 'image',
+
+            src:
+              'sf-symbol:exclamationmark.triangle.fill',
+
+            color:
+              COLORS.error,
+
+            width: 14,
+
+            height: 14,
+          },
+
+          {
+            type: 'text',
+
+            text:
+              title,
+
+            font: {
+              size: 'headline',
+              weight: 'bold',
+            },
+
+            textColor:
+              COLORS.error,
+
+            maxLines: 1,
+          },
+        ],
+      },
+
+      {
+        type: 'text',
+
+        text:
+          message,
+
+        font: {
+          size: 'caption1',
+        },
+
+        textColor:
+          COLORS.title,
+
+        maxLines: 3,
+      },
+
+      {
+        type: 'stack',
+
+        direction: 'row',
+
+        alignItems: 'center',
+
+        gap: 5,
+
+        padding: [
+          6,
+          10,
+          6,
+          10,
+        ],
+
+        backgroundColor:
+          COLORS.capsuleBg,
+
+        borderRadius: 10,
+
+        borderWidth: 1,
+
+        borderColor:
+          COLORS.border,
+
+        children: [
+
+          {
+            type: 'image',
+
+            src:
+              'sf-symbol:phone.circle',
+
+            color:
+              COLORS.time,
+
+            width: 12,
+
+            height: 12,
+          },
+
+          {
+            type: 'text',
+
+            text:
+              '请在 Safari 登录电信账号',
+
+            font: {
+              size: 'caption2',
+            },
+
+            textColor:
+              COLORS.time,
+
+            maxLines: 1,
+
+            minScale:
+              0.7,
+          },
+        ],
+      },
+    ],
+  };
+
+
+  if (url) {
+    w.url = url;
+  }
+
+  return w;
+}
+
+
+export default async function(ctx) {
+
+
+  return handleWidget(ctx);
 }
