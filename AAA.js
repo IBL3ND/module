@@ -2664,6 +2664,37 @@ function buildError(
 }
 
 
+async function handleWidget(ctx) {
+  const safeCtx = ctx || {};
+  const env = safeCtx.env || {};
+  const title = (env.CT_TITLE || '中国电信').trim() || '中国电信';
+
+  let result;
+  try {
+    result = await loadData(safeCtx);
+  } catch (e) {
+    return buildError(title, '数据获取失败', 'https://e.dlife.cn');
+  }
+
+  const { configured, ds, fromCache, authFailed } = result;
+
+  if (!configured) {
+    return buildError(title, '未配置登录', 'https://e.dlife.cn');
+  }
+
+  if (authFailed || !ds) {
+    return buildError(title, '登录已过期', 'https://e.dlife.cn');
+  }
+
+  const family = safeCtx.widgetFamily || '';
+  if (family.startsWith('accessory')) {
+    return buildLockScreen(title, ds, family);
+  }
+
+  return buildMainWidget(title, ds, fromCache);
+}
+
+
 export default async function(ctx) {
 
 
