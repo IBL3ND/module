@@ -69,3 +69,4 @@ scriptings:
     script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Sub_Widget.JS
 widgets:
 - name: sub-widget
+  script_name: sub-widget
