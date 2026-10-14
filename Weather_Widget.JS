@@ -27,18 +27,10 @@ export default async function (ctx) {
   const env = safeCtx.env || {};
   const widgetFamily = safeCtx.widgetFamily || 'systemMedium';
 
-  // 本地直测：key/host 写死在文件里，复制到 Egern 脚本编辑器直接运行
-  // ⚠️ 推公开仓库前记得删掉！
-  // ═══ 本地测试配置：填好直接复制到 Egern 脚本编辑器运行 ═══
-  const LOCAL_KEY      = 'f15c7e5f19d5486eaa53964b3a1a667f';  // 和风天气 KEY
-  const LOCAL_API_HOST = 'mx487tfcwn.re.qweatherapi.com';  // 个人 API Host，如 xxx.qweatherapi.com
-  const LOCAL_LOCATION = '';  // 城市名，如 慈溪
-  const LOCAL_USER_NAME = ''; // 名字（大尺寸问候语用），可空
-  // ═══════════════════════════════════════════════════
-  const apiKey     = (env.KEY || LOCAL_KEY || '').trim();
-  const apiHostRaw = (env.API_HOST || LOCAL_API_HOST || '').trim();
-  const location   = (env.LOCATION || LOCAL_LOCATION || '').trim();
-  const userName   = (env.USER_NAME || LOCAL_USER_NAME || '').trim();
+  const apiKey     = (env.KEY || '').trim();
+  const apiHostRaw = (env.API_HOST || '').trim();
+  const location   = (env.LOCATION || '').trim();
+  const userName   = (env.USER_NAME || '').trim();
 
   if (!apiKey)     return renderError('缺少 KEY 环境变量');
   if (!apiHostRaw) return renderError('缺少 API_HOST 环境变量');
@@ -71,7 +63,6 @@ export default async function (ctx) {
       ]);
       return renderLarge(now, city, daily3d, hourly24h, userName);
     }
-    // 中尺寸：7 天预报（今日高低温 + 6 天 forecast）
     const daily7d = await fetchDaily7d(safeCtx, apiKey, lon, lat, apiHost).catch(() => null);
     return renderMedium(now, city, daily7d);
 
@@ -82,11 +73,9 @@ export default async function (ctx) {
   }
 }
 
-// 轻量节假日+节气倒计时：返回最近的一个 {name, days}
 function getNextHoliday() {
   const now = new Date();
   const y = now.getFullYear();
-  // 公历节日 + 关键农历节日（公历日期）+ 二十四节气
   const holidays = [
     { m: 1, d: 1, name: '元旦' },
     { m: 2, d: 17, name: '春节', y: 2026 }, { m: 2, d: 6, name: '春节', y: 2027 },
@@ -98,7 +87,6 @@ function getNextHoliday() {
     { m: 10, d: 18, name: '重阳节', y: 2026 },
     { m: 10, d: 1, name: '国庆节' },
     { m: 12, d: 25, name: '圣诞节' },
-    // 二十四节气（2026-2027）
     { m: 2, d: 4, name: '立春' }, { m: 2, d: 19, name: '雨水' },
     { m: 3, d: 5, name: '惊蛰' }, { m: 3, d: 20, name: '春分' },
     { m: 4, d: 4, name: '清明' }, { m: 4, d: 20, name: '谷雨' },
@@ -136,11 +124,9 @@ function renderMedium(now, city, daily7d) {
   const pad = (n) => String(n).padStart(2, '0');
   const timeStr = `${nowT.getFullYear()}-${pad(nowT.getMonth() + 1)}-${pad(nowT.getDate())} ${pad(nowT.getHours())}:${pad(nowT.getMinutes())}`;
 
-  // 今日高低温（7d 第 0 天）
   const today = daily7d && daily7d[0];
   const hlText = today ? `H:${today.tempMax}° L:${today.tempMin}°` : '';
 
-  // 湿度渐变条 SVG：整条显示渐变（未填充部分淡化），白色圆点标记当前值
   const humidity = Math.max(0, Math.min(100, Number(now.humidity) || 0));
   const barW = 300, barH = 10;
   const fillW = Math.round(barW * humidity / 100);
@@ -156,7 +142,6 @@ function renderMedium(now, city, daily7d) {
     `<circle cx='${dotX}' cy='${barH / 2}' r='5' fill='%23FFFFFF' opacity='0.95'/>` +
     `</svg>`;
 
-  // 6 天预报（跳过今天）
   const forecastCells = [];
   if (daily7d) {
     for (let i = 1; i <= 6 && daily7d[i]; i++) {
@@ -184,7 +169,6 @@ function renderMedium(now, city, daily7d) {
     backgroundColor: { light: '#00000018', dark: '#FFFFFF20' },
   };
 
-  // 节假日倒计时（顶部中间）："距离X还有Y天"句式
   const holiday = getNextHoliday();
   const holidayBlock = holiday ? {
     type: 'stack',
@@ -197,7 +181,6 @@ function renderMedium(now, city, daily7d) {
     ]
   } : { type: 'spacer' };
 
-  // 实用信息行：体感 / 降水 / 能见度（spacer 夹中居中）
   const infoRow = {
     type: 'stack',
     direction: 'row',
@@ -214,7 +197,6 @@ function renderMedium(now, city, daily7d) {
     padding: 10,
     gap: 3,
     children: [
-      // 顶栏：图标+城市/天气/时间 | 节日倒计时 | 大温度+高低温
       {
         type: 'stack',
         direction: 'row',
@@ -250,7 +232,6 @@ function renderMedium(now, city, daily7d) {
 
       infoRow,
 
-      // 湿度行
       {
         type: 'stack',
         direction: 'row',
@@ -270,7 +251,6 @@ function renderMedium(now, city, daily7d) {
 
       hrLine,
 
-      // 6 天预报（flex:1 弹性占满剩余垂直空间）
       {
         type: 'stack',
         direction: 'row',
@@ -288,7 +268,6 @@ function renderSmall(now, city, daily3d, air) {
   const S = { light: '#8E8E93', dark: '#AEAEB2' };
   const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-  // 顶栏：城市名 + 天气图标右对齐
   const header = {
     type: 'stack', direction: 'row', alignItems: 'center',
     children: [
@@ -298,7 +277,6 @@ function renderSmall(now, city, daily3d, air) {
     ]
   };
 
-  // 今日行：大温度 + 高低温
   const today = daily3d && daily3d[0];
   const todayRow = {
     type: 'stack', direction: 'row', alignItems: 'center',
@@ -311,7 +289,6 @@ function renderSmall(now, city, daily3d, air) {
     ]
   };
 
-  // 预报行：明天、后天
   const rows = [];
   const labels = ['明天'];
   for (let i = 1; i < 3 && daily3d && daily3d[i]; i++) {
@@ -490,7 +467,6 @@ function isAccessoryFamily(family) {
 
 async function getLocation(ctx, locName, key, host) {
   const presets = {
-    // ── 海南省 ──
     '海口': { lon: '110.3288', lat: '20.0310' }, '三亚': { lon: '109.5119', lat: '18.2528' },
     '儋州': { lon: '109.5768', lat: '19.5209' }, '琼海': { lon: '110.4746', lat: '19.2584' },
     '万宁': { lon: '110.3893', lat: '18.7953' }, '文昌': { lon: '110.7530', lat: '19.6129' },
@@ -500,7 +476,6 @@ async function getLocation(ctx, locName, key, host) {
     '临高': { lon: '109.6877', lat: '19.9084' }, '定安': { lon: '110.3593', lat: '19.6849' },
     '乐东': { lon: '109.1717', lat: '18.7478' }, '昌江': { lon: '109.0556', lat: '19.2983' },
     '白沙': { lon: '109.4515', lat: '19.2240' }, '琼中': { lon: '109.8335', lat: '18.9982' },
-    // ── 广东省 ──
     '广州': { lon: '113.2644', lat: '23.1291' }, '深圳': { lon: '114.0579', lat: '22.5431' },
     '珠海': { lon: '113.5767', lat: '22.2707' }, '汕头': { lon: '116.6813', lat: '23.3540' },
     '佛山': { lon: '113.1214', lat: '23.0215' }, '韶关': { lon: '113.5975', lat: '24.8104' },
@@ -512,7 +487,6 @@ async function getLocation(ctx, locName, key, host) {
     '东莞': { lon: '113.7517', lat: '23.0206' }, '中山': { lon: '113.3927', lat: '22.5170' },
     '潮州': { lon: '116.6226', lat: '23.6569' }, '揭阳': { lon: '116.3728', lat: '23.5497' },
     '云浮': { lon: '112.0444', lat: '22.9150' },
-    // ── 全国热门城市 ──
     '北京': { lon: '116.4074', lat: '39.9042' }, '上海': { lon: '121.4737', lat: '31.2304' },
     '天津': { lon: '117.2008', lat: '39.0842' }, '重庆': { lon: '106.5049', lat: '29.5630' },
     '香港': { lon: '114.1733', lat: '22.3200' }, '澳门': { lon: '113.5491', lat: '22.1987' },
@@ -574,7 +548,6 @@ async function fetchWeatherNow(ctx, key, lon, lat, host) {
   };
 }
 
-// 3 天预报：拿今明后三天的高低温 + 白天图标
 async function fetchDaily7d(ctx, key, lon, lat, host) {
   const url = `${host}/v7/weather/7d?location=${lon},${lat}&key=${key}&lang=zh`;
   const resp = await ctx.http.get(url, { timeout: 8000 });
@@ -603,7 +576,6 @@ async function fetchDaily3d(ctx, key, lon, lat, host) {
   }));
 }
 
-// 24 小时预报：拿逐小时温度画曲线
 async function fetchHourly24h(ctx, key, lon, lat, host) {
   const url = `${host}/v7/weather/24h?location=${lon},${lat}&key=${key}&lang=zh`;
   const resp = await ctx.http.get(url, { timeout: 8000 });
@@ -615,7 +587,6 @@ async function fetchHourly24h(ctx, key, lon, lat, host) {
   }));
 }
 
-// 接口报错诊断：带上 HTTP 状态码和返回体摘要，方便定位是 host/key/套餐问题
 function describeApiError(tag, resp, data) {
   const status = resp ? resp.status : 'no-response';
   let snippet = '';
@@ -812,7 +783,6 @@ function daysDiff(from, to) {
   return Math.floor((t - f) / 86400000);
 }
 
-// 在给定公历年份 ~ 次年3月10日范围内，找到对应"农历 targetLunarMonth月targetLunarDay日"(非闰月)的公历日期
 function findSolarDateByLunar(targetLunarMonth, targetLunarDay, year) {
   const start = new Date(year, 0, 1);
   const end = new Date(year + 1, 2, 10);
@@ -881,7 +851,6 @@ function getCountdowns(customToday) {
 
 /* ===================== SVG 构建器 ===================== */
 
-// 模拟时钟 SVG（200x200）
 function buildClockSVG(hour, minute, second) {
   const cx = 100, cy = 100, r = 92;
   let ticks = '';
@@ -916,7 +885,6 @@ function buildClockSVG(hour, minute, second) {
   return 'data:image/svg+xml,' + svg;
 }
 
-// 逐小时温度曲线 SVG（360x120）
 function buildTempCurveSVG(hourly) {
   const W = 360, H = 120, padL = 8, padR = 8, padT = 22, padB = 16;
   const pts = hourly.slice(0, 9);
@@ -1026,7 +994,6 @@ function renderLarge(now, city, daily3d, hourly24h, userName) {
     padding: [12, 12, 4, 12],
     gap: 8,
     children: [
-      // 顶栏
       {
         type: 'stack', direction: 'row', alignItems: 'center',
         children: [
@@ -1064,9 +1031,7 @@ function renderLarge(now, city, daily3d, hourly24h, userName) {
           },
         ]
       },
-      // 星期条（周几+日期）
       { type: 'stack', direction: 'row', gap: 4, children: weekCells },
-      // 天气
       {
         type: 'stack', direction: 'row', alignItems: 'center', gap: 10,
         children: [
@@ -1089,11 +1054,8 @@ function renderLarge(now, city, daily3d, hourly24h, userName) {
           },
         ]
       },
-      // 明后天（中间）
       { type: 'stack', direction: 'row', gap: 16, children: [ dayCard('明天', tomorrow), dayCard('后天', dayAfter) ] },
-      // 弹性空隙：把曲线推到底部
       { type: 'spacer' },
-      // 曲线（最下面，宽度自适应）
       ...(curveSrc ? [{
         type: 'image', src: curveSrc, height: 112
       }] : []),
