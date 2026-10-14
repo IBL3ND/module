@@ -114,6 +114,36 @@ function fmtTime(ts) {
 }
 
 
+function mergeCookies(oldCookie, newPairs) {
+  const map = new Map();
+  for (const p of String(oldCookie || '').split(';')) {
+    const i = p.indexOf('=');
+    if (i > 0) map.set(p.slice(0, i).trim(), p.slice(i + 1).trim());
+  }
+  for (const p of String(newPairs || '').split(';')) {
+    const i = p.indexOf('=');
+    if (i > 0) map.set(p.slice(0, i).trim(), p.slice(i + 1).trim());
+  }
+  return [...map].map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+function harvestSetCookie(ctx, resp, cookie) {
+  // 滑动续期：API 成功返回时若带了 Set-Cookie，合并进存储（同名覆盖）
+  try {
+    const setCookies = (resp.headers && resp.headers.getAll('set-cookie')) || [];
+    const pairs = setCookies
+      .map((c) => String(c).split(';')[0].trim())
+      .filter(Boolean);
+    if (pairs.length > 0) {
+      const merged = mergeCookies(cookie, pairs.join('; '));
+      if (merged && merged !== cookie) ctx.storage.set('ct_cookie', merged);
+      return merged || cookie;
+    }
+  } catch (e) {}
+  return cookie;
+}
+
+
 async function refreshCookie(ctx) {
   const loginUrl =
     (ctx.env.CT_LOGIN_URL || '').trim() ||
@@ -145,10 +175,9 @@ async function refreshCookie(ctx) {
     .filter(Boolean);
 
   if (pairs.length > 0) {
-    ctx.storage.set(
-      'ct_cookie',
-      pairs.join('; ')
-    );
+    // 合并而非覆盖：回放可能只返回部分 cookie，直接覆盖会丢掉原有的
+    const merged = mergeCookies(ctx.storage.get('ct_cookie'), pairs.join('; '));
+    if (merged) ctx.storage.set('ct_cookie', merged);
   }
 
   return ctx.storage.get('ct_cookie') || '';
@@ -180,6 +209,9 @@ async function fetchJson(ctx, url, cookie) {
       `HTTP ${resp ? resp.status : 'no-response'}: ${url}`
     );
   }
+
+  // 滑动续期：成功响应带的 Set-Cookie 合并进存储
+  cookie = harvestSetCookie(ctx, resp, cookie);
 
   try {
     return await resp.json();
