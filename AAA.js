@@ -1728,8 +1728,6 @@ function makeCapsule(
 
     alignItems: 'center',
 
-    justifyContent: 'center',
-
     flex: 1,
 
     padding: [
@@ -1780,9 +1778,6 @@ function makeCapsule(
         direction: 'row',
 
         alignItems: 'center',
-
-        justifyContent:
-          'center',
 
         gap: 3,
 
@@ -2129,8 +2124,6 @@ function smallRow(
         direction: 'row',
 
         alignItems: 'center',
-
-        justifyContent: 'center',
 
         width: 30,
 
