@@ -1169,15 +1169,15 @@ async function runAppLogin(ctx, account) {
 }
 
 /* App 登录失败通知：同一账号只通知一次，成功后清除 */
-function notifyAppExpiredOnce(ctx, account) {
-  const key = 'ct_app_expired_notified';
+function notifyAppExpiredOnce(ctx, account, detail) {
+  const key = 'ct_app_expired_notified_v2';
   const marker = account ? account.phone : 'none';
   if (ctx.storage.get(key) === marker) return;
   ctx.storage.set(key, marker);
   try {
     ctx.notify({
       title: '中国电信',
-      body: 'App 登录失败，请检查 CT_APP_ACCOUNT（手机号#服务密码#AndroidID）是否正确',
+      body: 'App 登录失败: ' + (detail || '请检查 CT_APP_ACCOUNT 是否正确'),
     });
   } catch (e) {}
 }
@@ -1540,7 +1540,7 @@ async function loadData(ctx) {
         };
       }
       // 登录链失败（如密码错误）：通知一次，用缓存顶
-      notifyAppExpiredOnce(ctx, appAccount);
+      notifyAppExpiredOnce(ctx, appAccount, e && e.message);
       const cached = ctx.storage.getJSON('ct_datasource');
       return {
         configured: true,
