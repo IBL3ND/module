@@ -1,5 +1,5 @@
 name: 油价小组件
-description: 全国实时油价小组件92/95/98号汽油与柴油价格
+description: 全国实时油价小组件92-95-98号汽油与柴油价格
 author: iBL3ND
 icon: https://iili.io/nXI7HsS.png
 env_schema:
