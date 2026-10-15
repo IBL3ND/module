@@ -1,34 +1,29 @@
 /*
- * 中国电信小组件
- * 用这个链接去登录 https://e.dlife.cn
- * 同一个文件，两种用法：
- *   1. generic 类型 → iOS 小组件
- *   2. request 类型 → 登录捕获
+ * 中国电信小组件（Egern 版，单文件三模式）
+ * 移植自 xccverse/egern-widgets 的 china-telecom.js（cookie 获取逻辑全量照搬）
  *
- * 环境变量： 不需要手动填 添加模块后登录即可
- *   CT_LOGIN_URL
- *   CT_COOKIE
- *   CT_SHOW_USED_FLOW
- *   CT_FILTER_ORIENTATE_FLOW
- *   CT_TITLE
+ * 同一个文件，三种用法：
+ *   1. generic 类型 → iOS 小组件：显示剩余话费 / 剩余（或已用）流量 / 剩余语音
+ *   2. request 类型 → 登录捕获：Safari 里登录 e.dlife.cn 成功时自动捕获 cookie，
+ *      存入存储，小组件下次运行自动读取登录，全程无需手动复制粘贴。
+ *   3. schedule 类型 → 定时保活：每 20 分钟拉一次接口续 session
  *
- * 数据来源：
- *   https://e.dlife.cn/user/package_detail.do
- *   https://e.dlife.cn/user/balance.do
+ * 环境变量：
+ *   CT_LOGIN_URL          电信登录地址（抓包得到的登录 URL，用于自动更新 cookie）
+ *   CT_COOKIE             直接填写 cookie（与 CT_LOGIN_URL 二选一，URL 优先）
+ *   CT_SHOW_USED_FLOW     'true' 显示已用流量，否则显示剩余流量
+ *   CT_SHOW_USED_VOICE    'true' 显示已用语音，否则显示剩余语音
+ *   CT_SHOW_DIRECT        定向流量开关（本版已合并为通用/定向开关，见下）
+ *   CT_SHOW_GENERAL_FLOW  'false' 不统计通用流量，默认显示
+ *   CT_SHOW_DIRECTIONAL_FLOW 'false' 不统计定向流量，默认显示
+ *   CT_TITLE              小组件标题，默认 "中国电信"
+ *   CT_KEEPALIVE          定时保活开关：填 'false' 关闭，不填或填其他值均为开启
+ *   CT_EXPIRE_WARN_DAYS   cookie 超过此天数未刷新时提前通知，默认 5 天；填 0 关闭
+ *   CT_DEBUG              填 '1' 在小组件底部显示保活诊断信息
  *
- * 登录过期处理：
- *   服务器拒绝 cookie（非 200 / 返回登录页 HTML / 异常载荷）时视为登录过期，
- *   小组件显示"登录已过期"错误页（点小组件可直接跳登录页）并通知一次，
- *   不再静默展示旧数据；仅当"连不上服务器"（断网/超时）时才用缓存顶一下，
- *   此时标题栏会显示"缓存 HH:mm"以示区别。
- *
- * 保活模式（三种用法，同一个文件）：
- *   1. generic 类型 → iOS 小组件
- *   2. http_request 类型 → 登录捕获
- *   3. schedule 类型 → 定时保活：在 Egern 里建 schedule 脚本条目指向本文件，
- *      cron 设为每 20 分钟执行一次，每次触发会查一次接口，
- *      若服务端 session 是滑动过期即可续命。注意：若 e.dlife.cn 是固定时长
- *      过期，保活无效，只能手动重登（过期会有通知提示）。
+ * 数据来源：https://e.dlife.cn/user/package_detail.do
+ *           https://e.dlife.cn/user/balance.do
+ * 登录方式：Safari 打开 e.dlife.cn 登录一次，脚本自动捕获 cookie（需在模块里配置 http_request + MITM）
  */
 
 const URLS = {
@@ -220,7 +215,6 @@ async function fetchJson(ctx, url, cookie) {
     throw new Error(`not-json: ${url}`);
   }
 }
-
 
 function parseTelecom(detail, balance, opts) {
   const {
@@ -458,7 +452,6 @@ function parseTelecom(detail, balance, opts) {
   };
 }
 
-
 async function tryCookie(
   ctx,
   cookie,
@@ -498,24 +491,24 @@ async function tryCookie(
     ds
   );
 
+  // 多存一份原始接口数据：缓存兜底时按当前 Env 设置重新解析，避免旧缓存里的标题/数值跟新设置对不上
+  try {
+    ctx.storage.setJSON('ct_raw', { detail, balance, at: ds.updatedAt || Date.now() });
+  } catch (_) {}
+
   return ds;
 }
 
-
 async function loadData(ctx) {
-
-  const envCookie =
-    (ctx.env.CT_COOKIE || '').trim();
-
-  const loginUrl =
-    (ctx.env.CT_LOGIN_URL || '').trim() ||
-    ctx.storage.get('ct_login_url') ||
-    '';
 
   const settings = {
 
     showUsedFlow:
       ctx.env.CT_SHOW_USED_FLOW ===
+      'true',
+
+    showUsedVoice:
+      ctx.env.CT_SHOW_USED_VOICE ===
       'true',
 
     // 模块开关：通用流量 / 定向流量显示控制（默认都显示，即原来的"全部流量"）
@@ -531,6 +524,14 @@ async function loadData(ctx) {
       'true',
   };
 
+  const envCookie =
+    (ctx.env.CT_COOKIE || '').trim();
+
+  const loginUrl =
+    (ctx.env.CT_LOGIN_URL || '').trim() ||
+    ctx.storage.get('ct_login_url') ||
+    '';
+
   const storedCookie =
     ctx.storage.get('ct_cookie') ||
     '';
@@ -542,14 +543,12 @@ async function loadData(ctx) {
       storedCookie
     );
 
-
+  // 1) 优先用已捕获的 cookie（从登录后的真实请求里抓的，最可靠）
   const firstCookie =
     envCookie ||
     storedCookie;
 
-  // authFailed：服务器明确拒绝了 cookie（非 200 / 非 JSON / 异常载荷），
-  // 与"连不上服务器"（transient，走缓存）区分开
-  let authFailed = false;
+  let cookieDead = false;
 
   if (firstCookie) {
 
@@ -573,17 +572,19 @@ async function loadData(ctx) {
         fromCache: false,
 
         authFailed: false,
+
+        cookieDead: false,
       };
 
     } catch (e) {
 
       if (!(e && e.transient)) {
-        authFailed = true;
+        cookieDead = true;
       }
     }
   }
 
-
+  // 2) 回放登录地址刷新 cookie（备用方式）
   if (
     !envCookie &&
     loginUrl
@@ -619,12 +620,14 @@ async function loadData(ctx) {
             fromCache: false,
 
             authFailed: false,
+
+            cookieDead: false,
           };
 
         } catch (e2) {
 
           if (!(e2 && e2.transient)) {
-            authFailed = true;
+            cookieDead = true;
           }
         }
       }
@@ -633,13 +636,24 @@ async function loadData(ctx) {
     }
   }
 
+  // 3) 断网/过期时用缓存顶一下：有原始数据就按当前设置重新解析一次
+  const raw = ctx.storage.getJSON('ct_raw');
+  if (raw && raw.detail) {
+    try {
+      const ds = parseTelecom(raw.detail, raw.balance, settings);
+      ds.updatedAt = raw.at || ds.updatedAt;
+      return { configured, ds, fromCache: true, authFailed: cookieDead, cookieDead };
+    } catch (_) {
+      /* 解析失败就掉到旧缓存 */
+    }
+  }
 
   const cached =
     ctx.storage.getJSON(
       'ct_datasource'
     );
 
-  if (authFailed) {
+  if (cookieDead) {
     // cookie 被服务器拒绝且刷新无果：登录已过期，通知一次（同个 cookie 只通知一次）
     notifyExpiredOnce(ctx, firstCookie);
   }
@@ -654,10 +668,11 @@ async function loadData(ctx) {
     fromCache:
       !!cached,
 
-    authFailed,
+    authFailed: cookieDead,
+
+    cookieDead,
   };
 }
-
 
 // 登录过期通知：同一个失效 cookie 只通知一次，成功刷新后清除标记
 function notifyExpiredOnce(ctx, cookie) {
@@ -684,7 +699,6 @@ function clearExpiredFlag(ctx) {
   ctx.storage.delete('ct_expired_notified');
 }
 
-
 function makeCapsule(
   title,
   value,
@@ -698,8 +712,6 @@ function makeCapsule(
     direction: 'column',
 
     alignItems: 'center',
-
-    justifyContent: 'center',
 
     flex: 1,
 
@@ -751,9 +763,6 @@ function makeCapsule(
         direction: 'row',
 
         alignItems: 'center',
-
-        justifyContent:
-          'center',
 
         gap: 3,
 
@@ -1100,8 +1109,6 @@ function smallRow(
         direction: 'row',
 
         alignItems: 'center',
-
-        justifyContent: 'center',
 
         width: 30,
 
@@ -1641,300 +1648,173 @@ function buildError(
   return w;
 }
 
+/* ---------- 登录捕获（request 脚本模式） ---------- */
 
+// 在 Safari/浏览器里登录 e.dlife.cn 成功时，Egern 会经过 loginMiddle 请求，
+// 在此自动捕获登录地址存入存储，小组件下次运行自动读取，全程无需手动操作。
+// 不返回值 = 透传，不影响登录请求本身。
+/* 从请求头里取 Cookie，兼容 plain object / Headers 实例等形态，忽略大小写 */
 function getReqCookie(headers) {
-
-  if (!headers) {
-    return '';
+  if (!headers) return '';
+  if (typeof headers.get === 'function') {
+    return headers.get('cookie') || headers.get('Cookie') || '';
   }
-
-  if (
-    typeof headers.get ===
-    'function'
-  ) {
-
-    return (
-      headers.get('cookie') ||
-      headers.get('Cookie') ||
-      ''
-    );
+  for (const k of Object.keys(headers)) {
+    if (String(k).toLowerCase() === 'cookie') return headers[k] || '';
   }
-
-  for (
-    const k of Object.keys(headers)
-  ) {
-
-    if (
-      String(k).toLowerCase() ===
-      'cookie'
-    ) {
-
-      return headers[k] || '';
-    }
-  }
-
   return '';
 }
 
-
 async function handleCapture(ctx) {
+  const req = ctx.request || {};
+  const url = req.url || '';
+  if (!url.includes('e.dlife.cn')) return; // 非电信请求直接透传
 
-  const req =
-    ctx.request || {};
-
-  const url =
-    req.url || '';
-
-  if (
-    !url.includes(
-      'e.dlife.cn'
-    )
-  ) {
-    return;
-  }
-
-
-  if (
-    url.includes(
-      '/user/loginMiddle'
-    )
-  ) {
-
-    const loginUrl =
-      (
-        url.match(
-          /(http.+)&sign/
-        ) || []
-      )[1] ||
-      url;
-
-
-    if (
-      loginUrl &&
-      ctx.storage.get(
-        'ct_login_url'
-      ) !== loginUrl
-    ) {
-
-      ctx.storage.set(
-        'ct_login_url',
-        loginUrl
-      );
+  // 1) 登录握手地址：记下来，并标记"刚刚登录过"（10 分钟内有效）
+  if (url.includes('/user/loginMiddle')) {
+    const loginUrl = (url.match(/(http.+)&sign/) || [])[1] || url;
+    if (loginUrl && ctx.storage.get('ct_login_url') !== loginUrl) {
+      ctx.storage.set('ct_login_url', loginUrl);
     }
-
-
-    ctx.storage.set(
-      'ct_login_ts',
-      String(Date.now())
-    );
-
+    ctx.storage.set('ct_login_ts', String(Date.now()));
     return;
   }
 
+  // 2) 主要方式：直接从登录后的真实请求里抓 Cookie，比回放握手地址可靠
+  const cookie = String(getReqCookie(req.headers) || '').trim();
+  if (!cookie || ctx.storage.get('ct_cookie') === cookie) return;
+  ctx.storage.set('ct_cookie', cookie);
+  // 记录 cookie 获取时间，用于过期预警
+  ctx.storage.set('ct_cookie_ts', String(Date.now()));
+  // 新 cookie 到手，清除之前的过期预警标记
+  ctx.storage.delete('ct_expire_warned');
 
-  const cookie =
-    String(
-      getReqCookie(
-        req.headers
-      ) || ''
-    ).trim();
-
-
-  if (
-    !cookie ||
-    ctx.storage.get(
-      'ct_cookie'
-    ) === cookie
-  ) {
-    return;
-  }
-
-
-  ctx.storage.set(
-    'ct_cookie',
-    cookie
-  );
-
-  const ts =
-    Number(
-      ctx.storage.get(
-        'ct_login_ts'
-      ) || 0
-    );
-
-
-  if (
-    Date.now() - ts <
-    10 * 60 * 1000
-  ) {
-
-    ctx.storage.delete(
-      'ct_login_ts'
-    );
-
-
+  // 只有"刚登录过"才打扰用户（成功信号）；后台静默续期不通知
+  const ts = Number(ctx.storage.get('ct_login_ts') || 0);
+  if (Date.now() - ts < 10 * 60 * 1000) {
+    ctx.storage.delete('ct_login_ts');
     ctx.notify({
-
-      title:
-        '中国电信',
-
-      body:
-        '登录成功，小组件将自动更新',
-
-      action: {
-        type: 'clipboard',
-
-        text:
-          cookie,
-      },
+      title: '中国电信',
+      body: '登录成功，小组件将自动更新',
+      // 兜底：如果小组件没自动读到，点通知手动复制 cookie
+      action: { type: 'clipboard', text: cookie },
     });
   }
 }
 
+/* ---------- 小组件（generic 脚本模式） ---------- */
 
 async function handleWidget(ctx) {
+  const safeCtx = ctx || {};
+  const env = safeCtx.env || {};
+  const title = (env.CT_TITLE || '中国电信').trim() || '中国电信';
 
-  const title =
-    (
-      ctx.env.CT_TITLE ||
-      '中国电信'
-    ).trim() ||
-    '中国电信';
+  let result;
+  try {
+    result = await loadData(safeCtx);
+  } catch (e) {
+    return buildError(title, '数据获取失败', 'https://e.dlife.cn');
+  }
 
-
-  const {
-    configured,
-    ds,
-    fromCache,
-    authFailed,
-  } =
-    await loadData(ctx);
+  const { configured, ds, fromCache, authFailed, cookieDead } = result;
 
   if (!configured) {
-
-    return buildError(
-      title,
-      '未登录：在 Safari 打开 e.dlife.cn 登录一次',
-      URLS.login
-    );
+    return buildError(title, '未登录：在 Safari 打开 e.dlife.cn 登录一次', URLS.login);
   }
 
-
-  // cookie 被服务器拒绝：不再展示旧数据，直接提示重新登录
-  if (authFailed) {
-
-    return buildError(
-      title,
-      '登录已过期：在 Safari 打开 e.dlife.cn 重新登录',
-      URLS.login
-    );
+  if (authFailed || !ds) {
+    return buildError(title, '登录已过期', 'https://e.dlife.cn');
   }
 
-
-  if (!ds) {
-
-    return buildError(
-      title,
-      '数据获取失败，请检查网络或重新登录'
-    );
+  const family = safeCtx.widgetFamily || '';
+  let w;
+  if (family.startsWith('accessory')) {
+    w = buildLockScreen(title, ds, family);
+  } else {
+    w = buildMainWidget(title, ds, fromCache);
   }
-
-
-  const family =
-    ctx.widgetFamily ||
-    'systemSmall';
-
-  if (
-    family ===
-      'systemMedium' ||
-    family ===
-      'systemLarge' ||
-    family ===
-      'systemExtraLarge'
-  ) {
-
-    return buildMainWidget(
-      title,
-      ds,
-      fromCache
-    );
-  }
-
-  if (
-    family.startsWith(
-      'accessory'
-    )
-  ) {
-
-    return buildLockScreen(
-      title,
-      ds,
-      family
-    );
-  }
-
-  return buildSmall(
-    title,
-    ds,
-    fromCache
-  );
-}
-
-
-export default async function(ctx) {
-
-
-  if (
-    ctx.request &&
-    ctx.request.url
-  ) {
-
-    return handleCapture(ctx);
-  }
-
-
-  // 保活模式：schedule 定时任务（ctx.cron 存在）或 Env CT_KEEPALIVE=true。
-  // 定时查一次接口，利用服务端 session 滑动过期机制续命；
-  // 若已过期，loadData 内部会按"登录已过期"处理并通知一次。
-  if (
-    ctx.cron ||
-    (ctx.env && ctx.env.CT_KEEPALIVE === 'true')
-  ) {
-
-    return handleKeepAlive(ctx);
-  }
-
-
-  return handleWidget(ctx);
-}
-
-
-// 定时保活：轻量 ping 一次续 session。
-//
-// 注意：不要调完整 loadData——它最坏要串行发 5 个请求（每个 15s 超时），
-// 累计时长超过 Egern 定时任务的脚本超时会被直接终止。
-// 保活只需要一次真实触达；成功/失败都不通知不写缓存，
-// 下次小组件刷新会正常处理显示和过期提醒。
-async function handleKeepAlive(ctx) {
-
-  const cookie =
-    (ctx.env.CT_COOKIE || '').trim() ||
-    ctx.storage.get('ct_cookie') ||
-    '';
-
-  if (!cookie) return;
-
+  // cookie 失效时点小组件直接跳去登录页
+  if (cookieDead) w.url = URLS.login;
+  // CT_DEBUG=1：在底部显示保活诊断（上次保活时间/成败）
   try {
+    if (String(safeCtx.env?.CT_DEBUG || '') === '1' && w && Array.isArray(w.children)) {
+      const ka = safeCtx.storage.getJSON('ct_ka_last');
+      let dbg = '保活: 无记录';
+      if (ka && ka.ts) {
+        const agoMin = Math.max(0, Math.round((Date.now() - ka.ts) / 60000));
+        dbg = ka.ok ? `保活: ${agoMin}分钟前成功` : `保活: ${agoMin}分钟前失败(${(ka.err || '').slice(0, 30)})`;
+      }
+      w.children.push({ type: 'text', text: dbg, font: { size: 'caption2' }, opacity: 0.5, maxLines: 1 });
+    }
+  } catch (_) {}
+  return w;
+}
 
-    await ctx.http.get(URLS.detail, {
-      headers: {
-        Cookie: cookie,
-      },
+// 过期预警：cookie 快到期时提前通知，避免突然变红点
+function checkExpireWarn(ctx) {
+  try {
+    if (ctx.storage.get('ct_expire_warned')) return; // 每个 cookie 只预警一次
+    const ts = Number(ctx.storage.get('ct_cookie_ts') || 0);
+    if (!ts) return;
+    const warnDays = parseFloat(ctx.env?.CT_EXPIRE_WARN_DAYS) || 5;
+    if (warnDays <= 0) return;
+    const ageDays = (Date.now() - ts) / 86400000;
+    if (ageDays >= warnDays) {
+      ctx.storage.set('ct_expire_warned', '1');
+      ctx.notify({
+        title: '中国电信',
+        body: `登录已 ${Math.floor(ageDays)} 天未刷新，可能快过期了，点我去重新登录`,
+        action: { type: 'url', url: URLS.login },
+      });
+    }
+  } catch (_) {}
+}
 
-      timeout: 10000,
+/* ---------- 入口：单文件三模式 ---------- */
 
-      credentials: 'omit',
-    });
-
-  } catch (e) {}
+export default async function (ctx) {
+  const safeCtx = ctx || {};
+  // request 脚本条目 → 捕获登录；generic 脚本条目 → 渲染小组件
+  //（ctx.request 仅在 request/response 脚本中可用）
+  if (safeCtx.request && safeCtx.request.url) {
+    return handleCapture(safeCtx);
+  }
+  // schedule 定时保活 → 只拉接口续 session，不渲染小组件
+  if (!safeCtx.widgetFamily) {
+    const keep = String(safeCtx.env?.CT_KEEPALIVE || '').toLowerCase();
+    if (keep === 'false' || keep === '0') return { type: 'text', text: 'keepalive disabled' };
+    // 保活行车记录仪：记录每次运行的时间、成败、错误，下次掉线时有据可查
+    const ka = { ts: Date.now() };
+    const markKaFail = (err) => {
+      ka.ok = false;
+      ka.err = String(err || '').slice(0, 120);
+      const fails = Number(safeCtx.storage.get('ct_ka_fail') || 0) + 1;
+      safeCtx.storage.set('ct_ka_fail', String(fails));
+      ka.fails = fails;
+      // 连续失败 3 次就通知，别等半夜悄悄死
+      if (fails === 3) {
+        try {
+          safeCtx.notify({ title: '中国电信', body: `保活连续失败 3 次（${ka.err}），登录可能已失效` });
+        } catch (_) {}
+      }
+    };
+    try {
+      const r = await loadData(safeCtx);
+      if (r && r.fromCache) {
+        // 保活的目的是验证 session 还活着；只能读到缓存说明没打通真接口，
+        // 必须记失败——否则 cookie 死了也显示"保活成功"，行车记录仪就撒谎了
+        markKaFail(r.cookieDead ? '登录已失效，仅读到缓存' : '网络异常，仅读到缓存');
+      } else {
+        ka.ok = true;
+        safeCtx.storage.set('ct_ka_fail', '0');
+      }
+    } catch (e) {
+      markKaFail((e && e.message) || e);
+    }
+    try { safeCtx.storage.setJSON('ct_ka_last', ka); } catch (_) {}
+    checkExpireWarn(safeCtx);
+    return { type: 'text', text: 'keepalive done' };
+  }
+  checkExpireWarn(safeCtx);
+  return handleWidget(safeCtx);
 }
