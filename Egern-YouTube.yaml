@@ -85,7 +85,7 @@ compat_arguments_schema:
     - 'false'
   showOnlyTranslation:
     name: '[翻译] 只显示译文'
-    description: true=仅译文，false=双语对照
+    description: 打开=仅译文，关闭=双语对照
     default_value: 'false'
     options:
     - 'true'
