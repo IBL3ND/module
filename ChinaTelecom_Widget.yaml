@@ -1,17 +1,40 @@
 name: 中国电信小组件
-description: 中国电信 话费 语音 流量小组件（含定时保活）
+description: 中国电信 话费 语音 流量小组件（App RSA 登录 + 自动重登）
 author: iBL3ND
 icon: https://iili.io/nEufFXR.png
+homepage: https://telecom.nufe.ccwu.cc
 compat_arguments:
-  ctCapture: 'true'
+  ctPhone: ''
+  ctPassword: ''
+  ctDeviceId: ''
+  ctShowGeneralFlow: 'true'
+  ctShowDirectionalFlow: 'true'
   ctShowUsedFlow: 'false'
   ctShowUsedVoice: 'false'
-  ctShowDirect: 'auto'
   ctTitle: ''
 compat_arguments_schema:
-  ctCapture:
-    name: 中国电信数据抓取
-    description: 用这个链接去登录 https://e.dlife.cn（抓到数据后可以关闭）
+  ctPhone:
+    name: 手机号
+    description: 中国电信手机号
+    default_value: ''
+  ctPassword:
+    name: 服务密码
+    description: 服务密码 6 位数字，只存在你自己的模块设置里
+    default_value: ''
+  ctDeviceId:
+    name: 设备 ID
+    description: '复制网站去浏览器打开获取设备ID  使用步骤：1.使用短信登录授权设备 2. 复制显示的设备 ID 在此填写 3.获取方式：网站 https://telecom.nufe.ccwu.cc'
+    default_value: ''
+  ctShowGeneralFlow:
+    name: 显示通用流量
+    description: 关闭则只统计定向流量
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  ctShowDirectionalFlow:
+    name: 显示定向流量
+    description: 关闭则只统计通用流量
     default_value: 'true'
     options:
     - 'true'
@@ -30,14 +53,6 @@ compat_arguments_schema:
     options:
     - 'true'
     - 'false'
-  ctShowDirect:
-    name: 定向流量卡
-    description: auto=自动判断，true=强制显示，false=隐藏
-    default_value: 'auto'
-    options:
-    - 'auto'
-    - 'true'
-    - 'false'
   ctTitle:
     name: 小组件标题
     description: 默认"中国电信"，可自定义
@@ -48,21 +63,14 @@ scriptings:
     name: china-telecom
     script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CT_Widget.JS
     env:
+      CT_PHONE: '{{{ctPhone}}}'
+      CT_PASSWORD: '{{{ctPassword}}}'
+      CT_DEVICE_ID: '{{{ctDeviceId}}}'
+      CT_SHOW_GENERAL_FLOW: '{{{ctShowGeneralFlow}}}'
+      CT_SHOW_DIRECTIONAL_FLOW: '{{{ctShowDirectionalFlow}}}'
       CT_SHOW_USED_FLOW: '{{{ctShowUsedFlow}}}'
       CT_SHOW_USED_VOICE: '{{{ctShowUsedVoice}}}'
-      CT_SHOW_DIRECT: '{{{ctShowDirect}}}'
       CT_TITLE: '{{{ctTitle}}}'
-- http_request:
-    name: 中国电信自动捕获
-    match: '^ht[{{{ctCapture}}}]ps://e\.dlife\.cn/'
-    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CT_Widget.JS
-- schedule:
-    name: 中国电信保活
-    cron: '*/20 * * * *'
-    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CT_Widget.JS
-mitm:
-  hostnames:
-    includes:
-    - e.dlife.cn
 widgets:
 - name: china-telecom
+  script_name: china-telecom
