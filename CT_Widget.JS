@@ -1,6 +1,6 @@
 /*
  * 中国电信小组件（Egern 版，App RSA 登录）
- * 移植自 Scriptable「中国电信 2」3.0.0-rsa（2Ya&脑瓜，RSA 登录 + 电信官方 API）
+ * 移植自 Scriptable「中国电信」3.0.0-rsa（2Ya&脑瓜，RSA 登录 + 电信官方 API）
  * 登录方式：App 官方接口 userLoginNormal（RSA 加密）+ qryImportantData 查数
  * 账号存在模块设置里，token 失效时自动重登。
  * 30 分钟缓存：30 分钟内直接用缓存，不调接口，减少登录次数。
