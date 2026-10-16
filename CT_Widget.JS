@@ -1,702 +1,429 @@
 /*
- * 中国电信小组件（Egern 版，单文件三模式）
- * 移植自 xccverse/egern-widgets 的 china-telecom.js（cookie 获取逻辑全量照搬）
+ * 中国电信小组件（Egern 版，App RSA 登录）
+ * 移植自 Scriptable「中国电信 2」3.0.0-rsa（2Ya&脑瓜，RSA 登录 + 电信官方 API）
  *
- * 同一个文件，三种用法：
- *   1. generic 类型 → iOS 小组件：显示剩余话费 / 剩余（或已用）流量 / 剩余语音
- *   2. request 类型 → 登录捕获：Safari 里登录 e.dlife.cn 成功时自动捕获 cookie，
- *      存入存储，小组件下次运行自动读取登录，全程无需手动复制粘贴。
- *   3. schedule 类型 → 定时保活：每 20 分钟拉一次接口续 session
+ * 登录方式：App 官方接口 userLoginNormal（RSA 加密）+ qryImportantData 查数
+ * 账号存在模块设置里，token 失效时自动重登，不用每 24 小时去 Safari 手动登录。
+ * 网站 cookie 方法已废弃（e.dlife.cn 会话 24 小时绝对过期，保活/续期绕不过）。
  *
- * 环境变量：
- *   CT_LOGIN_URL          电信登录地址（抓包得到的登录 URL，用于自动更新 cookie）
- *   CT_COOKIE             直接填写 cookie（与 CT_LOGIN_URL 二选一，URL 优先）
+ * 环境变量（在模块 compat_arguments / generic env 里填）：
+ *   CT_PHONE              手机号（必填）
+ *   CT_PASSWORD           服务密码 6 位数字（必填，与 CT_SERVICE_PASSWORD 二选一）
+ *   CT_SERVICE_PASSWORD   服务密码（CT_PASSWORD 的别名，填一个即可）
+ *   CT_DEVICE_ID          设备 ID（可选）：在作者网页短信登录授权后复制
+ *                         不填则用随机设备 ID，可能需要多试几次才登上
  *   CT_SHOW_USED_FLOW     'true' 显示已用流量，否则显示剩余流量
  *   CT_SHOW_USED_VOICE    'true' 显示已用语音，否则显示剩余语音
- *   CT_SHOW_DIRECT        定向流量开关（本版已合并为通用/定向开关，见下）
  *   CT_SHOW_GENERAL_FLOW  'false' 不统计通用流量，默认显示
  *   CT_SHOW_DIRECTIONAL_FLOW 'false' 不统计定向流量，默认显示
  *   CT_TITLE              小组件标题，默认 "中国电信"
- *   CT_KEEPALIVE          定时保活开关：填 'false' 关闭，不填或填其他值均为开启
- *   CT_EXPIRE_WARN_DAYS   cookie 超过此天数未刷新时提前通知，默认 5 天；填 0 关闭
- *   CT_DEBUG              填 '1' 在小组件底部显示保活诊断信息
  *
- * 数据来源：https://e.dlife.cn/user/package_detail.do
- *           https://e.dlife.cn/user/balance.do
- * 登录方式：Safari 打开 e.dlife.cn 登录一次，脚本自动捕获 cookie（需在模块里配置 http_request + MITM）
+ * 数据来源：https://appgologin.189.cn:9031/login/client/userLoginNormal
+ *           https://appfuwu.189.cn:9021/query/qryImportantData
+ * 注意：密码只存在你自己的 Egern 模块设置里，不发给任何第三方。
  */
 
 const URLS = {
-  login: 'https://e.dlife.cn/index.do',
-  detail: 'https://e.dlife.cn/user/package_detail.do',
-  balance: 'https://e.dlife.cn/user/balance.do',
+  login: 'https://appgologin.189.cn:9031/login/client/userLoginNormal',
+  query: 'https://appfuwu.189.cn:9021/query/qryImportantData',
 };
-
 
 const FLOW_COLOR = '#FF6620';
 const VOICE_COLOR = '#78C100';
-
 
 const COLORS = {
   bg: {
     light: '#FFFFFF',
     dark: '#2C2C2E',
   },
-
   border: {
     light: '#E5E5EA',
     dark: '#3A3A3C',
   },
-
   title: {
     light: '#666666',
     dark: '#8E8E93',
   },
-
   value: {
     light: '#1C1C1E',
     dark: '#FFFFFF',
   },
-
   time: {
     light: '#999999',
     dark: '#666666',
   },
-
   error: {
     light: '#FF3B30',
     dark: '#FF453A',
   },
-
   capsuleBg: {
     light: '#FFFFFF15',
     dark: '#FFFFFF10',
   },
-
   accent: {
     light: '#FF6620',
     dark: '#FF854D',
   },
 };
 
-
 function formatFlow(flow) {
   const remain = flow / 1024;
-
   if (remain < 1024) {
-    return {
-      amount: remain.toFixed(2),
-      unit: 'MB',
-    };
+    return { amount: remain.toFixed(2), unit: 'MB' };
   }
-
-  return {
-    amount: (remain / 1024).toFixed(2),
-    unit: 'GB',
-  };
+  return { amount: (remain / 1024).toFixed(2), unit: 'GB' };
 }
-
 
 function pad2(n) {
   return n < 10 ? `0${n}` : `${n}`;
 }
 
-
 function fmtTime(ts) {
   const d = new Date(ts);
-
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-
-function mergeCookies(oldCookie, newPairs) {
-  const map = new Map();
-  for (const p of String(oldCookie || '').split(';')) {
-    const i = p.indexOf('=');
-    if (i > 0) map.set(p.slice(0, i).trim(), p.slice(i + 1).trim());
-  }
-  for (const p of String(newPairs || '').split(';')) {
-    const i = p.indexOf('=');
-    if (i > 0) map.set(p.slice(0, i).trim(), p.slice(i + 1).trim());
-  }
-  return [...map].map(([k, v]) => `${k}=${v}`).join('; ');
+function _safeN(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
-function harvestSetCookie(ctx, resp, cookie) {
-  // 滑动续期：API 成功返回时若带了 Set-Cookie，合并进存储（同名覆盖）
-  try {
-    const setCookies = (resp.headers && resp.headers.getAll('set-cookie')) || [];
-    const pairs = setCookies
-      .map((c) => String(c).split(';')[0].trim())
-      .filter(Boolean);
-    if (pairs.length > 0) {
-      const merged = mergeCookies(cookie, pairs.join('; '));
-      if (merged && merged !== cookie) ctx.storage.set('ct_cookie', merged);
-      return merged || cookie;
-    }
-  } catch (e) {}
-  return cookie;
+/* ---------- App 登录：transNumber / 北京时间 / RSA ---------- */
+
+function transNumber(str, encode = true) {
+  return [...String(str || '')].map((c) => String.fromCharCode((c.charCodeAt(0) + (encode ? 2 : -2)) & 0xffff)).join('');
 }
 
-
-async function refreshCookie(ctx) {
-  const loginUrl =
-    (ctx.env.CT_LOGIN_URL || '').trim() ||
-    ctx.storage.get('ct_login_url') ||
-    '';
-
-  if (!loginUrl) {
-    return ctx.storage.get('ct_cookie') || '';
-  }
-
-  const url =
-    (loginUrl.match(/(http.+)&sign/) || [])[1] ||
-    loginUrl;
-
-  const resp = await ctx.http.get(url, {
-    redirect: 'manual',
-    timeout: 15000,
-    credentials: 'omit',
-  });
-
-  const setCookies =
-    (resp.headers &&
-      resp.headers.getAll &&
-      resp.headers.getAll('set-cookie')) ||
-    [];
-
-  const pairs = setCookies
-    .map((c) => String(c).split(';')[0].trim())
-    .filter(Boolean);
-
-  if (pairs.length > 0) {
-    // 合并而非覆盖：回放可能只返回部分 cookie，直接覆盖会丢掉原有的
-    const merged = mergeCookies(ctx.storage.get('ct_cookie'), pairs.join('; '));
-    if (merged) ctx.storage.set('ct_cookie', merged);
-  }
-
-  return ctx.storage.get('ct_cookie') || '';
+function getBeijingTimestamp() {
+  const bjDate = new Date(Date.now() + 8 * 3600 * 1000);
+  const yyyy = String(bjDate.getFullYear());
+  const MM = String(bjDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(bjDate.getDate()).padStart(2, '0');
+  const HH = String(bjDate.getHours()).padStart(2, '0');
+  const mm = String(bjDate.getMinutes()).padStart(2, '0');
+  const ss = String(bjDate.getSeconds()).padStart(2, '0');
+  return `${yyyy}${MM}${dd}${HH}${mm}${ss}`;
 }
 
+// RSA 公钥 modulus（1024-bit），来自 Scriptable 原脚本 PEM，指数 65537
+const RSA_MOD_HEX = 'c190b4f5e53855833ebf34e97ab3c18d3e87dd5b359b0a45a791a026eced8b8e43351fb74cbf3922a9dc54d368da9864472d7fd934c0971e73dc5bfb0386214204dd7ca85bf2f20e9561bf50b6ba08d3d7b5efab3e642b62bfb85b8a7d9c0938fdf625299c4968666d7d9701f2a3af6ee543223cca6ad3f5ca04ef2562137f83';
 
-async function fetchJson(ctx, url, cookie) {
+function _modPow(base, exp, mod) {
+  let result = 1n;
+  let b = base % mod;
+  let e = exp;
+  while (e > 0n) {
+    if (e & 1n) result = (result * b) % mod;
+    b = (b * b) % mod;
+    e >>= 1n;
+  }
+  return result;
+}
+
+function _base64Encode(bytes) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    out += chars[b0 >> 2];
+    out += chars[((b0 & 3) << 4) | (b1 >> 4)];
+    out += i + 1 < bytes.length ? chars[((b1 & 15) << 2) | (b2 >> 6)] : '=';
+    out += i + 2 < bytes.length ? chars[b2 & 63] : '=';
+  }
+  return out;
+}
+
+// PKCS#1 v1.5 RSA 加密（纯 BigInt，不依赖 WebView），与原脚本 WebView + JSEncrypt 等价
+function rsaEncrypt(text) {
+  const data = [...String(text)].map((c) => c.charCodeAt(0) & 0xff);
+  const k = 128;
+  if (data.length > k - 11) throw new Error('RSA 明文过长');
+  const psLen = k - data.length - 3;
+  const ps = [];
+  while (ps.length < psLen) {
+    const r = Math.floor(Math.random() * 255) + 1;
+    if (r !== 0) ps.push(r);
+  }
+  const em = [0x00, 0x02, ...ps, 0x00, ...data];
+  let hex = '';
+  for (const b of em) hex += b.toString(16).padStart(2, '0');
+  const m = BigInt('0x' + RSA_MOD_HEX);
+  const c = _modPow(BigInt('0x' + hex), 65537n, m);
+  let cHex = c.toString(16).padStart(256, '0');
+  const out = [];
+  for (let i = 0; i < cHex.length; i += 2) out.push(parseInt(cHex.slice(i, i + 2), 16));
+  return _base64Encode(out);
+}
+
+async function _postJson(ctx, url, bodyObj) {
   let resp;
   try {
-    resp = await ctx.http.get(url, {
-      headers: {
-        Cookie: cookie,
-      },
-
+    resp = await ctx.http.post(url, {
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      body: JSON.stringify(bodyObj),
       timeout: 15000,
-
-      credentials: 'omit',
     });
   } catch (e) {
-    // 连服务器都没连上（断网/DNS/超时）：瞬时故障，可以用缓存顶
     const err = new Error(`network: ${url}`);
     err.transient = true;
     throw err;
   }
-
   if (!resp || resp.status !== 200) {
-    // 服务器有响应但拒绝了（302 跳登录/401/403 等）：cookie 已失效
-    throw new Error(
-      `HTTP ${resp ? resp.status : 'no-response'}: ${url}`
-    );
+    const err = new Error(`HTTP ${resp ? resp.status : 'no-response'}: ${url}`);
+    err.transient = true;
+    throw err;
   }
-
-  // 滑动续期：成功响应带的 Set-Cookie 合并进存储
-  cookie = harvestSetCookie(ctx, resp, cookie);
-
   try {
     return await resp.json();
   } catch (e) {
-    // 200 但不是 JSON（通常是被踢到登录页，拿回 HTML）：cookie 已失效
-    throw new Error(`not-json: ${url}`);
+    const err = new Error(`not-json: ${url}`);
+    err.transient = true;
+    throw err;
   }
 }
 
-function parseTelecom(detail, balance, opts) {
-  const {
-    showUsedFlow,
-    showGeneralFlow,
-    showDirectionalFlow,
-  } = opts;
-
-  let totalFlowAmount = 0;
-  let totalBalanceFlowAmount = 0;
-  let totalUsedFlowAmount = 0;
-
-  let totalVoiceAmount = 0;
-  let totalBalanceVoiceAmount = 0;
-
-  let isUnlimitedFlow = false;
-
-  for (const data of detail?.items || []) {
-
-    if (data.offerType === 19) {
-      continue;
-    }
-
-    for (const item of data.items || []) {
-
-
-      if (item.unitTypeId == 3) {
-
-        // 定向判断：资源名含"定向"即为定向流量，其余为通用流量
-        const isDirectional =
-          /定向/.test(
-            item.ratableResourcename || ''
-          );
-
-        const directionAllowed =
-          isDirectional ?
-            showDirectionalFlow :
-            showGeneralFlow;
-
-        if (
-          !(
-            item.usageAmount == 0 &&
-            item.balanceAmount == 0
-          )
-        ) {
-
-          const skip =
-            item.balanceAmount == '999999999999' ||
-            !directionAllowed;
-
-          if (!skip) {
-
-            totalFlowAmount +=
-              parseFloat(
-                item.ratableAmount
-              ) || 0;
-
-            totalBalanceFlowAmount +=
-              parseFloat(
-                item.balanceAmount
-              ) || 0;
-          }
-        }
-
-        // 已用流量同样按开关过滤，保证"只显示通用"时已用也是通用的
-        if (directionAllowed) {
-
-          totalUsedFlowAmount +=
-            parseFloat(
-              item.usageAmount
-            ) || 0;
-        }
-
-        if (
-          data.offerType == 21 &&
-          item.ratableAmount == '0'
-        ) {
-          isUnlimitedFlow = true;
-        }
-
-      }
-
-
-      else if (
-        !detail.voiceBalance &&
-        item.unitTypeId == 1
-      ) {
-
-        totalVoiceAmount +=
-          parseInt(
-            item.ratableAmount,
-            10
-          ) || 0;
-
-        totalBalanceVoiceAmount +=
-          parseInt(
-            item.balanceAmount,
-            10
-          ) || 0;
-      }
-    }
-  }
-
-
-  if (
-    detail.voiceAmount &&
-    detail.voiceBalance
-  ) {
-
-    totalVoiceAmount =
-      detail.voiceAmount;
-
-    totalBalanceVoiceAmount =
-      detail.voiceBalance;
-  }
-
-
-  const balanceFlow =
-    formatFlow(
-      totalBalanceFlowAmount
-    );
-
-  const usedFlow =
-    formatFlow(
-      totalUsedFlowAmount
-    );
-
-
-  const flow = {
-
-    title:
-      '剩余流量',
-
-    number:
-      balanceFlow.amount,
-
-    unit:
-      balanceFlow.unit,
-
-    percent:
-      +(
-        (
-          totalBalanceFlowAmount /
-          (totalFlowAmount || 1)
-        ) *
-        100
-      ).toFixed(2),
-
-    color:
-      FLOW_COLOR,
-  };
-
-
-  if (showUsedFlow) {
-
-    flow.title =
-      '已用流量';
-
-    flow.number =
-      usedFlow.amount;
-
-    flow.unit =
-      usedFlow.unit;
-  }
-
-
-  if (isUnlimitedFlow) {
-
-    flow.title =
-      '已用流量';
-
-    flow.number =
-      usedFlow.amount;
-
-    flow.unit =
-      usedFlow.unit;
-  }
-
-
-  const voice = {
-
-    title:
-      '剩余语音',
-
-    number:
-      `${totalBalanceVoiceAmount}`,
-
-    unit:
-      '分钟',
-
-    percent:
-      +(
-        (
-          totalBalanceVoiceAmount /
-          (totalVoiceAmount || 1)
-        ) *
-        100
-      ).toFixed(2),
-
-    color:
-      VOICE_COLOR,
-  };
-
-
-  const feeNum =
-    Number(
-      balance?.totalBalanceAvailable
-    );
-
-  const fee = {
-
-    title:
-      '剩余话费',
-
-    number:
-      Number.isFinite(feeNum)
-        ? (feeNum / 100).toFixed(2)
-        : '0.00',
-
-    unit:
-      '元',
-  };
-
-
-  return {
-
-    fee,
-
-    flow,
-
-    voice,
-
-    updatedAt:
-      Date.now(),
-  };
+/* ---------- App 登录 + 查数 ---------- */
+
+function _getAccount(ctx) {
+  const env = ctx.env || {};
+  const phone = String(env.CT_PHONE || '').trim();
+  const password = String(env.CT_PASSWORD || env.CT_SERVICE_PASSWORD || '').trim();
+  const deviceId = String(env.CT_DEVICE_ID || '').trim();
+  return { phone, password, deviceId };
 }
 
-async function tryCookie(
-  ctx,
-  cookie,
-  settings
-) {
-
-  const detail =
-    await fetchJson(
-      ctx,
-      URLS.detail,
-      cookie
-    );
-
-  const balance =
-    await fetchJson(
-      ctx,
-      URLS.balance,
-      cookie
-    );
-
-  // 200 + JSON 但不是套餐数据（比如返回了错误码对象）：视为登录失效
-  for (const [name, data] of [['detail', detail], ['balance', balance]]) {
-    if (!data || typeof data !== 'object' || Array.isArray(data)) {
-      throw new Error(`bad-payload: ${name}`);
-    }
+async function telecomLogin(ctx, account) {
+  const { phone, password, deviceId } = account;
+  const uuid = String(Math.floor(Math.random() * 9e15 + 1e15));
+  const ts = getBeijingTimestamp();
+  const encryptText = `iPhone 14 15.4.0${deviceId || uuid.slice(0, 12)}${phone}${ts}${password}0$$$0.`;
+  const encrypted = rsaEncrypt(encryptText);
+  const loginBody = {
+    content: {
+      fieldData: {
+        loginType: '4',
+        accountType: '',
+        isChinatelecom: '',
+        systemVersion: '15.4.0',
+        deviceUid: uuid.slice(0, 16),
+        phoneNum: transNumber(phone),
+        authentication: transNumber(password),
+        androidId: deviceId ? transNumber(deviceId) : '',
+        loginAuthCipherAsymmertric: encrypted,
+      },
+      attach: 'iPhone',
+    },
+    headerInfos: {
+      code: 'userLoginNormal',
+      clientType: '#12.2.0#channel50#iPhone 14 Pro#',
+      timestamp: ts,
+      shopId: '20002',
+      source: '110003',
+      sourcePassword: 'Sid98s',
+      userLoginName: transNumber(phone),
+    },
+  };
+  const loginData = await _postJson(ctx, URLS.login, loginBody);
+  const rd = loginData && loginData.responseData;
+  if (!rd || rd.resultCode !== '0000') {
+    const err = new Error(`登录失败 ${rd ? rd.resultCode : 'no-response'}：${(rd && rd.resultDesc) || '未知错误'}`);
+    err.resultCode = rd ? rd.resultCode : '';
+    err.resultDesc = rd ? rd.resultDesc : '';
+    throw err;
   }
-
-  const ds =
-    parseTelecom(
-      detail,
-      balance,
-      settings
-    );
-
-  ctx.storage.setJSON(
-    'ct_datasource',
-    ds
-  );
-
-  // 多存一份原始接口数据：缓存兜底时按当前 Env 设置重新解析，避免旧缓存里的标题/数值跟新设置对不上
+  const { token, cityCode, provinceCode } = rd.data.loginSuccessResult || {};
+  if (!token) throw new Error('登录成功但未返回 token');
   try {
-    ctx.storage.setJSON('ct_raw', { detail, balance, at: ds.updatedAt || Date.now() });
+    ctx.storage.set('ct_app_token', token);
+    ctx.storage.set('ct_app_city', String(cityCode || ''));
+    ctx.storage.set('ct_app_province', String(provinceCode || ''));
+    ctx.storage.set('ct_app_token_ts', String(Date.now()));
   } catch (_) {}
+  return { token, cityCode, provinceCode };
+}
 
-  return ds;
+async function fetchImportantData(ctx, account, token, cityCode, provinceCode) {
+  const ts = getBeijingTimestamp();
+  const dataBody = {
+    content: {
+      fieldData: {
+        provinceCode,
+        cityCode,
+        shopId: '20002',
+        isChinatelecom: '0',
+        account: transNumber(account.phone),
+      },
+      attach: 'test',
+    },
+    headerInfos: {
+      code: 'qryImportantData',
+      clientType: '#12.2.0#channel50#iPhone 14 Pro#',
+      timestamp: ts,
+      shopId: '20002',
+      source: '110003',
+      sourcePassword: 'Sid98s',
+      userLoginName: transNumber(account.phone),
+      token,
+    },
+  };
+  const dataResp = await _postJson(ctx, URLS.query, dataBody);
+  if (!dataResp || !dataResp.responseData) {
+    const err = new Error(`查数失败：${(dataResp && dataResp.headerInfos && dataResp.headerInfos.reason) || 'Token 失效'}`);
+    err.authFailed = true;
+    throw err;
+  }
+  return dataResp.responseData.data;
+}
+
+function parseImportantData(apiData, opts) {
+  const { showUsedFlow, showGeneralFlow, showDirectionalFlow } = opts;
+  // 话费：原脚本取 balanceInfo.indexBalanceDataInfo.balance（已是元）
+  const balance = _safeN(apiData && apiData.balanceInfo && apiData.balanceInfo.indexBalanceDataInfo && apiData.balanceInfo.indexBalanceDataInfo.balance);
+  const feeBalance = balance !== 0 ? balance : _safeN(apiData && apiData.balance);
+  const fee = { title: '剩余话费', number: feeBalance.toFixed(2), unit: '元' };
+
+  // 流量：commonFlow = 通用，totalAmount = 全部（含定向），定向 = 全部 - 通用
+  const common = (apiData && apiData.flowInfo && apiData.flowInfo.commonFlow) || {};
+  const total = (apiData && apiData.flowInfo && apiData.flowInfo.totalAmount) || {};
+  const gUsed = _safeN(common.used), gBalance = _safeN(common.balance), gTotal = _safeN(common.total);
+  const tUsed = _safeN(total.used !== undefined ? total.used : apiData.usedFlux), tBalance = _safeN(total.balance), tTotal = _safeN(total.total !== undefined ? total.total : (tUsed + tBalance));
+  const hasCommon = common.used !== undefined || common.balance !== undefined || common.total !== undefined;
+  let used, balanceFlow, totalFlow;
+  if (!hasCommon) {
+    used = tUsed; balanceFlow = tBalance; totalFlow = tTotal;
+  } else if (showGeneralFlow && showDirectionalFlow) {
+    used = tUsed; balanceFlow = tBalance; totalFlow = tTotal;
+  } else if (showGeneralFlow && !showDirectionalFlow) {
+    used = gUsed; balanceFlow = gBalance; totalFlow = gTotal;
+  } else if (!showGeneralFlow && showDirectionalFlow) {
+    used = Math.max(0, tUsed - gUsed); balanceFlow = Math.max(0, tBalance - gBalance); totalFlow = Math.max(0, tTotal - gTotal);
+  } else {
+    used = tUsed; balanceFlow = tBalance; totalFlow = tTotal;
+  }
+  // 原脚本单位：used/balance/total 都是 KB，/1024 得 MB，再走 formatFlow
+  const balanceFmt = formatFlow(balanceFlow);
+  const usedFmt = formatFlow(used);
+  const flow = {
+    title: '剩余流量',
+    number: balanceFmt.amount,
+    unit: balanceFmt.unit,
+    percent: +(totalFlow > 0 ? ((balanceFlow / totalFlow) * 100).toFixed(2) : '0'),
+    color: FLOW_COLOR,
+  };
+  if (showUsedFlow) {
+    flow.title = '已用流量';
+    flow.number = usedFmt.amount;
+    flow.unit = usedFmt.unit;
+  }
+
+  // 语音
+  const voiceInfo = (apiData && apiData.voiceInfo && apiData.voiceInfo.voiceDataInfo) || {};
+  const vTotal = _safeN(voiceInfo.total !== undefined ? voiceInfo.total : apiData.totalVoice);
+  const vUsed = _safeN(voiceInfo.used !== undefined ? voiceInfo.used : apiData.usedVoice);
+  const vBalance = _safeN(voiceInfo.balance !== undefined ? voiceInfo.balance : (vTotal - vUsed));
+  const showUsedVoice = opts.showUsedVoice;
+  const voice = {
+    title: showUsedVoice ? '已用语音' : '剩余语音',
+    number: `${showUsedVoice ? vUsed : vBalance}`,
+    unit: '分钟',
+    percent: +(vTotal > 0 ? (((showUsedVoice ? vUsed : vBalance) / vTotal) * 100).toFixed(2) : '0'),
+    color: VOICE_COLOR,
+  };
+
+  return { fee, flow, voice, updatedAt: Date.now() };
+}
+
+function _notifyAuthFailedOnce(ctx, account, err) {
+  try {
+    const marker = `${account.phone.slice(-4)}:${err && err.resultCode ? err.resultCode : (err && err.message) || ''}`;
+    if (ctx.storage.get('ct_auth_notified') === marker) return;
+    ctx.storage.set('ct_auth_notified', marker);
+    ctx.notify({ title: '中国电信', body: `登录失败：${(err && err.message) || '请检查手机号/服务密码/设备ID'}` });
+  } catch (_) {}
+}
+
+function _clearAuthFlag(ctx) {
+  try { ctx.storage.delete('ct_auth_notified'); } catch (_) {}
 }
 
 async function loadData(ctx) {
-
   const settings = {
-
-    showUsedFlow:
-      ctx.env.CT_SHOW_USED_FLOW ===
-      'true',
-
-    showUsedVoice:
-      ctx.env.CT_SHOW_USED_VOICE ===
-      'true',
-
-    // 模块开关：通用流量 / 定向流量显示控制（默认都显示，即原来的"全部流量"）
-    showGeneralFlow:
-      ctx.env.CT_SHOW_GENERAL_FLOW !==
-      'false',
-
-    // 兼容旧版 CT_FILTER_ORIENTATE_FLOW=true（等价于定向流量开关关闭）
-    showDirectionalFlow:
-      ctx.env.CT_SHOW_DIRECTIONAL_FLOW !==
-      'false' &&
-      ctx.env.CT_FILTER_ORIENTATE_FLOW !==
-      'true',
+    showUsedFlow: ctx.env.CT_SHOW_USED_FLOW === 'true',
+    showUsedVoice: ctx.env.CT_SHOW_USED_VOICE === 'true',
+    showGeneralFlow: ctx.env.CT_SHOW_GENERAL_FLOW !== 'false',
+    showDirectionalFlow: ctx.env.CT_SHOW_DIRECTIONAL_FLOW !== 'false',
   };
-
-  const envCookie =
-    (ctx.env.CT_COOKIE || '').trim();
-
-  const loginUrl =
-    (ctx.env.CT_LOGIN_URL || '').trim() ||
-    ctx.storage.get('ct_login_url') ||
-    '';
-
-  const storedCookie =
-    ctx.storage.get('ct_cookie') ||
-    '';
-
-  const configured =
-    !!(
-      envCookie ||
-      loginUrl ||
-      storedCookie
-    );
-
-  // 1) 优先用已捕获的 cookie（从登录后的真实请求里抓的，最可靠）
-  const firstCookie =
-    envCookie ||
-    storedCookie;
-
-  let cookieDead = false;
-
-  if (firstCookie) {
-
-    try {
-
-      const ds =
-        await tryCookie(
-          ctx,
-          firstCookie,
-          settings
-        );
-
-      clearExpiredFlag(ctx);
-
-      return {
-
-        configured,
-
-        ds,
-
-        fromCache: false,
-
-        authFailed: false,
-
-        cookieDead: false,
-      };
-
-    } catch (e) {
-
-      if (!(e && e.transient)) {
-        cookieDead = true;
-      }
-    }
+  const account = _getAccount(ctx);
+  const configured = !!(account.phone && account.password);
+  if (!configured) {
+    return { configured: false, ds: null, fromCache: false, authFailed: false, authError: '' };
   }
 
-  // 2) 回放登录地址刷新 cookie（备用方式）
-  if (
-    !envCookie &&
-    loginUrl
-  ) {
-
-    try {
-
-      const fresh =
-        await refreshCookie(ctx);
-
-      if (
-        fresh &&
-        fresh !== firstCookie
-      ) {
-
-        try {
-
-          const ds =
-            await tryCookie(
-              ctx,
-              fresh,
-              settings
-            );
-
-          clearExpiredFlag(ctx);
-
-          return {
-
-            configured,
-
-            ds,
-
-            fromCache: false,
-
-            authFailed: false,
-
-            cookieDead: false,
-          };
-
-        } catch (e2) {
-
-          if (!(e2 && e2.transient)) {
-            cookieDead = true;
-          }
-        }
-      }
-
-    } catch (e) {
-    }
-  }
-
-  // 3) 断网/过期时用缓存顶一下：有原始数据就按当前设置重新解析一次
-  const raw = ctx.storage.getJSON('ct_raw');
-  if (raw && raw.detail) {
-    try {
-      const ds = parseTelecom(raw.detail, raw.balance, settings);
-      ds.updatedAt = raw.at || ds.updatedAt;
-      return { configured, ds, fromCache: true, authFailed: cookieDead, cookieDead };
-    } catch (_) {
-      /* 解析失败就掉到旧缓存 */
-    }
-  }
-
-  const cached =
-    ctx.storage.getJSON(
-      'ct_datasource'
-    );
-
-  if (cookieDead) {
-    // cookie 被服务器拒绝且刷新无果：登录已过期，通知一次（同个 cookie 只通知一次）
-    notifyExpiredOnce(ctx, firstCookie);
-  }
-
-  return {
-
-    configured,
-
-    ds:
-      cached || null,
-
-    fromCache:
-      !!cached,
-
-    authFailed: cookieDead,
-
-    cookieDead,
-  };
-}
-
-// 登录过期通知：同一个失效 cookie 只通知一次，成功刷新后清除标记
-function notifyExpiredOnce(ctx, cookie) {
-  const key = 'ct_expired_notified';
-  const marker = cookie || 'none';
-
-  if (ctx.storage.get(key) === marker) {
-    return;
-  }
-
-  ctx.storage.set(key, marker);
-
+  let token = '';
+  let cityCode = '';
+  let provinceCode = '';
   try {
-    ctx.notify({
-      title: '中国电信',
-      body: '登录已过期，请在 Safari 重新登录 e.dlife.cn',
-    });
+    token = ctx.storage.get('ct_app_token') || '';
+    cityCode = ctx.storage.get('ct_app_city') || '';
+    provinceCode = ctx.storage.get('ct_app_province') || '';
+  } catch (_) {}
+
+  const _tryFetch = async (tok, city, prov) => {
+    const apiData = await fetchImportantData(ctx, account, tok, city, prov);
+    const ds = parseImportantData(apiData, settings);
+    try {
+      ctx.storage.setJSON('ct_datasource', ds);
+      ctx.storage.setJSON('ct_raw', { apiData, at: ds.updatedAt || Date.now() });
+    } catch (_) {}
+    _clearAuthFlag(ctx);
+    return ds;
+  };
+
+  // 1) 先用缓存 token 查数
+  if (token) {
+    try {
+      const ds = await _tryFetch(token, cityCode, provinceCode);
+      return { configured, ds, fromCache: false, authFailed: false, authError: '' };
+    } catch (e) {
+      if (e && e.transient) {
+        // 断网：用缓存顶
+        return _fromCache(ctx, configured, settings, false, '');
+      }
+      // token 失效：往下走重新登录
+    }
+  }
+
+  // 2) 重新登录再查数
+  try {
+    const login = await telecomLogin(ctx, account);
+    const ds = await _tryFetch(login.token, login.cityCode, login.provinceCode);
+    return { configured, ds, fromCache: false, authFailed: false, authError: '' };
   } catch (e) {
+    if (e && e.transient) {
+      return _fromCache(ctx, configured, settings, false, '');
+    }
+    // 登录失败（3001 等）：通知一次，显示错误页，不拿缓存冒充新鲜数据
+    _notifyAuthFailedOnce(ctx, account, e);
+    return { configured, ds: null, fromCache: false, authFailed: true, authError: (e && e.message) || '登录失败' };
   }
 }
 
-
-function clearExpiredFlag(ctx) {
-  ctx.storage.delete('ct_expired_notified');
+function _fromCache(ctx, configured, settings, authFailed, authError) {
+  try {
+    const raw = ctx.storage.getJSON('ct_raw');
+    if (raw && raw.apiData) {
+      const ds = parseImportantData(raw.apiData, settings);
+      ds.updatedAt = raw.at || ds.updatedAt;
+      return { configured, ds, fromCache: true, authFailed, authError };
+    }
+  } catch (_) {}
+  try {
+    const cached = ctx.storage.getJSON('ct_datasource');
+    if (cached) return { configured, ds: cached, fromCache: true, authFailed, authError };
+  } catch (_) {}
+  return { configured, ds: null, fromCache: false, authFailed, authError };
 }
 
 function makeCapsule(
@@ -1621,7 +1348,7 @@ function buildError(
             type: 'text',
 
             text:
-              '请在 Safari 登录电信账号',
+              '请在模块设置里检查账号',
 
             font: {
               size: 'caption2',
@@ -1648,62 +1375,6 @@ function buildError(
   return w;
 }
 
-/* ---------- 登录捕获（request 脚本模式） ---------- */
-
-// 在 Safari/浏览器里登录 e.dlife.cn 成功时，Egern 会经过 loginMiddle 请求，
-// 在此自动捕获登录地址存入存储，小组件下次运行自动读取，全程无需手动操作。
-// 不返回值 = 透传，不影响登录请求本身。
-/* 从请求头里取 Cookie，兼容 plain object / Headers 实例等形态，忽略大小写 */
-function getReqCookie(headers) {
-  if (!headers) return '';
-  if (typeof headers.get === 'function') {
-    return headers.get('cookie') || headers.get('Cookie') || '';
-  }
-  for (const k of Object.keys(headers)) {
-    if (String(k).toLowerCase() === 'cookie') return headers[k] || '';
-  }
-  return '';
-}
-
-async function handleCapture(ctx) {
-  const req = ctx.request || {};
-  const url = req.url || '';
-  if (!url.includes('e.dlife.cn')) return; // 非电信请求直接透传
-
-  // 1) 登录握手地址：记下来，并标记"刚刚登录过"（10 分钟内有效）
-  if (url.includes('/user/loginMiddle')) {
-    const loginUrl = (url.match(/(http.+)&sign/) || [])[1] || url;
-    if (loginUrl && ctx.storage.get('ct_login_url') !== loginUrl) {
-      ctx.storage.set('ct_login_url', loginUrl);
-    }
-    ctx.storage.set('ct_login_ts', String(Date.now()));
-    return;
-  }
-
-  // 2) 主要方式：直接从登录后的真实请求里抓 Cookie，比回放握手地址可靠
-  const cookie = String(getReqCookie(req.headers) || '').trim();
-  if (!cookie || ctx.storage.get('ct_cookie') === cookie) return;
-  ctx.storage.set('ct_cookie', cookie);
-  // 记录 cookie 获取时间，用于过期预警
-  ctx.storage.set('ct_cookie_ts', String(Date.now()));
-  // 新 cookie 到手，清除之前的过期预警标记
-  ctx.storage.delete('ct_expire_warned');
-
-  // 只有"刚登录过"才打扰用户（成功信号）；后台静默续期不通知
-  const ts = Number(ctx.storage.get('ct_login_ts') || 0);
-  if (Date.now() - ts < 10 * 60 * 1000) {
-    ctx.storage.delete('ct_login_ts');
-    ctx.notify({
-      title: '中国电信',
-      body: '登录成功，小组件将自动更新',
-      // 兜底：如果小组件没自动读到，点通知手动复制 cookie
-      action: { type: 'clipboard', text: cookie },
-    });
-  }
-}
-
-/* ---------- 小组件（generic 脚本模式） ---------- */
-
 async function handleWidget(ctx) {
   const safeCtx = ctx || {};
   const env = safeCtx.env || {};
@@ -1713,17 +1384,17 @@ async function handleWidget(ctx) {
   try {
     result = await loadData(safeCtx);
   } catch (e) {
-    return buildError(title, '数据获取失败', 'https://e.dlife.cn');
+    return buildError(title, '数据获取失败', '');
   }
 
-  const { configured, ds, fromCache, authFailed, cookieDead } = result;
+  const { configured, ds, fromCache, authFailed, authError } = result;
 
   if (!configured) {
-    return buildError(title, '未登录：在 Safari 打开 e.dlife.cn 登录一次', URLS.login);
+    return buildError(title, '未配置：请在模块设置里填手机号和服务密码', '');
   }
 
   if (authFailed || !ds) {
-    return buildError(title, '登录已过期', 'https://e.dlife.cn');
+    return buildError(title, authError || '登录失败，请检查手机号/服务密码/设备ID', '');
   }
 
   const family = safeCtx.widgetFamily || '';
@@ -1733,88 +1404,15 @@ async function handleWidget(ctx) {
   } else {
     w = buildMainWidget(title, ds, fromCache);
   }
-  // cookie 失效时点小组件直接跳去登录页
-  if (cookieDead) w.url = URLS.login;
-  // CT_DEBUG=1：在底部显示保活诊断（上次保活时间/成败）
-  try {
-    if (String(safeCtx.env?.CT_DEBUG || '') === '1' && w && Array.isArray(w.children)) {
-      const ka = safeCtx.storage.getJSON('ct_ka_last');
-      let dbg = '保活: 无记录';
-      if (ka && ka.ts) {
-        const agoMin = Math.max(0, Math.round((Date.now() - ka.ts) / 60000));
-        dbg = ka.ok ? `保活: ${agoMin}分钟前成功` : `保活: ${agoMin}分钟前失败(${(ka.err || '').slice(0, 30)})`;
-      }
-      w.children.push({ type: 'text', text: dbg, font: { size: 'caption2' }, opacity: 0.5, maxLines: 1 });
-    }
-  } catch (_) {}
   return w;
 }
 
-// 过期预警：cookie 快到期时提前通知，避免突然变红点
-function checkExpireWarn(ctx) {
-  try {
-    if (ctx.storage.get('ct_expire_warned')) return; // 每个 cookie 只预警一次
-    const ts = Number(ctx.storage.get('ct_cookie_ts') || 0);
-    if (!ts) return;
-    const warnDays = parseFloat(ctx.env?.CT_EXPIRE_WARN_DAYS) || 5;
-    if (warnDays <= 0) return;
-    const ageDays = (Date.now() - ts) / 86400000;
-    if (ageDays >= warnDays) {
-      ctx.storage.set('ct_expire_warned', '1');
-      ctx.notify({
-        title: '中国电信',
-        body: `登录已 ${Math.floor(ageDays)} 天未刷新，可能快过期了，点我去重新登录`,
-        action: { type: 'url', url: URLS.login },
-      });
-    }
-  } catch (_) {}
-}
-
-/* ---------- 入口：单文件三模式 ---------- */
+/* ---------- 入口 ---------- */
 
 export default async function (ctx) {
   const safeCtx = ctx || {};
-  // request 脚本条目 → 捕获登录；generic 脚本条目 → 渲染小组件
-  //（ctx.request 仅在 request/response 脚本中可用）
   if (safeCtx.request && safeCtx.request.url) {
-    return handleCapture(safeCtx);
+    return { type: 'text', text: 'app login mode, no capture' };
   }
-  // schedule 定时保活 → 只拉接口续 session，不渲染小组件
-  if (!safeCtx.widgetFamily) {
-    const keep = String(safeCtx.env?.CT_KEEPALIVE || '').toLowerCase();
-    if (keep === 'false' || keep === '0') return { type: 'text', text: 'keepalive disabled' };
-    // 保活行车记录仪：记录每次运行的时间、成败、错误，下次掉线时有据可查
-    const ka = { ts: Date.now() };
-    const markKaFail = (err) => {
-      ka.ok = false;
-      ka.err = String(err || '').slice(0, 120);
-      const fails = Number(safeCtx.storage.get('ct_ka_fail') || 0) + 1;
-      safeCtx.storage.set('ct_ka_fail', String(fails));
-      ka.fails = fails;
-      // 连续失败 3 次就通知，别等半夜悄悄死
-      if (fails === 3) {
-        try {
-          safeCtx.notify({ title: '中国电信', body: `保活连续失败 3 次（${ka.err}），登录可能已失效` });
-        } catch (_) {}
-      }
-    };
-    try {
-      const r = await loadData(safeCtx);
-      if (r && r.fromCache) {
-        // 保活的目的是验证 session 还活着；只能读到缓存说明没打通真接口，
-        // 必须记失败——否则 cookie 死了也显示"保活成功"，行车记录仪就撒谎了
-        markKaFail(r.cookieDead ? '登录已失效，仅读到缓存' : '网络异常，仅读到缓存');
-      } else {
-        ka.ok = true;
-        safeCtx.storage.set('ct_ka_fail', '0');
-      }
-    } catch (e) {
-      markKaFail((e && e.message) || e);
-    }
-    try { safeCtx.storage.setJSON('ct_ka_last', ka); } catch (_) {}
-    checkExpireWarn(safeCtx);
-    return { type: 'text', text: 'keepalive done' };
-  }
-  checkExpireWarn(safeCtx);
   return handleWidget(safeCtx);
 }
