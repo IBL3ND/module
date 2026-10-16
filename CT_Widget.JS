@@ -2,10 +2,6 @@
  * 中国电信小组件（Egern 版，App RSA 登录）
  * 移植自 Scriptable「中国电信 2」3.0.0-rsa（2Ya&脑瓜，RSA 登录 + 电信官方 API）
  *
- * 登录方式：App 官方接口 userLoginNormal（RSA 加密）+ qryImportantData 查数
- * 账号存在模块设置里，token 失效时自动重登，不用每 24 小时去 Safari 手动登录。
- * 网站 cookie 方法已废弃（e.dlife.cn 会话 24 小时绝对过期，保活/续期绕不过）。
- *
  * 环境变量（在模块 compat_arguments / generic env 里填）：
  *   CT_PHONE              手机号（必填）
  *   CT_PASSWORD           服务密码 6 位数字（必填，与 CT_SERVICE_PASSWORD 二选一）
