@@ -1,6 +1,9 @@
 /*
  * 中国电信小组件（Egern 版，App RSA 登录）
  * 移植自 Scriptable「中国电信 2」3.0.0-rsa（2Ya&脑瓜，RSA 登录 + 电信官方 API）
+ * 登录方式：App 官方接口 userLoginNormal（RSA 加密）+ qryImportantData 查数
+ * 账号存在模块设置里，token 失效时自动重登。
+ * 30 分钟缓存：30 分钟内直接用缓存，不调接口，减少登录次数。
  *
  * 环境变量（在模块 compat_arguments / generic env 里填）：
  *   CT_PHONE              手机号（必填）
@@ -84,8 +87,6 @@ function _safeN(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-/* ---------- App 登录：transNumber / 北京时间 / RSA ---------- */
-
 function transNumber(str, encode = true) {
   return [...String(str || '')].map((c) => String.fromCharCode((c.charCodeAt(0) + (encode ? 2 : -2)) & 0xffff)).join('');
 }
@@ -101,7 +102,6 @@ function getBeijingTimestamp() {
   return `${yyyy}${MM}${dd}${HH}${mm}${ss}`;
 }
 
-// RSA 公钥 modulus（1024-bit），来自 Scriptable 原脚本 PEM，指数 65537
 const RSA_MOD_HEX = 'c190b4f5e53855833ebf34e97ab3c18d3e87dd5b359b0a45a791a026eced8b8e43351fb74cbf3922a9dc54d368da9864472d7fd934c0971e73dc5bfb0386214204dd7ca85bf2f20e9561bf50b6ba08d3d7b5efab3e642b62bfb85b8a7d9c0938fdf625299c4968666d7d9701f2a3af6ee543223cca6ad3f5ca04ef2562137f83';
 
 function _modPow(base, exp, mod) {
@@ -131,7 +131,6 @@ function _base64Encode(bytes) {
   return out;
 }
 
-// PKCS#1 v1.5 RSA 加密（纯 BigInt，不依赖 WebView），与原脚本 WebView + JSEncrypt 等价
 function rsaEncrypt(text) {
   const data = [...String(text)].map((c) => c.charCodeAt(0) & 0xff);
   const k = 128;
@@ -179,8 +178,6 @@ async function _postJson(ctx, url, bodyObj) {
     throw err;
   }
 }
-
-/* ---------- App 登录 + 查数 ---------- */
 
 function _getAccount(ctx) {
   const env = ctx.env || {};
@@ -275,12 +272,10 @@ async function fetchImportantData(ctx, account, token, cityCode, provinceCode) {
 
 function parseImportantData(apiData, opts) {
   const { showUsedFlow, showGeneralFlow, showDirectionalFlow } = opts;
-  // 话费：原脚本取 balanceInfo.indexBalanceDataInfo.balance（已是元）
   const balance = _safeN(apiData && apiData.balanceInfo && apiData.balanceInfo.indexBalanceDataInfo && apiData.balanceInfo.indexBalanceDataInfo.balance);
   const feeBalance = balance !== 0 ? balance : _safeN(apiData && apiData.balance);
   const fee = { title: '剩余话费', number: feeBalance.toFixed(2), unit: '元' };
 
-  // 流量：commonFlow = 通用，totalAmount = 全部（含定向），定向 = 全部 - 通用
   const common = (apiData && apiData.flowInfo && apiData.flowInfo.commonFlow) || {};
   const total = (apiData && apiData.flowInfo && apiData.flowInfo.totalAmount) || {};
   const gUsed = _safeN(common.used), gBalance = _safeN(common.balance), gTotal = _safeN(common.total);
@@ -298,7 +293,6 @@ function parseImportantData(apiData, opts) {
   } else {
     used = tUsed; balanceFlow = tBalance; totalFlow = tTotal;
   }
-  // 原脚本单位：used/balance/total 都是 KB，/1024 得 MB，再走 formatFlow
   const balanceFmt = formatFlow(balanceFlow);
   const usedFmt = formatFlow(used);
   const flow = {
@@ -314,7 +308,6 @@ function parseImportantData(apiData, opts) {
     flow.unit = usedFmt.unit;
   }
 
-  // 语音
   const voiceInfo = (apiData && apiData.voiceInfo && apiData.voiceInfo.voiceDataInfo) || {};
   const vTotal = _safeN(voiceInfo.total !== undefined ? voiceInfo.total : apiData.totalVoice);
   const vUsed = _safeN(voiceInfo.used !== undefined ? voiceInfo.used : apiData.usedVoice);
@@ -357,6 +350,22 @@ async function loadData(ctx) {
     return { configured: false, ds: null, fromCache: false, authFailed: false, authError: '' };
   }
 
+  try {
+    const rawCache = ctx.storage.getJSON('ct_raw');
+    const dsCache = ctx.storage.getJSON('ct_datasource');
+    const at = (rawCache && rawCache.at) || (dsCache && dsCache.updatedAt) || 0;
+    if (at && Date.now() - at < 30 * 60 * 1000) {
+      if (rawCache && rawCache.apiData) {
+        const ds = parseImportantData(rawCache.apiData, settings);
+        ds.updatedAt = at;
+        return { configured, ds, fromCache: false, authFailed: false, authError: '' };
+      }
+      if (dsCache) {
+        return { configured, ds: dsCache, fromCache: false, authFailed: false, authError: '' };
+      }
+    }
+  } catch (_) {}
+
   let token = '';
   let cityCode = '';
   let provinceCode = '';
@@ -377,21 +386,17 @@ async function loadData(ctx) {
     return ds;
   };
 
-  // 1) 先用缓存 token 查数
   if (token) {
     try {
       const ds = await _tryFetch(token, cityCode, provinceCode);
       return { configured, ds, fromCache: false, authFailed: false, authError: '' };
     } catch (e) {
       if (e && e.transient) {
-        // 断网：用缓存顶
         return _fromCache(ctx, configured, settings, false, '');
       }
-      // token 失效：往下走重新登录
     }
   }
 
-  // 2) 重新登录再查数
   try {
     const login = await telecomLogin(ctx, account);
     const ds = await _tryFetch(login.token, login.cityCode, login.provinceCode);
@@ -400,7 +405,7 @@ async function loadData(ctx) {
     if (e && e.transient) {
       return _fromCache(ctx, configured, settings, false, '');
     }
-    // 登录失败（3001 等）：通知一次，显示错误页，不拿缓存冒充新鲜数据
+
     _notifyAuthFailedOnce(ctx, account, e);
     return { configured, ds: null, fromCache: false, authFailed: true, authError: (e && e.message) || '登录失败' };
   }
@@ -762,7 +767,6 @@ function buildMainWidget(
   };
 }
 
-/* 小尺寸专用：圆形图标 + 数值 + 说明 的横条 */
 function smallRow(
   color,
   symbol,
@@ -1006,19 +1010,11 @@ function buildLockScreen(
   family
 ) {
 
-  /*
-   * 锁屏组件背景是透明的，文字颜色交给系统处理，
-   * 只有次要文字用半透明白色
-   */
   const SUB = {
     light: '#FFFFFFB3',
     dark: '#FFFFFFB3',
   };
 
-
-  /*
-   * 单行：话费 · 流量
-   */
   if (
     family ===
       'accessoryInline'
@@ -1051,10 +1047,6 @@ function buildLockScreen(
     };
   }
 
-
-  /*
-   * 圆形：只显示剩余流量
-   */
   if (
     family ===
       'accessoryCircular'
@@ -1117,10 +1109,6 @@ function buildLockScreen(
     };
   }
 
-
-  /*
-   * 矩形：三行，左边说明，右边数值
-   */
   const line = (
     label,
     value,
@@ -1402,8 +1390,6 @@ async function handleWidget(ctx) {
   }
   return w;
 }
-
-/* ---------- 入口 ---------- */
 
 export default async function (ctx) {
   const safeCtx = ctx || {};
