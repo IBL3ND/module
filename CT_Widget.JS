@@ -1383,7 +1383,9 @@ async function handleWidget(ctx) {
 
   const family = safeCtx.widgetFamily || '';
   let w;
-  if (family.startsWith('accessory')) {
+  if (family === 'systemSmall') {
+    w = buildSmall(title, ds, fromCache);
+  } else if (family.startsWith('accessory')) {
     w = buildLockScreen(title, ds, family);
   } else {
     w = buildMainWidget(title, ds, fromCache);
