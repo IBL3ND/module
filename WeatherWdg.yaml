@@ -1,6 +1,7 @@
 name: 中国天气小组件
 description: 中国天气网 实况7天预报/生活指数，无需 Key
 author: iBL3ND
+icon: https://iili.io/njN7ugn.png
 compat_arguments:
   weatherCity: '海口'
   weatherUserName: ''
