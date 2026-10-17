@@ -1,0 +1,26 @@
+name: 中国天气小组件
+description: 中国天气网 实况7天预报/生活指数，无需 Key
+author: iBL3ND
+compat_arguments:
+  weatherCity: '海口'
+  weatherUserName: ''
+compat_arguments_schema:
+  weatherCity:
+    name: 城市
+    description: 要查询的城市，例如 海口、北京、慈溪，支持全国地级市及区县中文名
+    default_value: '海口'
+  weatherUserName:
+    name: 名字
+    description: 大尺寸问候语显示的名字，可不填
+    default_value: ''
+dns: {}
+scriptings:
+- generic:
+    name: weathercn
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/WeatherWdg.js
+    env:
+      CITY: '{{{weatherCity}}}'
+      USER_NAME: '{{{weatherUserName}}}'
+widgets:
+- name: weathercn
+  script_name: weathercn
