@@ -1,0 +1,18 @@
+name: TestFlight 监控
+description: 自动监控 TestFlight 名额 有名额就通知
+author: iBL3ND
+icon: https://iili.io/nwJtmNI.png
+compat_arguments:
+  tfIds: ''
+compat_arguments_schema:
+  tfIds:
+    name: TestFlight ID
+    description: 要监控的 ID，多个用逗号分隔 示例 hmC52rdF,b6X29Sva
+    default_value: ''
+scriptings:
+- schedule:
+    name: testflight-monitor
+    cron: '* * * * * ?'
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/TestFlight.js
+    env:
+      TF: '{{{tfIds}}}'
