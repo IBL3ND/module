@@ -14,7 +14,7 @@ const SCHEME = {
   iMe: "ime",
   Nicegram: "ng",
   Lingogram: "lingo",
-  Regram: "rg",
+  Regram: "regram",
 };
 
 function qval(qs, key) {
