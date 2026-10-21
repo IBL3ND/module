@@ -15,6 +15,7 @@ env_schema:
     - iMe
     - Nicegram
     - Lingogram
+    - Regram
 dns: {}
 scriptings:
 - http_request:
