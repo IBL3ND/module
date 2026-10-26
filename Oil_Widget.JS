@@ -65,7 +65,6 @@
  */
 
 export default async function (ctx) {
-  // 中文地区名 → 拼音路径映射（模块图形化选择用）
   const REGION_MAP = {
     '北京': 'beijing',
     '上海': 'shanghai',
@@ -405,10 +404,8 @@ export default async function (ctx) {
     '内蒙古-锡林郭勒': 'neimenggu/xilinguole',
     '内蒙古-阿拉善': 'neimenggu/alashan',
   };
-  // OIL_REGION（模块中文填写）优先，兼容旧版 region（拼音）
-  // 支持三种填法：城市名（海口）、"省份-城市"（广东-深圳）、拼音（hainan/haikou）
-  const CITY_MAP = {};      // 纯城市名 -> 拼音路径
-  const PROVINCE_PINYIN = {}; // 省份名 -> 省份拼音
+  const CITY_MAP = {};
+  const PROVINCE_PINYIN = {};
   for (const [k, v] of Object.entries(REGION_MAP)) {
     if (k.includes('-')) {
       const [prov, city] = k.split('-');
@@ -425,7 +422,7 @@ export default async function (ctx) {
     if (REGION_MAP[input]) return REGION_MAP[input];
     if (CITY_MAP[input]) return CITY_MAP[input];
     if (PROVINCE_PINYIN[input]) return PROVINCE_PINYIN[input];
-    return input; // 旧版拼音直传
+    return input;
   }
   const regionInput = (ctx.env.OIL_REGION || ctx.env.region || '').trim();
   const regionParam = resolveRegion(regionInput);
@@ -455,13 +452,23 @@ export default async function (ctx) {
   let regionName = "";
   let trendInfo = "";
   let hasCache = false;
+  let prevPrices = null;
+  let lastChange = null;
+  let siteStranded = false;
+  let nextAdj = null;
+  let cachedNextAdjKey = "";
   
   try {
     const cached = ctx.storage.getJSON(CACHE_KEY);
     if (cached && cached.prices) {
       prices = cached.prices;
+      prevPrices = cached.prices;
       regionName = cached.regionName || "";
       trendInfo = cached.trendInfo || "";
+      if (typeof cached.lastChange === "number") lastChange = cached.lastChange;
+      if (cached.siteStranded) siteStranded = true;
+      if (cached.nextAdj) nextAdj = cached.nextAdj;
+      cachedNextAdjKey = cached.nextAdjKey || "";
       hasCache = true;
     }
   } catch(_){}
@@ -550,8 +557,28 @@ export default async function (ctx) {
         }
       }
 
-      // 缓存包含地区名
-      ctx.storage.setJSON(CACHE_KEY, { prices, regionName, trendInfo });
+      const adjMatch = html.match(/<div class="tishi">[\s\S]*?<span>([^<]+)<\/span>[\s\S]*?<br\/>([\s\S]+?)<br\/>/);
+      if (adjMatch) {
+        const dm = adjMatch[1].match(/(\d{1,2})月(\d{1,2})日/);
+        if (dm) nextAdj = { month: parseInt(dm[1]), day: parseInt(dm[2]) };
+        const adjBody = adjMatch[2] || "";
+        siteStranded = adjBody.includes('搁浅') || adjBody.includes('维持目前价格不变');
+      }
+      const nextAdjKey = nextAdj ? `${nextAdj.month}-${nextAdj.day}` : "";
+
+      if (prevPrices) {
+        let diff = null;
+        for (const k of ["p92", "p95", "p98", "diesel"]) {
+          if (prevPrices[k] != null && prices[k] != null) {
+            const d = Math.round((prices[k] - prevPrices[k]) * 100) / 100;
+            if (Math.abs(d) >= 0.005) { diff = d; break; }
+          }
+        }
+        if (diff !== null) lastChange = diff;
+        else if (cachedNextAdjKey && nextAdjKey && cachedNextAdjKey !== nextAdjKey) lastChange = 0;
+      }
+
+      ctx.storage.setJSON(CACHE_KEY, { prices, regionName, trendInfo, lastChange, siteStranded, nextAdj, nextAdjKey });
       fetchError = false;
     } else {
       if (!hasCache) {
@@ -625,11 +652,9 @@ export default async function (ctx) {
     }
   }
 
-  // ═══════════ 锁屏专用布局（仅 accessory 系列生效，其他尺寸不受影响）═══════════
   if (ctx.widgetFamily && ctx.widgetFamily.startsWith("accessory")) {
-    // 锁屏背景透明，文字颜色交给系统处理，次要文字用半透明白色
     const SUB = { light: "#FFFFFFB3", dark: "#FFFFFFB3" };
-    const short = (label) => label.replace(/\s/g, "");   // "92 号" → "92号"
+    const short = (label) => label.replace(/\s/g, "");
     const place = regionName || "油价";
 
     let lockDate = "";
@@ -638,7 +663,6 @@ export default async function (ctx) {
       lockDate = `${ldm[1].padStart(2,"0")}-${ldm[2].padStart(2,"0")}`;
     }
 
-    // 没有任何价格数据
     if (rows.length === 0) {
       return {
         type:"widget",
@@ -653,7 +677,6 @@ export default async function (ctx) {
       };
     }
 
-    // 单行：海口 92号 9.72 · 95号 10.33
     if (ctx.widgetFamily === "accessoryInline") {
       return {
         type:"widget",
@@ -668,7 +691,6 @@ export default async function (ctx) {
       };
     }
 
-    // 圆形：只显示 92 号（没有则显示第一项）
     if (ctx.widgetFamily === "accessoryCircular") {
       const r0 = rows.find(r => r.label.includes("92")) || rows[0];
       return {
@@ -685,7 +707,6 @@ export default async function (ctx) {
       };
     }
 
-    // 矩形：第一行地区 + 调价日期，下面两行每行两个油品（左边说明，右边加粗价格）
     const cell = (r) => ({
       type:"stack",
       direction:"row",
@@ -730,8 +751,6 @@ export default async function (ctx) {
       ]
     };
   }
-  // ═══════════ 锁屏专用布局结束 ═══════════
-
   if (ctx.widgetFamily === "systemSmall") {
     const smallCard = (row) => ({
       type:"stack",
@@ -796,14 +815,6 @@ export default async function (ctx) {
             {type:"text",text:timeStr,font:{size:"callout"},textColor:COLORS.tertiary,maxLines:1}
           ]
         },
-        ...(SHOW_TREND && trendInfo ? [{
-          type:"text",
-          text:trendInfo.replace(/\s+/g, ""),
-          font:{size:"caption1"},
-          textColor:COLORS.secondary,
-          maxLines:1,
-          minScale:0.5
-        }] : []),
         ...(fetchError ? [{
           type:"text",
           text:errorMsg,
@@ -838,10 +849,56 @@ export default async function (ctx) {
     };
   }
 
+  let changeText = "--";
+  let changeColor = COLORS.tertiary;
+  if (lastChange !== null) {
+    if (lastChange > 0) { changeText = `↑ +${lastChange.toFixed(2)}`; changeColor = COLORS.p98; }
+    else if (lastChange < 0) { changeText = `↓ ${lastChange.toFixed(2)}`; changeColor = COLORS.diesel; }
+    else { changeText = "维持目前价格不变"; changeColor = COLORS.tertiary; }
+  } else if (siteStranded) {
+    changeText = "维持目前价格不变";
+    changeColor = COLORS.tertiary;
+  }
+  let adjText = "";
+  if (nextAdj) {
+    const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const adjDate = new Date(now.getFullYear(), nextAdj.month - 1, nextAdj.day);
+    if (adjDate.getTime() < today0 - 180 * 86400000) adjDate.setFullYear(now.getFullYear() + 1);
+    else if (adjDate.getTime() > today0 + 180 * 86400000) adjDate.setFullYear(now.getFullYear() - 1);
+    let guard = 0;
+    while (adjDate.getTime() < today0 && guard++ < 6) {
+      let added = 0;
+      while (added < 10) {
+        adjDate.setDate(adjDate.getDate() + 1);
+        const wd = adjDate.getDay();
+        if (wd !== 0 && wd !== 6) added++;
+      }
+    }
+    const daysLeft = Math.round((adjDate.getTime() - today0) / 86400000);
+    let countText = "";
+    if (daysLeft > 1) countText = ` · 还有${daysLeft}天`;
+    else if (daysLeft === 1) countText = " · 明天24时";
+    else if (daysLeft === 0) countText = " · 今晚24时调价";
+    adjText = `下次调价 ${adjDate.getMonth() + 1}月${adjDate.getDate()}日${countText}`;
+  }
+  const infoRow = rows.length > 0 ? {
+    type:"stack",
+    direction:"row",
+    alignItems:"center",
+    gap:4,
+    padding:[0,4,0,4],
+    children:[
+      {type:"text",text:"本轮涨跌",font:{size:"caption2"},textColor:COLORS.secondary,maxLines:1},
+      {type:"text",text:changeText,font:{size:"caption2",weight:"bold"},textColor:changeColor,maxLines:1},
+      {type:"spacer"},
+      ...(adjText ? [{type:"text",text:adjText,font:{size:"caption2"},textColor:COLORS.secondary,maxLines:1}] : [])
+    ]
+  } : null;
+
   return {
     type:"widget",
-    padding:[10,8,10,8],
-    gap:5,
+    padding:[10,8,8,8],
+    gap:4,
     
     refreshAfter:refreshTime,
     children:[
@@ -855,15 +912,6 @@ export default async function (ctx) {
           {type:"image",src:"sf-symbol:fuelpump.fill",width:13,height:13,color:COLORS.p92},
           {type:"text",text:titleText,font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary},
           {type:"spacer"},
-          ...(SHOW_TREND && trendInfo ? [{
-            type:"text",
-            text: trendInfo,
-            font:{size:"caption2"},
-            textColor: COLORS.trend,
-            textAlign:"right",
-            maxLines:1,
-            minScale: 0.8
-          }] : []),
           ...(fetchError ? [{
             type:"text",text:errorMsg,font:{size:"caption2"},textColor:COLORS.p98
           }] : [])
@@ -874,7 +922,7 @@ export default async function (ctx) {
         direction:"row",
         alignItems:"center",
         gap:6,
-        padding:[6,0,6,0],
+        padding:[3,0,3,0],
         children: rows.map(priceCard)
       } : {
         type:"stack",
@@ -886,6 +934,7 @@ export default async function (ctx) {
           {type:"text",text:fetchError?"数据获取失败":"暂无数据",font:{size:"body"},textColor:COLORS.secondary}
         ]
       },
+      ...(infoRow ? [infoRow] : []),
       {
         type:"stack",
         direction:"row",
