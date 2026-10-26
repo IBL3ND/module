@@ -1,24 +1,17 @@
-name: 全国油价小组件
-description: 全国实时油价小组件92-95-98号汽油与柴油价格
+name: 油价
+description: 全国实时油价小组件，92/95/98号汽油与柴油价格
 author: iBL3ND
-icon: https://iili.io/nXI7HsS.png
+icon: https://iili.io/nEG5oxt.png
 env_schema:
   OIL_REGION:
     name: 地区
-    description: 直接填写城市名，如：海口、深圳、广州；也可填"省份-城市"（广东-深圳）或省份名（广东）
+    description: 直接填写城市名，如：海口、深圳、广州；也可填\"省份-城市\"（广东-深圳）或省份名（广东）
     default_value: '海口'
-  SHOW_TREND:
-    name: 显示调价趋势
-    description: 是否在小组件上显示油价调价趋势
-    default_value: 'true'
-    options:
-      - 'true'
-      - 'false'
 scriptings:
 - generic:
     name: oil-widget
     script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Oil_Widget.JS
-    timeout: 60
+    timeout: 30
 widgets:
 - name: oil-widget
   script_name: oil-widget
