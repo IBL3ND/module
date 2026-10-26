@@ -22,9 +22,6 @@
  * 名称：region
  * 值：省份/城市（拼音，用 / 分隔）
  *
- * 名称：SHOW_TREND
- * 值：true（显示调价趋势）或 false（不显示）
- *
  *
  * 2️⃣ 地区代码对照表
  * ─────────────────────────────────────────────────
@@ -426,7 +423,6 @@ export default async function (ctx) {
   }
   const regionInput = (ctx.env.OIL_REGION || ctx.env.region || '').trim();
   const regionParam = resolveRegion(regionInput);
-  const SHOW_TREND = (ctx.env.SHOW_TREND || "true").trim() !== "false";
 
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
@@ -525,36 +521,34 @@ export default async function (ctx) {
           }
         }
       });
-      if (SHOW_TREND) {
-        const regTrend = /<div class="tishi">[\s\S]*?<span>([^<]+)<\/span>[\s\S]*?<br\/>([\s\S]+?)<br\/>/;
-        const trendMatch = html.match(regTrend);
-        
-        if (trendMatch && trendMatch.length >= 3) {
-          const datePart = trendMatch[1].split('价')[1]?.slice(0, -2) || "";
-          const valuePart = trendMatch[2];
-          const trend = (valuePart.includes('下调') || valuePart.includes('下跌')) ? '↓' : '↑';
-          let amount = "";
-          const allPrices = valuePart.match(/([\d\.]+)\s*元\/升/g);
-          if (allPrices && allPrices.length >= 2) {
-            const nums = allPrices.map(p => p.match(/([\d\.]+)/)[1]);
-            amount = `${nums[0]}-${nums[1]}`;
+      const regTrend = /<div class="tishi">[\s\S]*?<span>([^<]+)<\/span>[\s\S]*?<br\/>([\s\S]+?)<br\/>/;
+      const trendMatch = html.match(regTrend);
+      
+      if (trendMatch && trendMatch.length >= 3) {
+        const datePart = trendMatch[1].split('价')[1]?.slice(0, -2) || "";
+        const valuePart = trendMatch[2];
+        const trend = (valuePart.includes('下调') || valuePart.includes('下跌')) ? '↓' : '↑';
+        let amount = "";
+        const allPrices = valuePart.match(/([\d\.]+)\s*元\/升/g);
+        if (allPrices && allPrices.length >= 2) {
+          const nums = allPrices.map(p => p.match(/([\d\.]+)/)[1]);
+          amount = `${nums[0]}-${nums[1]}`;
+        }
+        else {
+          const allTons = valuePart.match(/([\d]+)\s*元(?:\/吨)?/g);
+          if (allTons && allTons.length >= 2) {
+            const nums = allTons.map(p => p.match(/([\d]+)/)[1]);
+            amount = `${nums[0]}-${nums[1]}元/吨`;
           }
           else {
-            const allTons = valuePart.match(/([\d]+)\s*元(?:\/吨)?/g);
-            if (allTons && allTons.length >= 2) {
-              const nums = allTons.map(p => p.match(/([\d]+)/)[1]);
-              amount = `${nums[0]}-${nums[1]}元/吨`;
-            }
-            else {
-              const singleMatch = valuePart.match(/([\d\.]+)\s*元\/升/);
-              if (singleMatch) {
-                amount = `${singleMatch[1]}元/L`;
-              }
+            const singleMatch = valuePart.match(/([\d\.]+)\s*元\/升/);
+            if (singleMatch) {
+              amount = `${singleMatch[1]}元/L`;
             }
           }
-          
-          trendInfo = `${datePart}调整 ${trend} ${amount}`.trim();
         }
+        
+        trendInfo = `${datePart}调整 ${trend} ${amount}`.trim();
       }
 
       const adjMatch = html.match(/<div class="tishi">[\s\S]*?<span>([^<]+)<\/span>[\s\S]*?<br\/>([\s\S]+?)<br\/>/);
@@ -659,7 +653,7 @@ export default async function (ctx) {
 
     let lockDate = "";
     const ldm = trendInfo.match(/(\d{1,2})月(\d{1,2})日/);
-    if (SHOW_TREND && ldm) {
+    if (ldm) {
       lockDate = `${ldm[1].padStart(2,"0")}-${ldm[2].padStart(2,"0")}`;
     }
 
