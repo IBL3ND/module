@@ -8,7 +8,7 @@
 
 const SCHEME = {
   Telegram: "tg",
-  Nagram: "tg",
+  Nagram: "na",
   Swiftgram: "sg",
   Turrit: "turrit",
   iMe: "ime",
@@ -55,7 +55,6 @@ export default async function (ctx) {
 
   const client = (ctx.env?.CLIENT || "Telegram").trim();
 
-  // 选官方 Telegram 直接放行，不重定向
   if (client === "Telegram") return;
 
   const scheme = SCHEME[client] || "tg";
