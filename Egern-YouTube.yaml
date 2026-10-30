@@ -9,8 +9,6 @@ compat_arguments:
   jumpAhead: 'true'
   blockStore: 'true'
   nativeDownload: 'true'
-  blockAi: 'true'
-  onTheGo: 'true'
 compat_arguments_schema:
   blockUpload:
     name: 隐藏「上传」入口
@@ -68,20 +66,6 @@ compat_arguments_schema:
     options:
     - 'true'
     - 'false'
-  blockAi:
-    name: 隐藏 AI 相关
-    description: 去除 Ask、AI 摘要及相关控件
-    default_value: 'true'
-    options:
-    - 'true'
-    - 'false'
-  onTheGo:
-    name: 随行控制
-    description: 兼容 UI 组件可用时提供随行控制
-    default_value: 'true'
-    options:
-    - 'true'
-    - 'false'
 author: gholts
 homepage: https://github.com/gholts/surge/tree/main/modules
 icon: https://iili.io/KQ67Yxa.png
@@ -121,23 +105,74 @@ rewrites:
         Location: https://$1subtype=Translate$3
 scriptings:
 - http_request:
-    name: youtube.enhance.request
-    match: ^(?:https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/player\/ad_break(?:\?.*)?$|https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/log_event|https?:\/\/[\w-]+\.googlevideo\.com\/initplayback(?:\?.*)?$|https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/player(?:\?.*)?$|https?:\/\/[\w-]+\.googlevideo\.com\/videoplayback)
-    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/Egern-YouTube.js
+    name: youtube.enhance.ad-break
+    match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/player\/ad_break(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-request.js
+- http_response:
+    name: youtube.enhance.download
+    match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/offline\/get_download_action(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-response.js
     env:
-      _compat.$argument: '{"autoHd":{{{autoHd}}},"nativeDownload":{{{nativeDownload}}}}'
+      _compat.$argument: '{"nativeDownload":{{{nativeDownload}}}}'
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_request:
+    name: youtube.enhance.download-player
+    match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/player(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-request.js
+    env:
+      _compat.$argument: '{"nativeDownload":{{{nativeDownload}}}}'
     max_size: 0
     body_required: true
     binary_body: true
 - http_response:
     name: youtube.enhance.response
-    match: ^(?:https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/(?:navigation\/resolve_url|browse|next|player|search|reel\/reel_watch_sequence|guide|account\/get_setting|get_watch|log_event|config|offline\/get_download_action)(?:\?.*)?$|https?:\/\/[\w-]+\.googlevideo\.com\/initplayback(?:\?.*)?$|https:\/\/(?:www|m)\.youtube\.com\/api\/timedtext(?:\?|$))
-    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/Egern-YouTube.js
+    match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/(?:navigation\/resolve_url|browse|next|player|search|reel\/reel_watch_sequence|guide|account\/get_setting|get_watch|log_event|config)(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-response.js
     env:
-      _compat.$argument: '{"blockUpload":{{{blockUpload}}},"blockShorts":{{{blockShorts}}},"blockGames":{{{blockGames}}},"blockVerticalLive":{{{blockVerticalLive}}},"jumpAhead":{{{jumpAhead}}},"autoHd":{{{autoHd}}},"blockStore":{{{blockStore}}},"blockAi":{{{blockAi}}},"onTheGo":{{{onTheGo}}},"nativeDownload":{{{nativeDownload}}}}'
+      _compat.$argument: '{"blockUpload":{{{blockUpload}}},"blockShorts":{{{blockShorts}}},"blockGames":{{{blockGames}}},"blockVerticalLive":{{{blockVerticalLive}}},"jumpAhead":{{{jumpAhead}}},"autoHd":{{{autoHd}}},"blockStore":{{{blockStore}}}}'
     max_size: 0
     body_required: true
     binary_body: true
+- http_response:
+    name: youtube.enhance.ump
+    match: ^https?:\/\/[\w-]+\.googlevideo\.com\/initplayback(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-response.js
+    env:
+      _compat.$argument: '{"blockGames":{{{blockGames}}},"blockVerticalLive":{{{blockVerticalLive}}},"jumpAhead":{{{jumpAhead}}},"autoHd":{{{autoHd}}},"blockStore":{{{blockStore}}}}'
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_request:
+    name: youtube.enhance.init
+    match: ^https?:\/\/[\w-]+\.googlevideo\.com\/initplayback(?:\?.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-request.js
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_request:
+    name: youtube.enhance.auto-hd
+    match: ^https?:\/\/[\w-]+\.googlevideo\.com\/videoplayback
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-request.js
+    env:
+      _compat.$argument: '{"autoHd":{{{autoHd}}}}'
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_request:
+    name: youtube.enhance.log-event
+    match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/log_event
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-request.js
+    max_size: 0
+    body_required: true
+    binary_body: true
+- http_response:
+    name: youtube.enhance.dual-subs
+    match: ^https://(?:www|m)\.youtube\.com/api/timedtext(?:\?|$)
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/YT-CC-ASR-Auto.js
+    max_size: 0
+    body_required: true
 mitm:
   hostnames:
     includes:
