@@ -19,7 +19,7 @@ compat_arguments_schema:
     default_value: ''
   ctPassword:
     name: 服务密码
-    description: 服务密码 6 位数字，只存在你自己的模块设置里
+    description: 电信APP 设置 账户与安全里 获取服务密码
     default_value: ''
   ctDeviceId:
     name: 设备 ID
