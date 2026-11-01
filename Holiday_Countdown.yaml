@@ -1,0 +1,34 @@
+name: 节日倒计时小组件
+description: 公历节日、24节气、农历传统节日倒计时，按天数排序，支持小中大尺寸与锁屏
+author: iBL3ND
+icon: https://iili.io/nUsZbHl.webp
+env_schema:
+  SHOW_HOLIDAYS:
+    name: 显示公历节日
+    description: 元旦、劳动节、国庆节等公历节日
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  SHOW_TERMS:
+    name: 显示24节气
+    description: 小寒、大寒、立春等24节气
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  SHOW_TRADITIONAL:
+    name: 显示传统节日
+    description: 春节、元宵、端午、中秋等农历节日及母亲节、父亲节
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+scriptings:
+- generic:
+    name: holiday-countdown
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Holiday_Countdown.js
+    timeout: 30
+widgets:
+- name: holiday-countdown
+  script_name: holiday-countdown
