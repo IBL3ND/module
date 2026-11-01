@@ -1,0 +1,12 @@
+name: 双周日历小组件
+description: 两周日期带农历、节日与节气
+author: iBL3ND
+icon: https://iili.io/nUZpEx4.webp
+scriptings:
+- generic:
+    name: cn-cal
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/CN_Cal.JS
+    timeout: 30
+widgets:
+- name: cn-cal
+  script_name: cn-cal
