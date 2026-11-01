@@ -1,0 +1,12 @@
+name: NetSpeed 小组件
+description: 测试网络下载速度，下载 Cloudflare 3MB 文件测速，显示 Mbps、MB/s 与用时，支持小中大尺寸
+author: iBL3ND
+icon: https://iili.io/nULElLJ.webp
+scriptings:
+- generic:
+    name: netspeed
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/NetSpeed_Widget.JS
+    timeout: 60
+widgets:
+- name: netspeed
+  script_name: netspeed
