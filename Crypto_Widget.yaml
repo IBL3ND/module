@@ -1,0 +1,17 @@
+name: 虚拟货币价格小组件
+description: Binance 行情，无需 Key，BTC、ETH 等最多 8 个币种，支持小/中/大尺寸与锁屏，失败币种单独提示
+author: iBL3ND
+icon: https://iili.io/KDiAbJS.png
+env_schema:
+  btcType:
+    name: 币种
+    description: 币种符号，多个用英文逗号分隔，如 BTC,ETH,BNB，最多 8 个，空格自动忽略
+    default_value: 'BTC,ETH,BNB'
+scriptings:
+- generic:
+    name: crypto
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Crypto_Widget.JS
+    timeout: 30
+widgets:
+- name: crypto
+  script_name: crypto
