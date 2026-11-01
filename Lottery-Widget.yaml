@@ -1,0 +1,29 @@
+name: 全国彩票开奖小组件
+description: 全国彩票开奖结果，开奖号码、期号与奖池，支持小/中/大尺寸，透明与深浅自适应
+author: iBL3ND
+icon: https://iili.io/nUQcmZJ.webp
+compat_arguments:
+  彩票类型: '七星彩'
+compat_arguments_schema:
+  彩票类型:
+    name: 彩票类型
+    description: 选择要显示的彩票种类，默认七星彩
+    default_value: '七星彩'
+    options:
+    - '双色球'
+    - '大乐透'
+    - '排列三'
+    - '福彩 3D'
+    - '七星彩'
+    - '七乐彩'
+    - '排列五'
+scriptings:
+- generic:
+    name: lottery
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Lottery-Widget.JS
+    env:
+      彩票类型: '{{{彩票类型}}}'
+    timeout: 30
+widgets:
+- name: lottery
+  script_name: lottery
