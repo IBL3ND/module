@@ -448,23 +448,18 @@ export default async function (ctx) {
   let regionName = "";
   let trendInfo = "";
   let hasCache = false;
-  let prevPrices = null;
-  let lastChange = null;
+  let forecastText = "--";
+  let forecastLow = null;
+  let forecastHigh = null;
+  let forecastDir = 0;
   let siteStranded = false;
   let nextAdj = null;
-  let cachedNextAdjKey = "";
-  
+
   try {
     const cached = ctx.storage.getJSON(CACHE_KEY);
     if (cached && cached.prices) {
       prices = cached.prices;
-      prevPrices = cached.prices;
       regionName = cached.regionName || "";
-      trendInfo = cached.trendInfo || "";
-      if (typeof cached.lastChange === "number") lastChange = cached.lastChange;
-      if (cached.siteStranded) siteStranded = true;
-      if (cached.nextAdj) nextAdj = cached.nextAdj;
-      cachedNextAdjKey = cached.nextAdjKey || "";
       hasCache = true;
     }
   } catch(_){}
@@ -548,6 +543,29 @@ export default async function (ctx) {
           }
         }
         
+        if (valuePart.includes('搁浅') || valuePart.includes('维持目前价格不变')) {
+          forecastText = "不变";
+          forecastLow = null;
+          forecastHigh = null;
+          forecastDir = 0;
+        } else if (allPrices && allPrices.length >= 2) {
+          const nums = allPrices.map(p => parseFloat(p.match(/([\d\.]+)/)[1]));
+          forecastLow = nums[0];
+          forecastHigh = nums[1];
+          forecastDir = trend === '↓' ? -1 : 1;
+          forecastText = `${trend} ${nums[0]}-${nums[1]}`;
+        } else if (allPrices && allPrices.length === 1) {
+          const v = parseFloat(allPrices[0].match(/([\d\.]+)/)[1]);
+          forecastLow = v;
+          forecastHigh = v;
+          forecastDir = trend === '↓' ? -1 : 1;
+          forecastText = `${trend} ${v}`;
+        } else if (amount) {
+          forecastLow = null;
+          forecastHigh = null;
+          forecastDir = trend === '↓' ? -1 : 1;
+          forecastText = `${trend} ${amount}`;
+        }
         trendInfo = `${datePart}调整 ${trend} ${amount}`.trim();
       }
 
@@ -558,21 +576,13 @@ export default async function (ctx) {
         const adjBody = adjMatch[2] || "";
         siteStranded = adjBody.includes('搁浅') || adjBody.includes('维持目前价格不变');
       }
-      const nextAdjKey = nextAdj ? `${nextAdj.month}-${nextAdj.day}` : "";
-
-      if (prevPrices) {
-        let diff = null;
-        for (const k of ["p92", "p95", "p98", "diesel"]) {
-          if (prevPrices[k] != null && prices[k] != null) {
-            const d = Math.round((prices[k] - prevPrices[k]) * 100) / 100;
-            if (Math.abs(d) >= 0.005) { diff = d; break; }
-          }
-        }
-        if (diff !== null) lastChange = diff;
-        else if (cachedNextAdjKey && nextAdjKey && cachedNextAdjKey !== nextAdjKey) lastChange = 0;
+      if (siteStranded) {
+        forecastText = "不变";
+        forecastLow = null;
+        forecastHigh = null;
+        forecastDir = 0;
       }
-
-      ctx.storage.setJSON(CACHE_KEY, { prices, regionName, trendInfo, lastChange, siteStranded, nextAdj, nextAdjKey });
+      ctx.storage.setJSON(CACHE_KEY, { prices, regionName });
       fetchError = false;
     } else {
       if (!hasCache) {
@@ -586,6 +596,56 @@ export default async function (ctx) {
       fetchError = true;
       errorMsg = e.message;
     }
+  }
+
+  if (forecastText === "--") {
+    let provName = "";
+    const provPinyin = regionParam.split("/")[0];
+    for (const k of Object.keys(PROVINCE_PINYIN)) {
+      if (PROVINCE_PINYIN[k] === provPinyin) { provName = k; break; }
+    }
+    if (provName) {
+      try {
+        const emBase = "https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPTA_WEB_YJ_JH&columns=ALL&sortColumns=DIM_DATE&sortTypes=1&pageSize=100&source=WEB";
+        const firstResp = await ctx.http.get(emBase + "&pageNumber=1", { timeout: 8000 });
+        const firstJson = JSON.parse(await firstResp.text());
+        const totalPages = firstJson && firstJson.result && firstJson.result.pages;
+        if (totalPages) {
+          const lastResp = await ctx.http.get(emBase + "&pageNumber=" + totalPages, { timeout: 8000 });
+          const lastJson = JSON.parse(await lastResp.text());
+          const rowsEm = lastJson && lastJson.result && lastJson.result.data;
+          if (rowsEm) {
+            let best = null;
+            for (const r of rowsEm) {
+              if (r.CITYNAME === provName && (!best || r.DIM_DATE > best.DIM_DATE)) best = r;
+            }
+            if (best) {
+              const vals = [best.ZDE92, best.ZDE95, best.ZDE0].filter(v => typeof v === "number");
+              let dir = 0;
+              for (const v of vals) {
+                if (v > 0) { dir = 1; break; }
+                if (v < 0) { dir = -1; break; }
+              }
+              if (dir !== 0) {
+                const absVals = vals.map(v => Math.abs(v));
+                const low = Math.min.apply(null, absVals);
+                const high = Math.max.apply(null, absVals);
+                const lowStr = low.toFixed(2);
+                const highStr = high.toFixed(2);
+                forecastLow = low;
+                forecastHigh = high;
+                forecastDir = dir;
+                forecastText = dir > 0 ? `↑ ${lowStr === highStr ? lowStr : lowStr + "-" + highStr}` : `↓ ${lowStr === highStr ? lowStr : lowStr + "-" + highStr}`;
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
+  if (forecastText === "--") {
+    forecastText = "搁浅";
   }
 
   const titleText = regionName ? `${regionName}实时油价` : "实时油价";
@@ -843,15 +903,21 @@ export default async function (ctx) {
     };
   }
 
-  let changeText = "--";
-  let changeColor = COLORS.tertiary;
-  if (lastChange !== null) {
-    if (lastChange > 0) { changeText = `↑ +${lastChange.toFixed(2)}`; changeColor = COLORS.p98; }
-    else if (lastChange < 0) { changeText = `↓ ${lastChange.toFixed(2)}`; changeColor = COLORS.diesel; }
-    else { changeText = "维持目前价格不变"; changeColor = COLORS.tertiary; }
-  } else if (siteStranded) {
-    changeText = "维持目前价格不变";
-    changeColor = COLORS.tertiary;
+  let forecastColor = COLORS.tertiary;
+  if (forecastDir > 0) forecastColor = COLORS.p98;
+  else if (forecastDir < 0) forecastColor = COLORS.diesel;
+  let fillText = "";
+  const p95Row = rows.find(r => r.label.includes("95"));
+  if (p95Row && p95Row.price != null) {
+    const fillCost = (p95Row.price * 50).toFixed(1);
+    if (forecastDir !== 0 && forecastLow != null && forecastHigh != null) {
+      const extra = forecastLow === forecastHigh ? `${(forecastLow * 50).toFixed(1)}` : `${(forecastLow * 50).toFixed(1)}-${(forecastHigh * 50).toFixed(1)}`;
+      fillText = forecastDir > 0 ? `95号加满50L¥${fillCost} 下轮预计多花¥${extra}` : `95号加满50L¥${fillCost} 下轮预计少花¥${extra}`;
+    } else if (siteStranded) {
+      fillText = `95号加满50L¥${fillCost} 下轮不变`;
+    } else {
+      fillText = `95号加满50L¥${fillCost}`;
+    }
   }
   let adjText = "";
   if (nextAdj) {
@@ -882,8 +948,8 @@ export default async function (ctx) {
     gap:4,
     padding:[0,4,0,4],
     children:[
-      {type:"text",text:"本轮涨跌",font:{size:"caption2"},textColor:COLORS.secondary,maxLines:1},
-      {type:"text",text:changeText,font:{size:"caption2",weight:"bold"},textColor:changeColor,maxLines:1},
+      {type:"text",text:"下轮预测",font:{size:"caption2"},textColor:COLORS.secondary,maxLines:1},
+      {type:"text",text:forecastText,font:{size:"caption2",weight:"bold"},textColor:forecastColor,maxLines:1},
       {type:"spacer"},
       ...(adjText ? [{type:"text",text:adjText,font:{size:"caption2"},textColor:COLORS.secondary,maxLines:1}] : [])
     ]
@@ -906,6 +972,7 @@ export default async function (ctx) {
           {type:"image",src:"sf-symbol:fuelpump.fill",width:13,height:13,color:COLORS.p92},
           {type:"text",text:titleText,font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary},
           {type:"spacer"},
+          {type:"text",text:`${timeStr} 更新`,font:{size:"caption2"},textColor:COLORS.tertiary,maxLines:1},
           ...(fetchError ? [{
             type:"text",text:errorMsg,font:{size:"caption2"},textColor:COLORS.p98
           }] : [])
@@ -935,7 +1002,7 @@ export default async function (ctx) {
         alignItems:"center",
         padding:[0,4,0,4],
         children:[
-          {type:"text",text:`${timeStr} 更新`,font:{size:"caption2"},textColor:COLORS.tertiary},
+          {type:"text",text:fillText,font:{size:"caption2"},textColor:COLORS.tertiary,maxLines:1,minScale:0.6},
           {type:"spacer"},
           {type:"text",text:"元/升",font:{size:"caption2"},textColor:COLORS.tertiary}
         ]
