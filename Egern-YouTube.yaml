@@ -1,7 +1,11 @@
 name: YouTube 增强
 description: 去除油管 广告 支持后台播放 画中画
+author: gholts,Maasea
+homepage: https://github.com/gholts/surge/tree/main/modules
+icon: https://iili.io/KQ67Yxa.png
 compat_arguments:
-  blockUpload: 'true'
+  屏蔽上传按钮: 'true'
+  屏蔽选段按钮: 'true'
   blockShorts: 'true'
   autoHd: 'true'
   blockGames: 'true'
@@ -10,9 +14,16 @@ compat_arguments:
   blockStore: 'true'
   nativeDownload: 'true'
 compat_arguments_schema:
-  blockUpload:
+  屏蔽上传按钮:
     name: 隐藏「上传」入口
     description: 隐藏导航栏中的「上传」入口
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
+  屏蔽选段按钮:
+    name: 屏蔽选段按钮
+    description: 屏蔽选段按钮
     default_value: 'true'
     options:
     - 'true'
@@ -66,19 +77,44 @@ compat_arguments_schema:
     options:
     - 'true'
     - 'false'
-author: gholts
-homepage: https://github.com/gholts/surge/tree/main/modules
-icon: https://iili.io/KQ67Yxa.png
 dns: {}
+rules:
+- and:
+    match:
+    - domain_suffix:
+        match: googlevideo.com
+    - protocol:
+        match: UDP
+    policy: REJECT
+- and:
+    match:
+    - domain:
+        match: youtubei.googleapis.com
+    - protocol:
+        match: UDP
+    policy: REJECT
 rewrites:
-- match: ^https:\/\/www\.youtube\.com\/(pagead|pcs)\/
+- match: (^https?:\/\/[\w-]+\.googlevideo\.com\/(?!dclk_video_ads).+?)&ctier=L(&.+?),ctier,(.+)
+  actions:
+  - redirect:
+      status: 302
+      location: $1$2$3
+- match: ^https?:\/\/[\w-]+\.googlevideo\.com\/(?!(dclk_video_ads|videoplayback\?)).+&oad
   actions:
   - respond:
-      status: 404
-- match: ^https:\/\/s\.youtube\.com\/api\/stats\/ads
+      status: 200
+- match: ^https?:\/\/(www|s)\.youtube\.com\/api\/stats\/ads
   actions:
   - respond:
-      status: 404
+      status: 200
+- match: ^https?:\/\/(www|s)\.youtube\.com\/(pagead|ptracking)
+  actions:
+  - respond:
+      status: 200
+- match: ^https?:\/\/s\.youtube\.com\/api\/stats\/qoe\?adcontext
+  actions:
+  - respond:
+      status: 200
 - match: ^https://((?:www|m)\.youtube\.com/api/timedtext\?)([^#]+)&tlang=([^&#]+)&([^#]*)(#.*)?$
   actions:
   - respond:
@@ -105,79 +141,81 @@ rewrites:
         Location: https://$1subtype=Translate$3
 scriptings:
 - http_request:
-    name: youtube.enhance.ad-break
+    name: youtube.single.ad-break
     match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/player\/ad_break(?:\?.*)?$
     script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-request.js
 - http_response:
-    name: youtube.enhance.download
+    name: youtube.single.download
     match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/offline\/get_download_action(?:\?.*)?$
     script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-response.js
     env:
       _compat.$argument: '{"nativeDownload":{{{nativeDownload}}}}'
-    max_size: 0
+    max_size: -1
     body_required: true
     binary_body: true
 - http_request:
-    name: youtube.enhance.download-player
+    name: youtube.single.download-player
     match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/player(?:\?.*)?$
     script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-request.js
     env:
       _compat.$argument: '{"nativeDownload":{{{nativeDownload}}}}'
-    max_size: 0
+    max_size: -1
     body_required: true
     binary_body: true
 - http_response:
-    name: youtube.enhance.response
+    name: youtube.single.response
     match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/(?:navigation\/resolve_url|browse|next|player|search|reel\/reel_watch_sequence|guide|account\/get_setting|get_watch|log_event|config)(?:\?.*)?$
     script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-response.js
     env:
-      _compat.$argument: '{"blockUpload":{{{blockUpload}}},"blockShorts":{{{blockShorts}}},"blockGames":{{{blockGames}}},"blockVerticalLive":{{{blockVerticalLive}}},"jumpAhead":{{{jumpAhead}}},"autoHd":{{{autoHd}}},"blockStore":{{{blockStore}}}}'
-    max_size: 0
+      _compat.$argument: '{"blockUpload":{{{屏蔽上传按钮}}},"blockShorts":{{{blockShorts}}},"blockGames":{{{blockGames}}},"blockVerticalLive":{{{blockVerticalLive}}},"jumpAhead":{{{jumpAhead}}},"autoHd":{{{autoHd}}},"blockStore":{{{blockStore}}}}'
+    max_size: -1
     body_required: true
     binary_body: true
 - http_response:
-    name: youtube.enhance.ump
+    name: youtube.single.ump
     match: ^https?:\/\/[\w-]+\.googlevideo\.com\/initplayback(?:\?.*)?$
     script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-response.js
     env:
       _compat.$argument: '{"blockGames":{{{blockGames}}},"blockVerticalLive":{{{blockVerticalLive}}},"jumpAhead":{{{jumpAhead}}},"autoHd":{{{autoHd}}},"blockStore":{{{blockStore}}}}'
-    max_size: 0
+    max_size: -1
     body_required: true
     binary_body: true
 - http_request:
-    name: youtube.enhance.init
+    name: youtube.single.init
     match: ^https?:\/\/[\w-]+\.googlevideo\.com\/initplayback(?:\?.*)?$
     script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-request.js
-    max_size: 0
+    max_size: -1
     body_required: true
     binary_body: true
 - http_request:
-    name: youtube.enhance.auto-hd
+    name: youtube.single.auto-hd
     match: ^https?:\/\/[\w-]+\.googlevideo\.com\/videoplayback
     script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-request.js
     env:
       _compat.$argument: '{"autoHd":{{{autoHd}}}}'
-    max_size: 0
+    max_size: -1
     body_required: true
     binary_body: true
 - http_request:
-    name: youtube.enhance.log-event
+    name: youtube.single.log-event
     match: ^https:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/log_event
     script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/youtube-request.js
-    max_size: 0
+    max_size: -1
     body_required: true
     binary_body: true
 - http_response:
-    name: youtube.enhance.dual-subs
+    name: youtube.single.dual-subs
     match: ^https://(?:www|m)\.youtube\.com/api/timedtext(?:\?|$)
     script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/YT-CC-ASR-Auto.js
-    max_size: 0
+    max_size: -1
     body_required: true
 mitm:
   hostnames:
     includes:
     - '*.googlevideo.com'
-    - youtubei.googleapis.com
     - www.youtube.com
-    - m.youtube.com
     - s.youtube.com
+    - youtubei.googleapis.com
+    - m.youtube.com
+    excludes:
+    - redirector*.googlevideo.com
