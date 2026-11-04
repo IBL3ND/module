@@ -972,7 +972,8 @@ export default async function (ctx) {
           {type:"image",src:"sf-symbol:fuelpump.fill",width:13,height:13,color:COLORS.p92},
           {type:"text",text:titleText,font:{size:"caption2",weight:"semibold"},textColor:COLORS.secondary},
           {type:"spacer"},
-          {type:"text",text:`${timeStr} 更新`,font:{size:"caption2"},textColor:COLORS.tertiary,maxLines:1},
+          {type:"image",src:"sf-symbol:arrow.clockwise",width:12,height:12,color:COLORS.tertiary},
+          {type:"text",text:timeStr,font:{size:"caption2"},textColor:COLORS.tertiary,maxLines:1},
           ...(fetchError ? [{
             type:"text",text:errorMsg,font:{size:"caption2"},textColor:COLORS.p98
           }] : [])
@@ -1004,7 +1005,7 @@ export default async function (ctx) {
         children:[
           {type:"text",text:fillText,font:{size:"caption2"},textColor:COLORS.tertiary,maxLines:1,minScale:0.6},
           {type:"spacer"},
-          {type:"text",text:"元/升",font:{size:"caption2"},textColor:COLORS.tertiary}
+          {type:"text",text:"元-升",font:{size:"caption2"},textColor:COLORS.tertiary}
         ]
       }
     ]
