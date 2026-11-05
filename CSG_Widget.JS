@@ -330,7 +330,7 @@ async function handleWidget(ctx) {
 
   const colors = {
     bg:        { light: "#FFFFFF", dark: "#2C2C2E" },
-    border:    { light: "#00000015", dark: "#FFFFFF20" },
+    border:    { light: "#E5E5EA", dark: "#3A3A3C" },
     title:     { light: "#666666", dark: "#8E8E93" },
     value:     { light: "#1C1C1E", dark: "#FFFFFF" },
     time:      { light: "#999999", dark: "#666666" },
@@ -386,9 +386,10 @@ async function handleWidget(ctx) {
       alignItems: "center",
       flex: 1,
       padding: [8, 10, 8, 10],
+      backgroundColor: colors.capsuleBg,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: { light: "#00000020", dark: "#FFFFFF60" },
+      borderColor: colors.border,
       children: [
         {
           type: "text",
