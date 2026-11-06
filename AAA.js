@@ -1,5 +1,5 @@
 /**
- * 蛋蛋不语 VIP 解锁 - 原生 Egern 适配版
+ * 蛋蛋不语 VIP 解锁 - Egern 原生适配版
  * 基于 Curtinp118 的 dandanvip_unlock.js (v1.1.0) 重写
  */
 
@@ -17,12 +17,11 @@ function patchObject(obj) {
 }
 
 export default async function(ctx) {
-    // 1. 获取响应体文本（Egern 的 body 是流，只能消费一次）
     const rawBody = await ctx.response.text();
 
     if (!rawBody) {
         console.log("❌ 蛋蛋不语：响应体为空");
-        return; // 不修改，让原始响应通过
+        return; 
     }
 
     let data;
@@ -30,10 +29,9 @@ export default async function(ctx) {
         data = JSON.parse(rawBody);
     } catch (e) {
         console.log("❌ 蛋蛋不语：JSON 解析失败", e.message);
-        return; // 解析失败时不修改响应
+        return; 
     }
 
-    // 2. 应用 VIP 补丁（兼容数组和对象两种结构）
     if (Array.isArray(data)) {
         data = data.map(patchObject);
     } else {
@@ -42,9 +40,6 @@ export default async function(ctx) {
 
     console.log("✅ 蛋蛋不语：VIP 已解锁");
 
-    // 3. 返回修改后的响应体
-    // Egern 支持通过返回 { body: ... } 来改写响应
-    return {
-        body: JSON.stringify(data)
-    };
+    // ✅ 关键修正：直接返回字符串，不再包裹在 { body: ... } 中
+    return JSON.stringify(data);
 }
