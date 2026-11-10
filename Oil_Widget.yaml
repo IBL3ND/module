@@ -17,7 +17,7 @@ env_schema:
 scriptings:
 - generic:
     name: oil-widget
-    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/AAA.js
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Oil_Widget.JS
     timeout: 30
 widgets:
 - name: oil-widget
