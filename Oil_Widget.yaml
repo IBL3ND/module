@@ -7,10 +7,17 @@ env_schema:
     name: 城市或地区
     description: 直接填写城市名，如：海口、深圳、广州；也可填"省份-城市"（广东-深圳）或省份名（广东）
     default_value: '海口'
+  OIL_NOTIFY:
+    name: 调价通知
+    description: 距调价3天内且预测涨跌时推送通知，同一轮同一预测只发一次，预测变化补发
+    default_value: 'true'
+    options:
+    - 'true'
+    - 'false'
 scriptings:
 - generic:
     name: oil-widget
-    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/Oil_Widget.JS
+    script_url: https://raw.githubusercontent.com/IBL3ND/module/refs/heads/main/AAA.js
     timeout: 30
 widgets:
 - name: oil-widget
