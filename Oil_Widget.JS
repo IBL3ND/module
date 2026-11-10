@@ -423,6 +423,7 @@ export default async function (ctx) {
   }
   const regionInput = (ctx.env.OIL_REGION || ctx.env.region || '').trim();
   const regionParam = resolveRegion(regionInput);
+  const notifyEnabled = String(ctx.env.OIL_NOTIFY == null ? "true" : ctx.env.OIL_NOTIFY).trim().toLowerCase() !== "false";
 
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
@@ -454,6 +455,8 @@ export default async function (ctx) {
   let forecastDir = 0;
   let siteStranded = false;
   let nextAdj = null;
+  let fcTons = null;
+  let fcAdjFull = null;
 
   try {
     const cached = ctx.storage.getJSON(CACHE_KEY);
@@ -644,9 +647,82 @@ export default async function (ctx) {
     }
   }
 
+  try {
+    const jlcResp = await ctx.http.get("https://oil.315i.com/chengpy.html", {
+      headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      timeout: 10000
+    });
+    if (jlcResp.status === 200) {
+      const jlcHtml = await jlcResp.text();
+      const jlcM = jlcHtml.match(/据金联创测算，截至\d{1,2}月\d{1,2}日第[一二三四五六七八九十\d]+个工作日，参考原油品种均价为[\d.]+美元\/桶，变化率为-?[\d.]+%，影响国内汽柴油标准品零售价应(上调|下调)(\d+)元\/吨/);
+      const winM = jlcHtml.match(/窗口期：\s*(\d{4})年(\d{1,2})月(\d{1,2})日/);
+      if (jlcM && winM) {
+        const tons = parseInt(jlcM[2]);
+        fcAdjFull = { y: parseInt(winM[1]), m: parseInt(winM[2]), d: parseInt(winM[3]) };
+        nextAdj = { month: fcAdjFull.m, day: fcAdjFull.d };
+        if (tons >= 50) {
+          fcTons = tons;
+          forecastDir = jlcM[1] === '下调' ? -1 : 1;
+          forecastLow = Number((tons * 0.00075).toFixed(2));
+          forecastHigh = Number((tons * 0.0009).toFixed(2));
+          forecastText = `${forecastDir < 0 ? '↓' : '↑'} ${forecastLow.toFixed(2)}-${forecastHigh.toFixed(2)}`;
+          siteStranded = false;
+        } else {
+          fcTons = null;
+          forecastDir = 0;
+          forecastLow = null;
+          forecastHigh = null;
+          forecastText = "不变";
+          siteStranded = true;
+        }
+      }
+    }
+  } catch (_) {}
+
   if (forecastText === "--") {
     forecastText = "搁浅";
   }
+
+  try {
+    if (notifyEnabled && forecastDir !== 0 && forecastLow != null && forecastHigh != null && nextAdj) {
+      const nToday0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      let adjD;
+      if (fcAdjFull) {
+        adjD = new Date(fcAdjFull.y, fcAdjFull.m - 1, fcAdjFull.d);
+      } else {
+        adjD = new Date(now.getFullYear(), nextAdj.month - 1, nextAdj.day);
+        if (adjD.getTime() < nToday0 - 180 * 86400000) adjD.setFullYear(now.getFullYear() + 1);
+        else if (adjD.getTime() > nToday0 + 180 * 86400000) adjD.setFullYear(now.getFullYear() - 1);
+        let guard2 = 0;
+        while (adjD.getTime() < nToday0 && guard2++ < 6) {
+          let added = 0;
+          while (added < 10) {
+            adjD.setDate(adjD.getDate() + 1);
+            const wd = adjD.getDay();
+            if (wd !== 0 && wd !== 6) added++;
+          }
+        }
+      }
+      const remainMs = adjD.getTime() + 24 * 3600 * 1000 - Date.now();
+      if (remainMs > 0 && remainMs <= 3 * 24 * 3600 * 1000) {
+        const sig = `${adjD.getFullYear()}-${adjD.getMonth() + 1}-${adjD.getDate()}|${forecastDir}|${forecastLow}|${forecastHigh}|${fcTons == null ? "" : fcTons}`;
+        let lastSig = null;
+        try { lastSig = ctx.storage.getJSON("oil_adjust_notify_sig"); } catch (_) {}
+        if (lastSig !== sig) {
+          const rangeStr = forecastText.replace(/^[↑↓]\s*/, "");
+          const amountStr = fcTons == null ? `${rangeStr}元/升` : `约${fcTons}元/吨（${rangeStr}元/升）`;
+          const extraStr = forecastLow === forecastHigh ? `${(forecastLow * 50).toFixed(1)}` : `${(forecastLow * 50).toFixed(1)}-${(forecastHigh * 50).toFixed(1)}`;
+          const dateStr = `${adjD.getMonth() + 1}月${adjD.getDate()}日24时`;
+          if (forecastDir < 0) {
+            ctx.notify({ title: "油价要降了", body: `${dateStr}预计下调${amountStr}，95号加满50L约省¥${extraStr}，等降价后再加更划算` });
+          } else {
+            ctx.notify({ title: "油价要涨了", body: `${dateStr}预计上调${amountStr}，95号加满50L约多花¥${extraStr}，赶在调价前加满更划算` });
+          }
+          try { ctx.storage.setJSON("oil_adjust_notify_sig", sig); } catch (_) {}
+        }
+      }
+    }
+  } catch (_) {}
 
   const titleText = regionName ? `${regionName}实时油价` : "实时油价";
 
@@ -939,7 +1015,7 @@ export default async function (ctx) {
     if (daysLeft > 1) countText = ` · 还有${daysLeft}天`;
     else if (daysLeft === 1) countText = " · 明天24时";
     else if (daysLeft === 0) countText = " · 今晚24时调价";
-    adjText = `下次调价 ${adjDate.getMonth() + 1}月${adjDate.getDate()}日${countText}`;
+    adjText = `下轮调价 ${adjDate.getMonth() + 1}月${adjDate.getDate()}日${countText}`;
   }
   const infoRow = rows.length > 0 ? {
     type:"stack",
@@ -1005,7 +1081,7 @@ export default async function (ctx) {
         children:[
           {type:"text",text:fillText,font:{size:"caption2"},textColor:COLORS.tertiary,maxLines:1,minScale:0.6},
           {type:"spacer"},
-          {type:"text",text:"元-升",font:{size:"caption2"},textColor:COLORS.tertiary}
+          {type:"text",text:"元/升",font:{size:"caption2"},textColor:COLORS.tertiary}
         ]
       }
     ]
