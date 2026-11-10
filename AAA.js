@@ -1015,7 +1015,7 @@ export default async function (ctx) {
     if (daysLeft > 1) countText = ` · 还有${daysLeft}天`;
     else if (daysLeft === 1) countText = " · 明天24时";
     else if (daysLeft === 0) countText = " · 今晚24时调价";
-    adjText = `下次调价 ${adjDate.getMonth() + 1}月${adjDate.getDate()}日${countText}`;
+    adjText = `下轮调价 ${adjDate.getMonth() + 1}月${adjDate.getDate()}日${countText}`;
   }
   const infoRow = rows.length > 0 ? {
     type:"stack",
