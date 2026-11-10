@@ -1,0 +1,73 @@
+name: 我的排班
+
+description: 排班日历小组件，在设置里按班次填写本月日期号，没填到的日期默认休息
+
+author: iBL3ND
+
+icon: https://iili.io/nmvgG7R.webp
+
+env_schema:
+
+  SHIFT_BAI:
+
+    name: 白班
+
+    description: 填本月上白班的日期号，逗号分隔，如：1,8,15
+
+    default_value: ''
+
+  SHIFT_ZAO:
+
+    name: 早班
+
+    description: 填本月上早班的日期号，逗号分隔，如：2,9,16
+
+    default_value: ''
+
+  SHIFT_YE:
+
+    name: 夜班
+
+    description: 填本月上夜班的日期号，逗号分隔，如：3,10,17
+
+    default_value: ''
+
+  SHIFT_WU:
+
+    name: 午班
+
+    description: 填本月上午班的日期号，逗号分隔，如：4,11,18
+
+    default_value: ''
+
+  SHIFT_XIAYE:
+
+    name: 下夜
+
+    description: 填本月上下夜的日期号，逗号分隔，如：5,12,19
+
+    default_value: ''
+
+  SHIFT_DAYE:
+
+    name: 大夜
+
+    description: 填本月上大夜的日期号，逗号分隔，如：6,13,20
+
+    default_value: ''
+
+scriptings:
+
+- generic:
+
+    name: shift-widget
+
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/Sched-Widget.js
+
+    timeout: 30
+
+widgets:
+
+- name: shift-widget
+
+  script_name: shift-widget
