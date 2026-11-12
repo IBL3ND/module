@@ -654,15 +654,15 @@ export default async function (ctx) {
     });
     if (jlcResp.status === 200) {
       const jlcHtml = await jlcResp.text();
-      const jlcM = jlcHtml.match(/据金联创测算，截至\d{1,2}月\d{1,2}日第[一二三四五六七八九十\d]+个工作日，参考原油品种均价为[\d.]+美元\/桶，变化率为-?[\d.]+%，影响国内汽柴油标准品零售价应(上调|下调)(\d+)元\/吨/);
+      const jlcM = jlcHtml.match(/据金联创测算，截至\d{1,2}月\d{1,2}日第[一二三四五六七八九十\d]+个工作日，参考原油品种均价为[\d.]+美元\/桶，变化率为-?[\d.]+%，影响国内汽柴油标准品零售价(?:应(上调|下调)(\d+)|分别(上调|下调)(\d+)和\d+)元\/吨/);
       const winM = jlcHtml.match(/窗口期：\s*(\d{4})年(\d{1,2})月(\d{1,2})日/);
       if (jlcM && winM) {
-        const tons = parseInt(jlcM[2]);
+        const tons = parseInt(jlcM[2] || jlcM[4]);
         fcAdjFull = { y: parseInt(winM[1]), m: parseInt(winM[2]), d: parseInt(winM[3]) };
         nextAdj = { month: fcAdjFull.m, day: fcAdjFull.d };
         if (tons >= 50) {
           fcTons = tons;
-          forecastDir = jlcM[1] === '下调' ? -1 : 1;
+          forecastDir = (jlcM[1] || jlcM[3]) === '下调' ? -1 : 1;
           forecastLow = Number((tons * 0.00075).toFixed(2));
           forecastHigh = Number((tons * 0.0009).toFixed(2));
           forecastText = `${forecastDir < 0 ? '↓' : '↑'} ${forecastLow.toFixed(2)}-${forecastHigh.toFixed(2)}`;
