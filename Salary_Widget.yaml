@@ -48,6 +48,14 @@ env_schema:
 
     default_value: ''
 
+  CUSTOM_DAYS:
+
+    name: 自定义记录(大尺寸下显示)
+
+    description: 改某天的实际工时和入账，格式：日期号:小时:金额，多条用分号隔开，如：5:5:500;12:3.5:350；填了就以填的为准，可留空
+
+    default_value: ''
+
   HOURLY_WAGE:
 
     name: 每小时工资
