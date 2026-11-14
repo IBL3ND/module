@@ -1,0 +1,65 @@
+name: 今日入账
+
+description: 工资实时计算今日入账 带距离下班倒计时
+
+author: iBL3ND
+
+icon: https://iili.io/o97ZxuS.webp
+
+env_schema:
+
+  WORK_START:
+
+    name: 上班时间
+
+    description: 每天上班时间，如：09:00
+
+    default_value: '09:00'
+
+  LUNCH_START:
+
+    name: 午休开始
+
+    description: 中午休息开始时间，如：12:00；不午休就清空这项和午休结束
+
+    default_value: '12:00'
+
+  LUNCH_END:
+
+    name: 午休结束
+
+    description: 中午休息结束时间，如：13:00；不午休就清空这项和午休开始
+
+    default_value: '13:00'
+
+  WORK_END:
+
+    name: 下班时间
+
+    description: 每天下班时间，如：18:00
+
+    default_value: '18:00'
+
+  HOURLY_WAGE:
+
+    name: 每小时工资
+
+    description: 每小时工资收入（元），如：100
+
+    default_value: '100'
+
+scriptings:
+
+- generic:
+
+    name: salary-widget
+
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/Salary_Widget.js
+
+    timeout: 30
+
+widgets:
+
+- name: salary-widget
+
+  script_name: salary-widget
