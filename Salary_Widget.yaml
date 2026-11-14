@@ -40,6 +40,14 @@ env_schema:
 
     default_value: '18:00'
 
+  REST_DAYS:
+
+    name: 本月休息日
+
+    description: 填本月休息的日期号，逗号分隔，如：1,8,15,22；休息日当天显示今日休息、入账为 0；每月记得更新，可留空
+
+    default_value: ''
+
   HOURLY_WAGE:
 
     name: 每小时工资
