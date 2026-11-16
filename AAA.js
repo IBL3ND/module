@@ -306,15 +306,11 @@ async function handleWidget(ctx) {
       {
         type: 'stack', direction: 'row', alignItems: 'center',
         children: [
-          {
-            type: 'stack', flex: 1, direction: 'column', alignItems: 'start',
-            children: [{ type: 'text', text: '今日入账', font: { size: 16, weight: 'bold' }, textColor: INK }],
-          },
+          { type: 'text', text: '本月统计', font: { size: 16, weight: 'bold' }, textColor: INK },
+          { type: 'spacer' },
           { type: 'text', text: `¥${monthTotal}元`, font: { size: 14, weight: 'bold' }, textColor: AMT_TX },
-          {
-            type: 'stack', flex: 1, direction: 'column', alignItems: 'end',
-            children: [{ type: 'text', text: `${Y}年${MO + 1}月`, font: { size: 14, weight: 'bold' }, textColor: INK }],
-          },
+          { type: 'spacer' },
+          { type: 'text', text: `${Y}年${MO + 1}月`, font: { size: 14, weight: 'bold' }, textColor: INK },
         ],
       },
       { type: 'spacer', length: 8 },
