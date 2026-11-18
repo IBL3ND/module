@@ -11,7 +11,7 @@
  *   NOTIFY         发现新转账时推送通知：true / false
  *
  * 📊 尺寸说明：
- *   • 小尺寸  : 最近 3 笔转账
+ *   • 小尺寸  : 只显示地址余额（原生币；TRON 另显示 USDT 余额）
  *   • 中尺寸  : 最近 4 笔转账
  *   • 大尺寸  : 最近 7 笔转账（带对方完整地址）
  *   • 锁屏    : 矩形显示最近 1 笔，单行显示最新动态
@@ -322,6 +322,42 @@ export default async function (ctx) {
     return out;
   }
 
+  async function fetchBalance() {
+    try {
+      if (CHAIN === 'TRON') {
+        const j = await httpGet('https://api.trongrid.io/v1/accounts/' + encodeURIComponent(ADDRESS));
+        const a0 = j && j.data && j.data[0];
+        if (!a0) return null;
+        let usdt = null;
+        if (Array.isArray(a0.trc20)) {
+          const u = a0.trc20.find((x) => x && x['TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'] != null);
+          if (u) usdt = amt(u['TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'], 6);
+        }
+        return { amount: amt(a0.balance || 0, 6), symbol: 'TRX', usdt };
+      }
+      if (CHAIN === 'BTC') {
+        for (const b of ['https://blockstream.info/api/address/', 'https://mempool.space/api/address/']) {
+          try {
+            const j = await httpGet(b + encodeURIComponent(ADDRESS));
+            if (j && j.chain_stats) return { amount: amt((j.chain_stats.funded_txo_sum || 0) - (j.chain_stats.spent_txo_sum || 0), 8), symbol: 'BTC', usdt: null };
+          } catch (e) {}
+        }
+        return null;
+      }
+      if (CHAIN === 'ETH' && !ES_KEY) {
+        const j = await httpGet('https://eth.blockscout.com/api/v2/addresses/' + encodeURIComponent(ADDRESS));
+        if (j && j.coin_balance != null) return { amount: amt(j.coin_balance, 18), symbol: 'ETH', usdt: null };
+        return null;
+      }
+      if (ES_CHAIN_ID[CHAIN] && ES_KEY) {
+        const j = await httpGet('https://api.etherscan.io/v2/api?chainid=' + ES_CHAIN_ID[CHAIN] + '&module=account&action=balance&address=' + encodeURIComponent(ADDRESS) + '&tag=latest&apikey=' + ES_KEY);
+        if (j && typeof j.result === 'string') return { amount: amt(j.result, 18), symbol: { ETH: 'ETH', BSC: 'BNB', POLYGON: 'POL' }[CHAIN], usdt: null };
+        return null;
+      }
+    } catch (e) {}
+    return null;
+  }
+
   async function fetchAll() {
     if (CHAIN === 'TRON') return fetchTron(ADDRESS);
     if (CHAIN === 'BTC') return fetchBtc(ADDRESS);
@@ -340,7 +376,7 @@ export default async function (ctx) {
   const storeGet = (key) => { try { return safeCtx.storage.getJSON(key); } catch (e) { return null; } };
   const storeSet = (key, val) => { try { safeCtx.storage.setJSON(key, val); } catch (e) {} };
 
-  let state = { status: 'ok', txs: [], fetchedAt: Date.now(), errMsg: '' };
+  let state = { status: 'ok', txs: [], fetchedAt: Date.now(), errMsg: '', balance: null };
   const cacheKey = 'cm_cache_' + CHAIN + '_' + ADDRESS;
   const lastKey = 'cm_last_' + CHAIN + '_' + ADDRESS;
 
@@ -367,8 +403,9 @@ export default async function (ctx) {
         txs.push(t);
       }
       txs.sort((a, b) => b.ts - a.ts);
-      state = { status: txs.length ? 'ok' : 'empty', txs, fetchedAt: Date.now(), errMsg: '' };
-      storeSet(cacheKey, { ts: Date.now(), txs });
+      const bal = await fetchBalance();
+      state = { status: txs.length ? 'ok' : 'empty', txs, fetchedAt: Date.now(), errMsg: '', balance: bal };
+      storeSet(cacheKey, { ts: Date.now(), txs, balance: bal });
       if (NOTIFY && txs.length) {
         const last = storeGet(lastKey);
         const newest = txs[0];
@@ -389,7 +426,7 @@ export default async function (ctx) {
       if (e && e.message === 'nokey') {
         state = { status: 'nokey', txs: [], fetchedAt: Date.now(), errMsg: '' };
       } else if (cached && Array.isArray(cached.txs) && cached.txs.length) {
-        state = { status: 'ok', txs: cached.txs, fetchedAt: cached.ts, errMsg: '' };
+        state = { status: 'ok', txs: cached.txs, fetchedAt: cached.ts, errMsg: '', balance: cached.balance || null };
       } else {
         state = { status: 'error', txs: [], fetchedAt: Date.now(), errMsg: (e && e.message) || '获取失败' };
       }
@@ -505,6 +542,28 @@ export default async function (ctx) {
   if (state.status === 'badaddr') return msgWidget('地址和所选链对不上，请检查模块设置里的链和地址');
   if (state.status === 'nokey') return msgWidget(CHAIN + ' 需要填 Etherscan 免费 Key 后才能查询');
   if (state.status === 'error') return msgWidget('获取失败：' + state.errMsg);
+
+  if (family === 'systemSmall' && state.balance) {
+    const b = state.balance;
+    const kids = [
+      titleRow(),
+      { type: 'spacer', length: 14 },
+      { type: 'text', text: '余额', font: { size: 10 }, textColor: A.sub },
+      { type: 'spacer', length: 3 },
+      {
+        type: 'stack', direction: 'row', alignItems: 'center', children: [
+          { type: 'text', text: b.amount, font: { size: 24, weight: 'bold' }, textColor: A.text, maxLines: 1 },
+          { type: 'spacer', length: 5 },
+          { type: 'text', text: b.symbol, font: { size: 13, weight: 'bold' }, textColor: A.chain }
+        ]
+      },
+      ...(b.usdt ? [{ type: 'spacer', length: 5 }, { type: 'text', text: b.usdt + ' USDT', font: { size: 12 }, textColor: A.sub }] : []),
+      { type: 'spacer' },
+      addrRow()
+    ];
+    return { type: 'widget', padding: 11, backgroundGradient: bgGradient, refreshAfter: refreshAfter(120 * 1000), children: kids };
+  }
+
   if (state.status === 'empty') return msgWidget('暂无转账记录');
 
   const limit = family === 'systemLarge' ? 7 : family === 'systemMedium' ? 4 : 3;
