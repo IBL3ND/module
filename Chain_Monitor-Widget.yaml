@@ -1,0 +1,75 @@
+name: 链上监控小组件
+
+description: 监控指定地址的转账记录 有新转账时推送通知
+
+author: iBL3ND
+
+icon: https://iili.io/KDiAbJS.png
+
+env_schema:
+
+  CHAIN:
+
+    name: 监控的链
+
+    description: 选择要监控的区块链
+
+    default_value: 'TRON'
+
+    options:
+
+    - 'TRON'
+
+    - 'BTC'
+
+    - 'ETH'
+
+    - 'BSC'
+
+    - 'POLYGON'
+
+  ADDRESS:
+
+    name: 钱包地址
+
+    description: 要监控的地址，如波场地址 T 开头、ETH/BSC/Polygon 为 0x 开头、BTC 为 1/3/bc1 开头
+
+    default_value: ''
+
+  ETHERSCAN_KEY:
+
+    name: Etherscan Key
+
+    description: Etherscan 免费 API Key；BSC、POLYGON 必填，ETH 可不填（不填走免 Key 源），TRON、BTC 不用填
+
+    default_value: ''
+
+  NOTIFY:
+
+    name: 新转账通知
+
+    description: 发现新转账时推送通知
+
+    default_value: 'true'
+
+    options:
+
+    - 'true'
+
+    - 'false'
+
+scriptings:
+
+- generic:
+
+    name: chain-monitor
+
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/Chain_Monitor.js
+
+    timeout: 30
+
+widgets:
+
+- name: chain-monitor
+
+  script_name: chain-monitor
