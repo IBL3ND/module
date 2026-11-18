@@ -36,9 +36,8 @@ export default async function (ctx) {
   const ES_CHAIN_ID = { ETH: '1', BSC: '56', POLYGON: '137' };
 
   const C = {
-    bg: '#020A12',
     fill: '#06222F',
-    title: '#D9E9F7',
+    title: { light: '#000000', dark: '#D9E9F7' },
     text: '#FFFFFF',
     sub: '#8FA3B8',
     time: '#7C8DA6',
@@ -47,6 +46,24 @@ export default async function (ctx) {
     warn: '#FFB35C'
   };
   const HUES = ['#57B9D2', '#4A90C2', '#6D80C5', '#806FCF', '#8B5DCA', '#C05FD0'];
+
+  const bgGradient = {
+    type: 'linear',
+    colors: [
+      { light: '#FFFFFF00', dark: '#2C2C2E00' },
+      { light: '#FFFFFF00', dark: '#2C2C2E00' }
+    ],
+    stops: [0, 1],
+    startPoint: { x: 0, y: 0 },
+    endPoint: { x: 0, y: 1 }
+  };
+  const A = {
+    text: { light: '#000000', dark: '#FFFFFF' },
+    sub: { light: '#555555', dark: '#8FA3B8' },
+    time: { light: '#888888', dark: '#7C8DA6' },
+    warn: { light: '#C77400', dark: '#FFB35C' },
+    chain: { light: '#1D7A99', dark: '#57B9D2' }
+  };
 
   const refreshAfter = (ms) => new Date(Date.now() + ms).toISOString();
   const pad2 = (n) => String(n).padStart(2, '0');
@@ -381,19 +398,19 @@ export default async function (ctx) {
     type: 'stack', direction: 'row', alignItems: 'center', children: [
       { type: 'text', text: '链上监控', font: { size: 14, weight: 'bold' }, textColor: C.title },
       { type: 'spacer', length: 6 },
-      { type: 'text', text: CHAIN_NAME[CHAIN] || CHAIN, font: { size: 10, weight: 'bold' }, textColor: HUES[0] },
+      { type: 'text', text: CHAIN, font: { size: 14, weight: 'bold' }, textColor: A.chain },
       { type: 'spacer' },
-      { type: 'image', src: 'sf-symbol:arrow.clockwise', width: 12, height: 12, color: C.time },
+      { type: 'image', src: 'sf-symbol:arrow.clockwise', width: 12, height: 12, color: A.time },
       { type: 'spacer', length: 4 },
-      { type: 'text', text: hhmm(state.fetchedAt), font: { size: 11 }, textColor: C.time }
+      { type: 'text', text: hhmm(state.fetchedAt), font: { size: 11 }, textColor: A.time }
     ]
   });
 
   const addrRow = () => ({
     type: 'stack', direction: 'row', alignItems: 'center', children: [
-      { type: 'text', text: ADDRESS ? shortAddr(ADDRESS) : '未填写地址', font: { size: 10 }, textColor: C.sub, maxLines: 1 },
+      { type: 'text', text: ADDRESS ? shortAddr(ADDRESS) : '未填写地址', font: { size: 10 }, textColor: A.sub, maxLines: 1 },
       { type: 'spacer' },
-      { type: 'text', text: state.txs.length ? state.txs.length + ' 笔记录' : '', font: { size: 10 }, textColor: C.sub }
+      { type: 'text', text: state.txs.length ? state.txs.length + ' 笔记录' : '', font: { size: 10 }, textColor: A.sub }
     ]
   });
 
@@ -438,11 +455,11 @@ export default async function (ctx) {
   };
 
   const msgWidget = (text) => ({
-    type: 'widget', padding: 12, backgroundColor: C.bg, refreshAfter: refreshAfter(5 * 60 * 1000),
+    type: 'widget', padding: 12, backgroundGradient: bgGradient, refreshAfter: refreshAfter(5 * 60 * 1000),
     children: [
       titleRow(),
       { type: 'spacer' },
-      { type: 'text', text, font: { size: 12 }, textColor: C.warn, textAlign: 'center' },
+      { type: 'text', text, font: { size: 12 }, textColor: A.warn, textAlign: 'center' },
       { type: 'spacer' }
     ]
   });
@@ -454,7 +471,7 @@ export default async function (ctx) {
       text = (t.dir === 'in' ? '↓ +' : '↑ -') + t.amount + ' ' + t.symbol + ' · ' + rowTime(t.ts);
     } else if (state.status === 'noaddr') text = '链上监控 · 未填写地址';
     else if (state.status === 'error') text = '链上监控 · 获取失败';
-    return { type: 'widget', refreshAfter: refreshAfter(120 * 1000), children: [{ type: 'text', text, font: { size: 12 }, textColor: C.text }] };
+    return { type: 'widget', refreshAfter: refreshAfter(120 * 1000), children: [{ type: 'text', text, font: { size: 12 }, textColor: A.text }] };
   }
 
   if (family === 'accessoryRectangular') {
@@ -462,20 +479,20 @@ export default async function (ctx) {
     if (state.status === 'ok' && state.txs.length) {
       kids.push({ type: 'spacer', length: 4 }, txRow(state.txs[0], 0, false));
     } else {
-      kids.push({ type: 'spacer', length: 6 }, { type: 'text', text: state.status === 'empty' ? '暂无转账记录' : '暂无数据', font: { size: 11 }, textColor: C.sub });
+      kids.push({ type: 'spacer', length: 6 }, { type: 'text', text: state.status === 'empty' ? '暂无转账记录' : '暂无数据', font: { size: 11 }, textColor: A.sub });
     }
-    return { type: 'widget', padding: 10, backgroundColor: C.bg, refreshAfter: refreshAfter(120 * 1000), children: kids };
+    return { type: 'widget', padding: 10, backgroundGradient: bgGradient, refreshAfter: refreshAfter(120 * 1000), children: kids };
   }
 
   if (family === 'accessoryCircular') {
     const t = state.txs[0];
     return {
-      type: 'widget', backgroundColor: C.bg, refreshAfter: refreshAfter(120 * 1000),
+      type: 'widget', backgroundGradient: bgGradient, refreshAfter: refreshAfter(120 * 1000),
       children: [{
         type: 'stack', direction: 'column', alignItems: 'center', children: [
-          { type: 'text', text: t ? (t.dir === 'in' ? '↓' : '↑') : '—', font: { size: 16, weight: 'bold' }, textColor: t ? (t.dir === 'in' ? C.inColor : C.outColor) : C.sub },
-          { type: 'text', text: t ? t.amount : '0', font: { size: 10, weight: 'bold' }, textColor: C.text, maxLines: 1 },
-          { type: 'text', text: t ? t.symbol : CHAIN, font: { size: 8 }, textColor: C.sub, maxLines: 1 }
+          { type: 'text', text: t ? (t.dir === 'in' ? '↓' : '↑') : '—', font: { size: 16, weight: 'bold' }, textColor: t ? (t.dir === 'in' ? C.inColor : C.outColor) : A.sub },
+          { type: 'text', text: t ? t.amount : '0', font: { size: 10, weight: 'bold' }, textColor: A.text, maxLines: 1 },
+          { type: 'text', text: t ? t.symbol : CHAIN, font: { size: 8 }, textColor: A.sub, maxLines: 1 }
         ]
       }]
     };
@@ -494,5 +511,5 @@ export default async function (ctx) {
     kids.push(txRow(tx, i, detailed));
     if (i < limit - 1 && i < state.txs.length - 1) kids.push({ type: 'spacer', length: 5 });
   });
-  return { type: 'widget', padding: 11, backgroundColor: C.bg, refreshAfter: refreshAfter(120 * 1000), children: kids };
+  return { type: 'widget', padding: 11, backgroundGradient: bgGradient, refreshAfter: refreshAfter(120 * 1000), children: kids };
 }
