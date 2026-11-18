@@ -36,16 +36,20 @@ export default async function (ctx) {
   const ES_CHAIN_ID = { ETH: '1', BSC: '56', POLYGON: '137' };
 
   const C = {
-    fill: '#06222F',
     title: { light: '#000000', dark: '#D9E9F7' },
-    text: '#FFFFFF',
-    sub: '#8FA3B8',
-    time: '#7C8DA6',
-    inColor: '#3ECF8E',
-    outColor: '#FF8A5C',
-    warn: '#FFB35C'
+    inColor: { light: '#1DA851', dark: '#3ECF8E' },
+    outColor: { light: '#E05E2B', dark: '#FF8A5C' }
   };
-  const HUES = ['#57B9D2', '#4A90C2', '#6D80C5', '#806FCF', '#8B5DCA', '#C05FD0'];
+  const CARD_BG = { light: '#FFFFFF15', dark: '#FFFFFF10' };
+  const CARD_BORDER = { light: '#E5E5EA', dark: '#48484A' };
+  const HUES = [
+    { light: '#1F7A99', dark: '#57B9D2' },
+    { light: '#2B6CA3', dark: '#4A90C2' },
+    { light: '#4A5CA8', dark: '#6D80C5' },
+    { light: '#5F4DB0', dark: '#806FCF' },
+    { light: '#6D3FA8', dark: '#8B5DCA' },
+    { light: '#9C3FAE', dark: '#C05FD0' }
+  ];
 
   const bgGradient = {
     type: 'linear',
@@ -392,7 +396,6 @@ export default async function (ctx) {
     }
   }
 
-  const barSvg = (color) => "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 16'><rect width='3' height='16' rx='1.5' fill='" + color.replace('#', '%23') + "'/></svg>";
 
   const titleRow = () => ({
     type: 'stack', direction: 'row', alignItems: 'center', children: [
@@ -419,15 +422,15 @@ export default async function (ctx) {
     const isIn = tx.dir === 'in';
     const mainLine = {
       type: 'stack', direction: 'row', alignItems: 'center', children: [
-        { type: 'image', src: barSvg(hue), width: 3, height: 16 },
+        { type: 'stack', width: 3, height: 16, backgroundColor: hue, borderRadius: 1.5 },
         { type: 'spacer', length: 7 },
         { type: 'text', text: isIn ? '↓' : '↑', font: { size: 13, weight: 'bold' }, textColor: isIn ? C.inColor : C.outColor },
         { type: 'spacer', length: 5 },
-        { type: 'text', text: (isIn ? '+' : '-') + tx.amount, font: { size: 13, weight: 'bold' }, textColor: C.text },
+        { type: 'text', text: (isIn ? '+' : '-') + tx.amount, font: { size: 13, weight: 'bold' }, textColor: A.text },
         { type: 'spacer', length: 4 },
         { type: 'text', text: tx.symbol, font: { size: 11, weight: 'bold' }, textColor: hue },
         { type: 'spacer' },
-        { type: 'text', text: rowTime(tx.ts), font: { size: 10 }, textColor: C.time }
+        { type: 'text', text: rowTime(tx.ts), font: { size: 10 }, textColor: A.time }
       ]
     };
     const children = [mainLine];
@@ -435,20 +438,20 @@ export default async function (ctx) {
       children.push({
         type: 'stack', direction: 'row', alignItems: 'center', children: [
           { type: 'spacer', length: 10 },
-          { type: 'text', text: (isIn ? '来自 ' : '转到 ') + (tx.counterparty || '-'), font: { size: 10 }, textColor: C.sub, maxLines: 1 },
+          { type: 'text', text: (isIn ? '来自 ' : '转到 ') + (tx.counterparty || '-'), font: { size: 10 }, textColor: A.sub, maxLines: 1 },
           { type: 'spacer' },
-          ...(tx.pending ? [{ type: 'text', text: '确认中', font: { size: 10 }, textColor: C.warn }] : [])
+          ...(tx.pending ? [{ type: 'text', text: '确认中', font: { size: 10 }, textColor: A.warn }] : [])
         ]
       });
     } else {
       mainLine.children.splice(7, 0,
         { type: 'spacer', length: 6 },
-        { type: 'text', text: shortAddr(tx.counterparty), font: { size: 10 }, textColor: C.sub, maxLines: 1 },
+        { type: 'text', text: shortAddr(tx.counterparty), font: { size: 10 }, textColor: A.sub, maxLines: 1 },
         { type: 'spacer', length: 6 });
     }
     return {
-      type: 'stack', direction: 'column', backgroundColor: C.fill,
-      borderWidth: 1, borderColor: hue, borderRadius: 8,
+      type: 'stack', direction: 'column', backgroundColor: CARD_BG,
+      borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 8,
       padding: detailed ? [6, 8, 6, 8] : [5, 8, 5, 8],
       children
     };
