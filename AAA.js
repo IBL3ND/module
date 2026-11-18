@@ -13,7 +13,7 @@
  * 📊 尺寸说明：
  *   • 小尺寸  : 最近 3 笔转账
  *   • 中尺寸  : 最近 4 笔转账
- *   • 大尺寸  : 最近 8 笔转账（带对方完整地址）
+ *   • 大尺寸  : 最近 7 笔转账（带对方完整地址）
  *   • 锁屏    : 矩形显示最近 1 笔，单行显示最新动态
  *
  * 🔔 监控说明：
@@ -452,7 +452,7 @@ export default async function (ctx) {
     return {
       type: 'stack', direction: 'column', backgroundColor: CARD_BG,
       borderWidth: 1, borderColor: CARD_BORDER, borderRadius: 8,
-      padding: detailed ? [6, 8, 6, 8] : [5, 8, 5, 8],
+      padding: detailed ? [5, 8, 5, 8] : [5, 8, 5, 8],
       children
     };
   };
@@ -507,12 +507,13 @@ export default async function (ctx) {
   if (state.status === 'error') return msgWidget('获取失败：' + state.errMsg);
   if (state.status === 'empty') return msgWidget('暂无转账记录');
 
-  const limit = family === 'systemLarge' ? 8 : family === 'systemMedium' ? 4 : 3;
+  const limit = family === 'systemLarge' ? 7 : family === 'systemMedium' ? 4 : 3;
   const detailed = family === 'systemLarge';
+  const rowGap = detailed ? 4 : 5;
   const kids = [titleRow(), { type: 'spacer', length: 5 }, addrRow(), { type: 'spacer', length: 7 }];
   state.txs.slice(0, limit).forEach((tx, i) => {
     kids.push(txRow(tx, i, detailed));
-    if (i < limit - 1 && i < state.txs.length - 1) kids.push({ type: 'spacer', length: 5 });
+    if (i < limit - 1 && i < state.txs.length - 1) kids.push({ type: 'spacer', length: rowGap });
   });
   return { type: 'widget', padding: 11, backgroundGradient: bgGradient, refreshAfter: refreshAfter(120 * 1000), children: kids };
 }
