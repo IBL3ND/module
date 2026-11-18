@@ -1,7 +1,7 @@
 /**
  * ════════════════════════════════════════════════════
  *  链上地址转账监控小组件
- *  数据源：TronGrid（波场）/ Blockstream（BTC）/ Blockscout（ETH）/ Etherscan V2（需 Key 的链）
+ *  数据源：TronGrid（波场）/ Blockstream + mempool.space（BTC）/ Blockscout + Routescan（ETH）/ Etherscan V2（需 Key 的链）
  * ════════════════════════════════════════════════════
  *
  * ⚙️ 配置方法（模块设置）：
@@ -28,7 +28,7 @@ export default async function (ctx) {
   const family = safeCtx.widgetFamily || 'systemSmall';
 
   const CHAIN = String(env.CHAIN || 'TRON').trim().toUpperCase();
-  const ADDRESS = String(env.ADDRESS || '').trim();
+  const ADDRESS = String(env.ADDRESS || '').replace(/\s+/g, '');
   const ES_KEY = String(env.ETHERSCAN_KEY || '').trim();
   const NOTIFY = String(env.NOTIFY || 'true').trim().toLowerCase() !== 'false';
 
@@ -149,7 +149,7 @@ export default async function (ctx) {
 
   async function fetchTron(addr) {
     const out = [];
-    const tokenJson = await httpGet('https://api.trongrid.io/v1/accounts/' + addr + '/transactions/trc20?limit=30');
+    const tokenJson = await httpGet('https://api.trongrid.io/v1/accounts/' + encodeURIComponent(addr) + '/transactions/trc20?limit=30');
     if (!tokenJson || tokenJson.success === false) throw new Error('波场接口返回异常');
     for (const t of tokenJson.data || []) {
       if (!t.value || t.value === '0') continue;
@@ -165,7 +165,7 @@ export default async function (ctx) {
       });
     }
     try {
-      const nativeJson = await httpGet('https://api.trongrid.io/v1/accounts/' + addr + '/transactions?limit=30');
+      const nativeJson = await httpGet('https://api.trongrid.io/v1/accounts/' + encodeURIComponent(addr) + '/transactions?limit=30');
       for (const t of (nativeJson && nativeJson.data) || []) {
         const ret = t.ret && t.ret[0] && t.ret[0].contractRet;
         const contract = t.raw_data && t.raw_data.contract && t.raw_data.contract[0];
@@ -189,7 +189,11 @@ export default async function (ctx) {
   }
 
   async function fetchBtc(addr) {
-    const json = await httpGet('https://blockstream.info/api/address/' + addr + '/txs');
+    let json = null;
+    try { json = await httpGet('https://blockstream.info/api/address/' + encodeURIComponent(addr) + '/txs'); } catch (e) {}
+    if (!Array.isArray(json)) {
+      json = await httpGet('https://mempool.space/api/address/' + encodeURIComponent(addr) + '/txs');
+    }
     if (!Array.isArray(json)) throw new Error('BTC 接口返回异常');
     const out = [];
     for (const t of json) {
@@ -216,7 +220,7 @@ export default async function (ctx) {
   }
 
   async function fetchBlockscout(addr) {
-    const base = 'https://eth.blockscout.com/api/v2/addresses/' + addr;
+    const base = 'https://eth.blockscout.com/api/v2/addresses/' + encodeURIComponent(addr);
     const out = [];
     const txJson = await httpGet(base + '/transactions');
     if (!txJson || !Array.isArray(txJson.items)) throw new Error('ETH 接口返回异常');
@@ -252,9 +256,9 @@ export default async function (ctx) {
     return out;
   }
 
-  async function fetchEtherscan(chain, addr) {
+  async function fetchEtherscan(chain, addr, mkOverride) {
     const cid = ES_CHAIN_ID[chain];
-    const mk = (action) => 'https://api.etherscan.io/v2/api?chainid=' + cid + '&module=account&action=' + action + '&address=' + addr + '&page=1&offset=30&sort=desc&apikey=' + ES_KEY;
+    const mk = mkOverride || ((action) => 'https://api.etherscan.io/v2/api?chainid=' + cid + '&module=account&action=' + action + '&address=' + encodeURIComponent(addr) + '&page=1&offset=30&sort=desc&apikey=' + ES_KEY);
     const check = (json) => {
       if (!json) throw new Error('接口返回异常');
       if (json.status === '0') {
@@ -300,7 +304,11 @@ export default async function (ctx) {
   async function fetchAll() {
     if (CHAIN === 'TRON') return fetchTron(ADDRESS);
     if (CHAIN === 'BTC') return fetchBtc(ADDRESS);
-    if (CHAIN === 'ETH' && !ES_KEY) return fetchBlockscout(ADDRESS);
+    if (CHAIN === 'ETH' && !ES_KEY) {
+      try { return await fetchBlockscout(ADDRESS); } catch (e) {
+        return fetchEtherscan('ETH', ADDRESS, (action) => 'https://api.routescan.io/v2/network/mainnet/evm/1/etherscan/api?module=account&action=' + action + '&address=' + encodeURIComponent(ADDRESS) + '&page=1&offset=30&sort=desc');
+      }
+    }
     if (ES_CHAIN_ID[CHAIN]) {
       if (!ES_KEY) throw new Error('nokey');
       return fetchEtherscan(CHAIN, ADDRESS);
@@ -315,8 +323,17 @@ export default async function (ctx) {
   const cacheKey = 'cm_cache_' + CHAIN + '_' + ADDRESS;
   const lastKey = 'cm_last_' + CHAIN + '_' + ADDRESS;
 
+  const ADDR_OK = {
+    TRON: /^T[1-9A-HJ-NP-Za-km-z]{33}$/,
+    BTC: /^(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}$|^bc1[0-9a-z]{11,71}$/i,
+    ETH: /^0x[0-9a-fA-F]{40}$/,
+    BSC: /^0x[0-9a-fA-F]{40}$/,
+    POLYGON: /^0x[0-9a-fA-F]{40}$/
+  };
   if (!ADDRESS) {
     state = { status: 'noaddr', txs: [], fetchedAt: Date.now(), errMsg: '' };
+  } else if (ADDR_OK[CHAIN] && !ADDR_OK[CHAIN].test(ADDRESS)) {
+    state = { status: 'badaddr', txs: [], fetchedAt: Date.now(), errMsg: '' };
   } else {
     try {
       const raw = await fetchAll();
@@ -408,6 +425,7 @@ export default async function (ctx) {
       });
     } else {
       mainLine.children.splice(7, 0,
+        { type: 'spacer', length: 6 },
         { type: 'text', text: shortAddr(tx.counterparty), font: { size: 10 }, textColor: C.sub, maxLines: 1 },
         { type: 'spacer', length: 6 });
     }
@@ -464,6 +482,7 @@ export default async function (ctx) {
   }
 
   if (state.status === 'noaddr') return msgWidget('请先在模块设置里填写要监控的地址');
+  if (state.status === 'badaddr') return msgWidget('地址和所选链对不上，请检查模块设置里的链和地址');
   if (state.status === 'nokey') return msgWidget(CHAIN + ' 需要填 Etherscan 免费 Key 后才能查询');
   if (state.status === 'error') return msgWidget('获取失败：' + state.errMsg);
   if (state.status === 'empty') return msgWidget('暂无转账记录');
