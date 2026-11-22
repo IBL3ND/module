@@ -1,0 +1,13 @@
+name: Egern 模块转换器
+description: Egern 运行时在浏览器打开 https://ibl3nd-egern.hub 即可使用，转换在本地完成
+author: iBL3ND
+icon: https://iili.io/KBtLXCx.png
+scriptings:
+- http_request:
+    name: 转换器页面
+    match: ^https?:\/\/ibl3nd-egern\.hub(?:\/.*)?$
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/Egern_Converter.js
+mitm:
+  hostnames:
+    includes:
+    - ibl3nd-egern.hub
