@@ -4,8 +4,8 @@ author: gholts,Maasea
 homepage: https://github.com/gholts/surge/tree/main/modules
 icon: https://iili.io/KQ67Yxa.png
 compat_arguments:
-  屏蔽上传按钮: 'true'
   屏蔽选段按钮: 'true'
+  屏蔽上传按钮: 'true'
   blockShorts: 'true'
   autoHd: 'true'
   blockGames: 'true'
@@ -14,16 +14,16 @@ compat_arguments:
   blockStore: 'true'
   nativeDownload: 'true'
 compat_arguments_schema:
-  屏蔽上传按钮:
-    name: 隐藏「上传」入口
-    description: 隐藏导航栏中的「上传」入口
+  屏蔽选段按钮:
+    name: 屏蔽选段按钮
+    description: 屏蔽选段按钮
     default_value: 'true'
     options:
     - 'true'
     - 'false'
-  屏蔽选段按钮:
-    name: 屏蔽选段按钮
-    description: 屏蔽选段按钮
+  屏蔽上传按钮:
+    name: 隐藏「上传」入口
+    description: 隐藏导航栏中的「上传」入口
     default_value: 'true'
     options:
     - 'true'
@@ -99,10 +99,10 @@ rewrites:
   - redirect:
       status: 302
       location: $1$2$3
-- match: ^https?:\/\/[\w-]+\.googlevideo\.com\/(?!(dclk_video_ads|videoplayback\?)).+&oad
+- match: ^https?:\/\/[\w-]+\.googlevideo\.com\/(?!(dclk_video_ads|videoplayback\?|initplayback)).+&oad
   actions:
   - respond:
-      status: 200
+      status: 404
 - match: ^https?:\/\/(www|s)\.youtube\.com\/api\/stats\/ads
   actions:
   - respond:
