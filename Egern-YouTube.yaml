@@ -102,7 +102,7 @@ rewrites:
 - match: ^https?:\/\/[\w-]+\.googlevideo\.com\/(?!(dclk_video_ads|videoplayback\?)).+&oad
   actions:
   - respond:
-      status: 200
+      status: 404
 - match: ^https?:\/\/(www|s)\.youtube\.com\/api\/stats\/ads
   actions:
   - respond:
