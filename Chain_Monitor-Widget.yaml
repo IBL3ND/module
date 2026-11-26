@@ -68,6 +68,16 @@ scriptings:
 
     timeout: 30
 
+- schedule:
+
+    name: chain-monitor-notify
+
+    cron: '*/10 * * * *'
+
+    script_url: https://raw.githubusercontent.com/IBL3ND/js/refs/heads/main/Chain_Monitor.js
+
+    timeout: 30
+
 widgets:
 
 - name: chain-monitor
